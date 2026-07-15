@@ -490,9 +490,10 @@ function syncFormToState(){
 function updatePreview(){
   syncFormToState();
   const frame = document.getElementById('previewFrame');
-  /* "<\/body>" not "</body>": Live Server injects its reload script before the FIRST
-     literal </body> in the file — an unescaped one here splits this script element
-     and dumps the rest of the source as visible page text */
+  /* the closing body tag below MUST keep its backslash escape: dev servers
+     (Live Server) inject their reload script before the first unescaped
+     closing-body sequence in the file, which would split this script element
+     and dump the rest of the source as visible page text */
   frame.srcdoc = '<meta charset="utf-8"><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'<\/body>';
   const text = state.bodyHtml.replace(/<[^>]+>/g,' ');
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
