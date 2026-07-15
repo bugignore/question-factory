@@ -1,0 +1,17 @@
+{
+  "name": "Notes Factory",
+  "short_name": "NFactory",
+  "description": "Build the ExamNotesPDF master prompt, parse the AI reply, and hand notes off to WordPress publishing",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F2F4F8",
+  "theme_color": "#2A4D9B",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

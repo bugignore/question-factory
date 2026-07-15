@@ -1,0 +1,118 @@
+name: Publish note to WordPress
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pending-notes/**.json"
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Retry a specific file (path like pending-notes/my-slug.json). Leave empty to process every pending note."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-notes
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # loop guard: never re-run on the bot's own commit that moves files to published-notes/
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish pending notes as WordPress drafts
+        env:
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          ONLY_FILE: ${{ inputs.file }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${WP_SITE_URL:-}" ] || [ -z "${WP_USERNAME:-}" ] || [ -z "${WP_APP_PASSWORD:-}" ]; then
+            echo "::error::Missing secrets. Set WP_SITE_URL, WP_USERNAME and WP_APP_PASSWORD in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+          shopt -s nullglob
+          if [ -n "$ONLY_FILE" ]; then
+            files=("$ONLY_FILE")
+          else
+            files=(pending-notes/*.json)
+          fi
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "Nothing to publish — pending-notes/ is empty."
+            exit 0
+          fi
+
+          mkdir -p published-notes
+          failed=0
+
+          for f in "${files[@]}"; do
+            [ -f "$f" ] || { echo "::warning::$f not found, skipping"; continue; }
+            slug="$(basename "$f" .json)"
+            echo "── Processing $slug ──"
+
+            # dedupe guard: re-uploading the same slug must not create a second draft
+            if [ -f "published-notes/$slug.json" ]; then
+              echo "::warning::$slug already published earlier (published-notes/$slug.json exists) — skipping to avoid a duplicate draft. Delete that file first if you really want to publish again."
+              git rm -q "$f"
+              continue
+            fi
+
+            # validate the JSON before touching WordPress
+            if ! jq -e '.seo.seoTitle and .seo.slug and .bodyHtml' "$f" >/dev/null 2>&1; then
+              echo "::error::$f is not valid — needs seo.seoTitle, seo.slug and bodyHtml. Leaving it in pending-notes/."
+              failed=1
+              continue
+            fi
+
+            payload="$(jq '{
+              title: .seo.h1,
+              slug: .seo.slug,
+              excerpt: .seo.metaDescription,
+              content: .bodyHtml,
+              status: "draft"
+            } | if .title == null or .title == "" then .title = .slug else . end' "$f")"
+
+            http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+              -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/posts" \
+              -H "Content-Type: application/json" \
+              -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+              --data-binary "$payload" || echo "000")"
+
+            if [ "$http_code" = "201" ]; then
+              post_id="$(jq -r '.id' /tmp/wp-response.json)"
+              post_link="$(jq -r '.link' /tmp/wp-response.json)"
+              echo "✔ Draft created: id=$post_id  $post_link"
+              jq --argjson id "$post_id" --arg link "$post_link" \
+                 --arg at "$(date -u +%FT%TZ)" \
+                 '. + {wordpress: {postId: $id, link: $link, publishedAt: $at, status: "draft"}}' \
+                 "$f" > "published-notes/$slug.json"
+              git rm -q "$f"
+              git add "published-notes/$slug.json"
+            else
+              echo "::error::WordPress rejected $slug (HTTP $http_code). Response follows. File stays in pending-notes/ — fix the cause and re-run this workflow from the Actions tab."
+              cat /tmp/wp-response.json || true
+              failed=1
+            fi
+          done
+
+          # commit whatever succeeded, even if something else failed
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Publish note(s) to WordPress as draft [skip ci]"
+            git push
+          fi
+
+          exit $failed
