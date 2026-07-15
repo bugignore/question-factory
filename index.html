@@ -276,6 +276,7 @@ topic,question_en,question_hi,option1_en,option1_hi,option2_en,option2_hi,option
 - EVERY field wrapped in straight double quotes ("), inner quotes doubled. Use only straight quotes, never curly quotes.
 - No commas problems: since every field is quoted, commas inside text are fine.
 - correct = 1, 2, 3 or 4 only. No blank fields.
+- Keep each option under 200 characters and each explanation under 2 sentences (website database limit).
 - exam_type_year: one label like CTET2024 or DSSSB2023 (style only, not a real paper claim).
 - Explanation: 1-2 sentences on why the correct option is right (maths: show the quick calculation).`;
 }
@@ -328,6 +329,10 @@ function parseCSV(text){
 }
 function csvField(v){ v=String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
 function toCSV(rws){ return HEADER.join(',')+'\n'+rws.map(r=>r.fields.map(csvField).join(',')).join('\n'); }
+/* website stores correct as 0-3 (0=option A). Tool works in 1-4 internally; convert only on export. */
+function exportRows(rws){
+  return rws.map(r=>{ const f=r.fields.slice(); f[11]=String((parseInt(f[11])||1)-1); return {fields:f}; });
+}
 function norm(s){ return String(s).toLowerCase().replace(/\s+/g,' ').replace(/[^\w\u0900-\u097F ]/g,'').trim(); }
 const DEV=/[\u0900-\u097F]/;
 
@@ -389,6 +394,12 @@ function checkCsv(){
   const subj = document.getElementById('subject').value.trim() || "Pedagogy";
   if(!document.getElementById('appendMode').checked) rows = [];
 
+  // if the pasted CSV is already 0-indexed (e.g. re-importing an exported file), shift to internal 1-4
+  const cvals = parsed.filter(r=>r.length===15).map(r=>String(r[11]).trim());
+  if(cvals.includes('0') && !cvals.includes('4')){
+    parsed.forEach(r=>{ if(r.length===15 && /^[0-3]$/.test(String(r[11]).trim())) r[11]=String(parseInt(r[11])+1); });
+  }
+
   const oldSet = new Set();
   const oldRaw = document.getElementById('oldCsv').value;
   if(oldRaw.trim()){
@@ -415,6 +426,9 @@ function checkCsv(){
     if(!/^[1-4]$/.test(f[11])) issues.push('correct = "'+f[11]+'"');
     f.forEach((v,i)=>{ if(v==='') issues.push(HEADER[i]+' blank'); });
     if(f[1].length<10) issues.push('question too short');
+    if(f[1].length>1200 || f[2].length>1200) issues.push('question too long for website DB');
+    for(let i=3;i<=10;i++){ if(f[i].length>280){ issues.push(HEADER[i]+' too long ('+f[i].length+' chars) — website DB limit'); break; } }
+    if(f[12].length>900 || f[13].length>900) issues.push('explanation too long for website DB');
     if(lang!=='en' && !DEV.test(f[2])) issues.push('question_hi has no Hindi');
     const on=[f[3],f[5],f[7],f[9]].map(norm);
     if(new Set(on).size<4) issues.push('two options identical');
@@ -567,20 +581,20 @@ function updateDl(){
   stat('dlStats',[['Format OK',g.length],['Verified',v.length],['Will export',pickRows().length]]);
   const fn=document.getElementById('fileName');
   fn.value = suggestName();
-  document.getElementById('finalOut').value = pickRows().length? toCSV(pickRows()) : '';
+  document.getElementById('finalOut').value = pickRows().length? toCSV(exportRows(pickRows())) : '';
 }
 function copyFinal(btn){
   const p=pickRows(), m=msg('dlMsg');
   if(!p.length){ show(m,'bad','Nothing to export — verify questions first or choose "All rows".'); return; }
-  document.getElementById('finalOut').value=toCSV(p);
-  doCopy(toCSV(p), btn, m, p.length+' question(s) copied — paste into your website.');
+  document.getElementById('finalOut').value=toCSV(exportRows(p));
+  doCopy(toCSV(exportRows(p)), btn, m, p.length+' question(s) copied — paste into your website.');
 }
 function downloadCsv(){
   const p=pickRows(), m=msg('dlMsg');
   if(!p.length){ show(m,'bad','Nothing to export.'); return; }
   let name=(document.getElementById('fileName').value.trim()||suggestName());
   if(!/\.csv$/i.test(name)) name+='.csv';
-  const blob=new Blob([toCSV(p)],{type:'text/csv;charset=utf-8'});
+  const blob=new Blob([toCSV(exportRows(p))],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
   show(m,'ok',p.length+' question(s) saved as '+name);
 }
