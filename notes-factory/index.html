@@ -490,7 +490,10 @@ function syncFormToState(){
 function updatePreview(){
   syncFormToState();
   const frame = document.getElementById('previewFrame');
-  frame.srcdoc = '<meta charset="utf-8"><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'</body>';
+  /* "<\/body>" not "</body>": Live Server injects its reload script before the FIRST
+     literal </body> in the file — an unescaped one here splits this script element
+     and dumps the rest of the source as visible page text */
+  frame.srcdoc = '<meta charset="utf-8"><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'<\/body>';
   const text = state.bodyHtml.replace(/<[^>]+>/g,' ');
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   document.getElementById('bodyWords').textContent = words.toLocaleString();
