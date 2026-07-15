@@ -4,11 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Question Factory</title>
-<meta name="theme-color" content="#1B2A4A">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Question Factory">
-<link rel="manifest" href="manifest.json">
 <style>
   :root{
     --paper:#F2F4F8; --card:#FFFFFF; --ink:#1B2A4A; --ink-soft:#51617F;
@@ -86,7 +81,7 @@
     <option value="custom">Custom — bilingual</option>
   </select>
   <div class="row2">
-    <div><label>Subject (topic column)</label><input type="text" id="subject" value="Pedagogy"></div>
+    <div><label>Topic column value (exactly as your website expects, e.g. "CTET - Pedagogy")</label><input type="text" id="subject" value="CTET - Pedagogy"></div>
     <div><label>Questions (5–50)</label><input type="number" id="count" value="15" min="5" max="50"></div>
   </div>
   <label>Sub-topic</label>
@@ -111,6 +106,7 @@
   <textarea id="csvIn" placeholder="Paste the whole reply — extra text around the CSV is removed automatically."></textarea>
   <label style="font-weight:500"><input type="checkbox" id="appendMode" style="width:auto;margin-right:6px">Add to questions already checked (build a bigger batch)</label>
   <button class="btn" onclick="tryRun(checkCsv,this)">✓ Check, fix &amp; shuffle</button>
+  <button class="btn ghost" onclick="tryRun(copyContinue,this)">📋 Copy "continue" prompt (DeepSeek stopped midway)</button>
   <div class="msg" id="csvMsg"></div>
   <div class="stats" id="csvStats"></div>
   <div class="issues" id="csvIssues"></div>
@@ -330,8 +326,8 @@ function parseCSV(text){
   if(field!==''||row.length){ row.push(field); out.push(row); }
   return out.filter(r=>r.length>1 || (r.length===1&&r[0].trim()!==''));
 }
-function csvField(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }
-function toCSV(rws){ return HEADER.map(csvField).join(',')+'\n'+rws.map(r=>r.fields.map(csvField).join(',')).join('\n'); }
+function csvField(v){ v=String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function toCSV(rws){ return HEADER.join(',')+'\n'+rws.map(r=>r.fields.map(csvField).join(',')).join('\n'); }
 function norm(s){ return String(s).toLowerCase().replace(/\s+/g,' ').replace(/[^\w\u0900-\u097F ]/g,'').trim(); }
 const DEV=/[\u0900-\u097F]/;
 
@@ -368,6 +364,18 @@ function shuffleRow(f){
 }
 
 /* ---------- STEP 2 ---------- */
+function copyContinue(btn){
+  const n = okRows().length;
+  const t = `Continue generating the SAME CSV in this same chat, starting from the next new row.
+Rules:
+- Do NOT repeat the header line.
+- Do NOT repeat any question already generated (you have made about ${n||'several'} so far).
+- Same subject, sub-topic, quality method and CSV rules as before.
+- Output ONLY one markdown code block with the new CSV rows.
+- If you reach the output limit again, stop only after a COMPLETE row.`;
+  doCopy(t, btn, msg('csvMsg'), 'Continue prompt copied — paste it in the SAME DeepSeek chat, then paste the new rows here (they will be added to the batch).');
+  document.getElementById('appendMode').checked = true;
+}
 function checkCsv(){
   const m = msg('csvMsg'), issuesEl = document.getElementById('csvIssues');
   issuesEl.classList.remove('show'); issuesEl.innerHTML='';
@@ -428,8 +436,9 @@ function checkCsv(){
     ['Ans 1/2/3/4', dist.join('/')]]);
   if(problems.length){ issuesEl.innerHTML=problems.map(p=>'<div>• '+p+'</div>').join(''); issuesEl.classList.add('show'); }
   show(m, badN? 'warn':'ok',
-    added+' question(s) ready. Options shuffled — answers now spread across 1-4.'+(badN? ' '+badN+' row(s) excluded (see list).':'')+' Tap Next.');
+    added+' question(s) added — batch total '+good.length+'. Options shuffled.'+(badN? ' '+badN+' row(s) excluded (see list).':'')+' Paste more rows or tap Next.');
   document.getElementById('csvIn').value='';
+  document.getElementById('appendMode').checked = true; // next paste adds to the batch by default
 }
 
 /* ---------- STEP 3 ---------- */
@@ -571,7 +580,7 @@ function downloadCsv(){
   if(!p.length){ show(m,'bad','Nothing to export.'); return; }
   let name=(document.getElementById('fileName').value.trim()||suggestName());
   if(!/\.csv$/i.test(name)) name+='.csv';
-  const blob=new Blob(['\uFEFF'+toCSV(p)],{type:'text/csv;charset=utf-8'});
+  const blob=new Blob([toCSV(p)],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
   show(m,'ok',p.length+' question(s) saved as '+name);
 }
