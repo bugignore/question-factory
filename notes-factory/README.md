@@ -22,8 +22,8 @@ GitHub Actions (automatic, seconds later):
    moves the file to published-notes/ with the new post's id + link.
 
 You, in WordPress:
-6. Open the draft, paste the Focus Keyword + Meta Description into Rank Math's
-   panel (see "Why Rank Math is manual" below), review, hit Publish.
+6. Open the draft — title, slug, content, AND all Rank Math fields (Focus
+   Keyword, SEO Title, Meta Description) already filled — review, hit Publish.
 ```
 
 If step 5 fails, the file simply stays in `pending-notes/`, the failure is visible in the **Actions** tab, and you can re-run it from there once the cause is fixed. Nothing is ever lost — the JSON in the repo is the permanent backup of every note.
@@ -49,14 +49,20 @@ In this repo: **Settings → Secrets and variables → Actions → New repositor
 
 These are encrypted, never appear in any file, are masked in logs, and are safe even on a public repo. **Never** put them anywhere else — not in the tool, not in a committed file.
 
-### 3. That's it
+### 3. Rank Math REST snippet (one time, ~2 minutes — makes SEO fields fully automatic)
+
+WordPress's REST API refuses to write post meta that isn't registered for REST, and Rank Math doesn't register its fields. Install the snippet in [`wp-snippet-rank-math-rest.php`](wp-snippet-rank-math-rest.php) once (easiest: the **Code Snippets** plugin → Add New → paste → Activate; the file's header lists two other install options). After that, every draft arrives with Focus Keyword, SEO Title, and Meta Description already set in Rank Math — true one-click publish.
+
+**Without the snippet nothing breaks:** the workflow detects the rejection, retries without the SEO meta so the draft still lands, and prints a warning telling you to paste the Rank Math fields manually for that post (the tool's "Copy Rank Math fields" button covers that).
+
+### 4. That's it
 
 The workflow (`.github/workflows/publish-note.yml`) and folders (`pending-notes/`, `published-notes/`) are already in the repo.
 
 ## Caveats you should know
 
 - **Ad scripts require `unfiltered_html`.** WordPress strips `<script>` tags (the AdSense slots) from post content unless the authenticated user has the `unfiltered_html` capability — on a normal single-site install that means an **Administrator**. If drafts arrive with the ad code missing, that's why.
-- **Why Rank Math is manual:** Rank Math's fields (`rank_math_focus_keyword`, description) are not exposed through the core REST API by default, so the pipeline can't set them. The tool's Step 4 has a "Copy Rank Math fields" button — one paste into the Rank Math panel per post. (Automating it needs a `register_post_meta` snippet on the WP side; ask if you want that later.)
+- **Rank Math automation needs the snippet from setup step 3.** Without it, drafts still publish but SEO fields must be pasted manually (the workflow warns you when this happens); with it, everything is set automatically.
 - **Duplicate protection:** re-uploading a `<slug>.json` that was already published is skipped automatically (the workflow sees `published-notes/<slug>.json` exists). To genuinely republish, delete that file first.
 - **The upload page needs the folder to exist** — it does (`pending-notes/.gitkeep`), don't delete it.
 - **Paste the notes body into a Custom HTML block** in WordPress if you ever paste manually — a Paragraph block will escape the HTML and show tags as text. (Via the pipeline this doesn't matter: REST inserts the raw HTML directly.)

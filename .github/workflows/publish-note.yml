@@ -81,7 +81,12 @@ jobs:
               slug: .seo.slug,
               excerpt: .seo.metaDescription,
               content: .bodyHtml,
-              status: "draft"
+              status: "draft",
+              meta: {
+                rank_math_focus_keyword: (.seo.focusKeyword // ""),
+                rank_math_title: (.seo.seoTitle // ""),
+                rank_math_description: (.seo.metaDescription // "")
+              }
             } | if .title == null or .title == "" then .title = .slug else . end' "$f")"
 
             http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
@@ -89,6 +94,20 @@ jobs:
               -H "Content-Type: application/json" \
               -u "$WP_USERNAME:$WP_APP_PASSWORD" \
               --data-binary "$payload" || echo "000")"
+
+            # If WP rejects the meta keys (Rank Math REST snippet not installed yet),
+            # retry once without meta so the draft is never lost — with a loud warning.
+            if [ "$http_code" = "400" ] || [ "$http_code" = "403" ]; then
+              if grep -q "rank_math" /tmp/wp-response.json 2>/dev/null; then
+                echo "::warning::$slug — WordPress rejected the Rank Math meta fields. Install the register-rank-math-meta snippet (see notes-factory/README.md) to publish SEO fields automatically. Retrying WITHOUT meta so the draft still lands; paste the Rank Math fields manually for this post."
+                payload="$(echo "$payload" | jq 'del(.meta)')"
+                http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+                  -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/posts" \
+                  -H "Content-Type: application/json" \
+                  -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                  --data-binary "$payload" || echo "000")"
+              fi
+            fi
 
             if [ "$http_code" = "201" ]; then
               post_id="$(jq -r '.id' /tmp/wp-response.json)"
