@@ -102,6 +102,10 @@
 
   <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build &amp; copy prompt</button>
   <div class="msg" id="pMsg"></div>
+  <div id="filePickWrap" style="display:none">
+    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF v6.md</code> in the folder above this one:</label>
+    <input type="file" id="masterPromptFile" accept=".md,.txt">
+  </div>
   <div class="stats" id="pStats"></div>
   <details><summary>View full prompt (optional)</summary><div>
     <textarea id="promptOut" style="min-height:260px" placeholder="Tap the button above — the full prompt appears here too." readonly></textarea>
@@ -187,10 +191,12 @@
 
 /* ---------- resilience wrapper (same pattern as Question Factory) ---------- */
 function tryRun(fn, btn){
-  try{ fn(btn); }
-  catch(e){
-    alert("Something went wrong: "+(e && e.message ? e.message : e)+"\nYour data is safe — try again.");
+  const report = e => alert("Something went wrong: "+(e && e.message ? e.message : e)+"\nYour data is safe — try again.");
+  try{
+    const r = fn(btn);
+    if(r && typeof r.catch === 'function') r.catch(report);
   }
+  catch(e){ report(e); }
 }
 window.addEventListener('error', ()=>{ /* never let a script error kill the page silently */ });
 
@@ -284,8 +290,28 @@ async function loadMasterPrompt(){
       lastErr = new Error('HTTP '+res.status);
     }catch(e){ lastErr = e; }
   }
-  throw new Error('Could not load the master prompt file from the repo root (MASTER-PROMPT-ExamNotesPDF v6.md). Make sure it still sits one folder above notes-factory/. '+(lastErr?lastErr.message:''));
+  // fetch is blocked on file:// pages, and fails if the file moved — fall back to a manual file picker
+  document.getElementById('filePickWrap').style.display = 'block';
+  const hint = location.protocol === 'file:'
+    ? 'This page was opened straight from the folder (file://), where browsers block reading other files automatically.'
+    : 'Could not load the master prompt file from the repo root ('+(lastErr?lastErr.message:'')+').';
+  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF v6.md manually — then tap "Build & copy prompt" again.');
 }
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('masterPromptFile').addEventListener('change', function(){
+    const f = this.files && this.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      masterPromptText = String(reader.result||'');
+      document.getElementById('filePickWrap').style.display = 'none';
+      show(msg('pMsg'),'ok','Master prompt loaded from the picked file — tap "Build & copy prompt" again.');
+    };
+    reader.onerror = ()=>show(msg('pMsg'),'bad','Could not read that file — try picking it again.');
+    reader.readAsText(f);
+  });
+});
 
 function outputContract(){
   return `
