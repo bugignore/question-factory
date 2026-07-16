@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Notes Factory</title>
+<style>
+  :root{
+    --paper:#F2F4F8; --card:#FFFFFF; --ink:#1B2A4A; --ink-soft:#51617F;
+    --line:#D8DEE9; --accent:#2A4D9B; --ok:#0E7C56; --ok-bg:#E4F4EC;
+    --bad:#B3362B; --bad-bg:#FBEAE7; --warn:#8A6400; --warn-bg:#FFF5D6;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.45;display:flex;flex-direction:column}
+  .top{padding:10px 14px 8px;background:var(--card);border-bottom:1.5px solid var(--line)}
+  .top h1{font-size:17px;margin:0;font-weight:800}
+  .rail{display:flex;gap:6px;margin-top:8px}
+  .rail span{flex:1;height:5px;border-radius:99px;background:var(--line)}
+  .rail span.on{background:var(--accent)}
+  .rail span.done{background:var(--ok)}
+  main{flex:1;overflow-y:auto;padding:14px;padding-bottom:90px;max-width:680px;width:100%;margin:0 auto}
+  .step{display:none}
+  .step.show{display:block;animation:f .18s}
+  @keyframes f{from{opacity:.4}to{opacity:1}}
+  h2{font-size:16px;margin:0 0 2px}
+  .hint{color:var(--ink-soft);font-size:12.5px;margin:0 0 12px}
+  label{display:block;font-weight:600;font-size:12.5px;margin:11px 0 4px}
+  input[type=text],input[type=number],textarea,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;color:var(--ink);background:var(--card);font-size:15px}
+  textarea{min-height:110px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn{display:flex;width:100%;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font:inherit;font-weight:700;font-size:15px;cursor:pointer;margin-top:12px}
+  .btn.ghost{background:var(--card);color:var(--accent)}
+  .btn.green{background:var(--ok);border-color:var(--ok)}
+  .btn.small{width:auto;display:inline-flex;padding:8px 14px;font-size:13px;margin-top:8px}
+  .btn:disabled{opacity:.4}
+  .msg{border-radius:9px;padding:10px 12px;font-size:13px;margin-top:10px;display:none}
+  .msg.show{display:block}
+  .msg.ok{background:var(--ok-bg);color:var(--ok)}
+  .msg.bad{background:var(--bad-bg);color:var(--bad)}
+  .msg.warn{background:var(--warn-bg);color:var(--warn)}
+  .stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .stat{background:#EDF1FA;border-radius:8px;padding:6px 10px;font-size:11.5px;color:var(--ink-soft)}
+  .stat b{font-size:15px;display:block;color:var(--ink)}
+  details{margin-top:10px;border:1.5px solid var(--line);border-radius:9px;background:var(--card)}
+  summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--accent);padding:10px 12px;list-style-position:inside}
+  details>div{padding:0 12px 12px}
+  .issues{font-size:12px;color:var(--warn);margin-top:8px;max-height:160px;overflow-y:auto;background:var(--warn-bg);border-radius:8px;padding:8px 10px;display:none}
+  .issues.show{display:block}
+  .issues div{margin:2px 0}
+  nav.bot{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1.5px solid var(--line);display:flex;gap:10px;padding:10px 14px;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  nav.bot button{flex:1;padding:13px;border-radius:10px;font:inherit;font-weight:700;font-size:15px;cursor:pointer;border:1.5px solid var(--line);background:var(--card);color:var(--ink)}
+  nav.bot button#nextBtn{background:var(--ink);color:#fff;border-color:var(--ink);flex:2}
+  nav.bot button:disabled{opacity:.35}
+  .chip{display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:2px 9px;font-size:11.5px;margin:2px 2px 0 0}
+  .previewFrame{width:100%;height:360px;border:1.5px solid var(--line);border-radius:9px;background:#fff}
+  .noteRow{display:flex;gap:8px;align-items:center;margin:4px 0}
+  .noteRow input[type=checkbox]{width:auto}
+  fieldset{border:1.5px solid var(--line);border-radius:9px;padding:10px 12px;margin-top:10px}
+  fieldset legend{font-size:12.5px;font-weight:600;color:var(--ink-soft);padding:0 4px}
+  .privacyNote{background:#EDF1FA;border-radius:9px;padding:10px 12px;font-size:12px;color:var(--ink-soft);margin-top:10px}
+  /* mobile is the primary target: collapse side-by-side fields on narrow phones */
+  @media (max-width:420px){
+    .row2{grid-template-columns:1fr}
+    .previewFrame{height:300px}
+  }
+</style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2A4D9B">
+</head>
+<body>
+<div class="top">
+  <h1>📚 Notes Factory</h1>
+  <div class="rail"><span id="r0" class="on"></span><span id="r1"></span><span id="r2"></span><span id="r3"></span></div>
+</div>
+
+<main>
+<!-- STEP 1 -->
+<section class="step show" id="step0">
+  <h2>1 · Build &amp; copy the prompt</h2>
+  <p class="hint">Fills your exact TOPIC / EXAM TYPE / SUBJECT into the ExamNotesPDF master prompt (the file itself is never edited) and copies the whole thing — paste it into a new DeepSeek / ChatGPT / Claude chat.</p>
+
+  <label>Topic (must match the CDP list exactly — pick from the list)</label>
+  <select id="topic"></select>
+
+  <label>Exam type (select one or more)</label>
+  <div id="examTypes"></div>
+
+  <label>Subject</label>
+  <select id="subject">
+    <option>Auto-detect</option>
+    <option>CDP</option>
+    <option>Geography</option>
+    <option>History</option>
+    <option>Science</option>
+    <option>Maths</option>
+    <option>Hindi</option>
+    <option>English</option>
+    <option>EVS</option>
+  </select>
+
+  <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build &amp; copy prompt</button>
+  <div class="msg" id="pMsg"></div>
+  <div id="filePickWrap" style="display:none">
+    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF v6.md</code> in the folder above this one:</label>
+    <input type="file" id="masterPromptFile" accept=".md,.txt">
+  </div>
+  <div class="stats" id="pStats"></div>
+  <details><summary>View full prompt (optional)</summary><div>
+    <textarea id="promptOut" style="min-height:260px" placeholder="Tap the button above — the full prompt appears here too." readonly></textarea>
+  </div></details>
+</section>
+
+<!-- STEP 2 -->
+<section class="step" id="step1">
+  <h2>2 · Paste the AI's reply</h2>
+  <p class="hint">Paste the whole reply from DeepSeek/ChatGPT/Claude. The parser reads the machine-readable markers first, and falls back to reading the visible SEO panel + HTML if a model ignored them — nothing is ever a dead end.</p>
+  <textarea id="rawIn" style="min-height:220px" placeholder="Paste the full AI reply here…"></textarea>
+  <label style="font-weight:500"><input type="checkbox" id="appendMode" style="width:auto;margin-right:6px">This is a continuation — add it to what I already pasted (AI stopped midway)</label>
+  <button class="btn" onclick="tryRun(parseAndGo,this)">🔎 Parse</button>
+  <button class="btn ghost" onclick="tryRun(copyContinue,this)">📋 Copy "continue" prompt (AI stopped midway)</button>
+  <div class="msg" id="parseMsg"></div>
+  <div class="issues" id="parseIssues"></div>
+</section>
+
+<!-- STEP 3 -->
+<section class="step" id="step2">
+  <h2>3 · Review &amp; edit</h2>
+  <p class="hint">Fix anything the parser missed before handing it off. This is what actually gets published.</p>
+
+  <fieldset>
+    <legend>SEO fields (Rank Math panel)</legend>
+    <label>Focus Keyword</label>
+    <input type="text" id="fFocusKeyword">
+    <label>SEO Title</label>
+    <input type="text" id="fSeoTitle">
+    <label>URL Slug</label>
+    <input type="text" id="fSlug">
+    <label>Meta Description</label>
+    <textarea id="fMetaDescription" style="min-height:70px;font-family:inherit;font-size:14px"></textarea>
+    <label>H1</label>
+    <input type="text" id="fH1">
+  </fieldset>
+
+  <label>Notes body (HTML) — word count: <span id="bodyWords">0</span></label>
+  <iframe class="previewFrame" id="previewFrame" sandbox=""></iframe>
+  <details><summary>Edit raw body HTML</summary><div>
+    <textarea id="fBodyHtml" style="min-height:220px" oninput="updatePreview()"></textarea>
+  </div></details>
+
+  <details><summary>Publisher-only notes (SEO linking recs + mnemonics archive)</summary><div>
+    <textarea id="fPublisherNotes" style="min-height:160px"></textarea>
+  </div></details>
+</section>
+
+<!-- STEP 4 -->
+<section class="step" id="step3">
+  <h2>4 · Hand off to GitHub</h2>
+  <p class="hint">No password or API key is ever entered here. You hand the file to GitHub using your own existing GitHub login — a workflow already in this repo then publishes it to WordPress as a draft using a secret only GitHub Actions can see.</p>
+
+  <fieldset>
+    <legend>Your repo (saved on this device only)</legend>
+    <div class="row2">
+      <div><label>GitHub username / org</label><input type="text" id="ghOwner" placeholder="bugignore"></div>
+      <div><label>Repo name</label><input type="text" id="ghRepo" placeholder="question-factory"></div>
+    </div>
+  </fieldset>
+
+  <button class="btn" onclick="tryRun(downloadBundle,this)">⬇ Download note file (<span id="dlSlug">note</span>.json)</button>
+  <button class="btn green" onclick="tryRun(openGithubUpload,this)">🚀 Open GitHub upload page</button>
+  <div class="msg" id="sendMsg"></div>
+  <div class="privacyNote">Drop the downloaded file into <code>pending-notes/</code> on that page and commit — that's the only manual step. GitHub Actions takes it from there and moves it to <code>published-notes/</code> once WordPress confirms the draft was created.</div>
+
+  <details><summary>Fallback: copy HTML / SEO fields manually instead</summary><div>
+    <button class="btn small ghost" onclick="tryRun(copyBodyHtml,this)">📋 Copy notes body HTML</button>
+    <button class="btn small ghost" onclick="tryRun(copySeoFields,this)">📋 Copy Rank Math fields</button>
+  </div></details>
+
+  <button class="btn ghost" onclick="tryRun(resetAll,this)" style="border-color:var(--bad);color:var(--bad)">Start a new note (clear everything)</button>
+</section>
+</main>
+
+<nav class="bot">
+  <button id="backBtn" onclick="nav(-1)">← Back</button>
+  <button id="nextBtn" onclick="nav(1)">Next →</button>
+</nav>
+
+<script>
+"use strict";
+
+/* ---------- resilience wrapper (same pattern as Question Factory) ---------- */
+function tryRun(fn, btn){
+  const report = e => alert("Something went wrong: "+(e && e.message ? e.message : e)+"\nYour data is safe — try again.");
+  try{
+    const r = fn(btn);
+    if(r && typeof r.catch === 'function') r.catch(report);
+  }
+  catch(e){ report(e); }
+}
+window.addEventListener('error', ()=>{ /* never let a script error kill the page silently */ });
+
+/* ---------- CDP master topic list (English text — must match the master prompt file exactly) ---------- */
+const CDP_TOPICS = [
+"Growth & Development",
+"Principles & Stages of Development",
+"Factors Affecting Development & Individual Differences",
+"Intelligence, Creativity & Personality",
+"Learning Process & Principles",
+"Behavioural Learning Theories (Pavlov, Skinner, Thorndike)",
+"Cognitive Learning Theories (Piaget, Bruner, Vygotsky)",
+"Constructivism & Child-Centred Learning",
+"Motivation, Attention & Interest",
+"Memory, Forgetting & Thinking",
+"Language Development",
+"Inclusive Education",
+"Children with Special Needs",
+"Learning Disabilities (Dyslexia, ADHD, Autism etc.)",
+"Assessment & Evaluation",
+"Teaching Methods & Classroom Management",
+"Bloom's Taxonomy & Learning Outcomes",
+"Educational Psychology",
+"Major Psychologists & Their Theories",
+"Important CTET Pedagogy Concepts"
+];
+const EXAM_TYPES = ["CTET Paper I","CTET Paper II","PGT","TGT","KVS","NVS","DSSSB","UPTET","BPSC TRE"];
+
+function initSelectors(){
+  const topicSel = document.getElementById('topic');
+  topicSel.innerHTML = CDP_TOPICS.map(t=>`<option>${t}</option>`).join('');
+  const wrap = document.getElementById('examTypes');
+  wrap.innerHTML = EXAM_TYPES.map((e,i)=>`<label style="font-weight:500"><input type="checkbox" class="examChk" value="${e}" ${i===0?'checked':''} style="width:auto;margin-right:6px">${e}</label>`).join('');
+}
+initSelectors();
+
+/* ---------- navigation ---------- */
+var cur = 0;
+function nav(d){
+  let n = cur + d;
+  if(n<0||n>3) return;
+  if(d>0){
+    if(cur===0 && !document.getElementById('promptOut').value.trim()){ show(msg('pMsg'),'bad','Build & copy the prompt first.'); return; }
+    if(cur===1 && !state.parsed){ show(msg('parseMsg'),'bad','Parse the AI reply first.'); return; }
+  }
+  cur=n; render();
+}
+function render(){
+  for(let i=0;i<4;i++){
+    document.getElementById('step'+i).classList.toggle('show', i===cur);
+    const r=document.getElementById('r'+i);
+    r.className = i<cur ? 'done' : i===cur ? 'on' : '';
+  }
+  document.getElementById('backBtn').disabled = cur===0;
+  document.getElementById('nextBtn').textContent = cur===3 ? 'Done' : 'Next →';
+  document.getElementById('nextBtn').disabled = cur===3;
+  if(cur===2){ fillReviewForm(); updatePreview(); }
+  if(cur===3){ loadSettings(); document.getElementById('dlSlug').textContent = (state.seo && state.seo.slug) || 'note'; }
+  document.querySelector('main').scrollTop=0;
+}
+function msg(id){ return document.getElementById(id); }
+function show(el,type,text){ el.className='msg show '+type; el.textContent=text; }
+
+/* ---------- copy helper (same pattern as Question Factory) ---------- */
+function doCopy(text, btn, msgEl, okText){
+  const done = ()=>{ show(msgEl,'ok',okText); if(btn){const o=btn.textContent;btn.textContent='Copied ✓';setTimeout(()=>btn.textContent=o,1500);} };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done,msgEl));
+  } else fallbackCopy(text,done,msgEl);
+}
+function fallbackCopy(text,done,msgEl){
+  const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try{ document.execCommand('copy'); done(); }
+  catch(e){ show(msgEl,'warn','Auto-copy blocked — open "View" above, long-press → Select All → Copy.'); }
+  document.body.removeChild(ta);
+}
+
+/* ================= STEP 1 — build prompt ================= */
+var masterPromptText = null;
+var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'' };
+
+async function loadMasterPrompt(){
+  if(masterPromptText) return masterPromptText;
+  const candidates = ['../MASTER-PROMPT-ExamNotesPDF%20v6.md', '../MASTER-PROMPT-ExamNotesPDF v6.md'];
+  let lastErr;
+  for(const url of candidates){
+    try{
+      const res = await fetch(url);
+      if(res.ok){ masterPromptText = await res.text(); return masterPromptText; }
+      lastErr = new Error('HTTP '+res.status);
+    }catch(e){ lastErr = e; }
+  }
+  // fetch is blocked on file:// pages, and fails if the file moved — fall back to a manual file picker
+  document.getElementById('filePickWrap').style.display = 'block';
+  const hint = location.protocol === 'file:'
+    ? 'This page was opened straight from the folder (file://), where browsers block reading other files automatically.'
+    : 'Could not load the master prompt file from the repo root ('+(lastErr?lastErr.message:'')+').';
+  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF v6.md manually — then tap "Build & copy prompt" again.');
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('masterPromptFile').addEventListener('change', function(){
+    const f = this.files && this.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      masterPromptText = String(reader.result||'');
+      document.getElementById('filePickWrap').style.display = 'none';
+      show(msg('pMsg'),'ok','Master prompt loaded from the picked file — tap "Build & copy prompt" again.');
+    };
+    reader.onerror = ()=>show(msg('pMsg'),'bad','Could not read that file — try picking it again.');
+    reader.readAsText(f);
+  });
+});
+
+function outputContract(){
+  return `
+
+=== PIPELINE OUTPUT CONTRACT (read this after finishing everything above — mandatory, additive only) ===
+Everything specified above still applies in full — every rule, every section, every format, every word-count target. This contract only adds wrapper markers around your final answer so an automated script can extract the pieces; it changes nothing about what you write, only how it is packaged at the very end.
+
+Output exactly three blocks, in this order, with nothing outside them (no extra commentary before, between, or after).
+
+CRITICAL RENDERING RULE: the content of EVERY block (including the HTML body and the plain-text publisher notes) MUST sit inside a fenced code block (three backticks on their own line before and after the content, immediately inside the sentinel markers). This is because chat interfaces render raw HTML visually — without the code fence, the person copying your reply gets rendered text with every tag destroyed. The fence is what keeps your output copyable as source. Never skip it.
+
+<<<SEO_JSON>>>
+\`\`\`json
+{
+  "focusKeyword": "...",
+  "seoTitle": "...",
+  "slug": "...",
+  "metaDescription": "...",
+  "h1": "..."
+}
+\`\`\`
+<<<END_SEO_JSON>>>
+
+<<<NOTES_BODY_HTML>>>
+\`\`\`html
+(the complete pure-HTML notes body exactly as specified above — the Table of Contents through the end of Section 9 and its ad slot, nothing removed, nothing summarized)
+\`\`\`
+<<<END_NOTES_BODY_HTML>>>
+
+<<<PUBLISHER_NOTES>>>
+\`\`\`
+(Part A2 SEO Linking Recommendations + Part E Mnemonics Archive + the Part D1 consolidated checks table, exactly as specified above, plain text as required)
+\`\`\`
+<<<END_PUBLISHER_NOTES>>>
+
+If you run out of space and cannot finish, stop cleanly at the end of a complete HTML element — the user will send "continue" and you must resume EXACTLY where you stopped (same block, inside a new code fence, no repetition of anything already written, no fresh introduction).
+`;
+}
+
+async function buildPrompt(){
+  const topic = document.getElementById('topic').value;
+  const examType = [...document.querySelectorAll('.examChk:checked')].map(c=>c.value).join(' / ') || 'CTET Paper I';
+  const subject = document.getElementById('subject').value;
+  state.topic = topic; state.examType = examType; state.subject = subject;
+
+  const master = await loadMasterPrompt();
+
+  const config = `=== RUN THIS GENERATION WITH THESE EXACT INPUT VARIABLES ===
+TOPIC: ${topic}
+EXAM TYPE: ${examType}
+SUBJECT: ${subject}
+TARGET_YEAR: 2026 (this is the locked constant already specified inside the prompt below — do not change it)
+=== END RUN CONFIGURATION — THE FULL MASTER PROMPT FOLLOWS BELOW, UNCHANGED ===
+
+`;
+  return config + master + outputContract();
+}
+
+async function copyPrompt(btn){
+  const out = document.getElementById('promptOut');
+  show(msg('pMsg'),'warn','Loading master prompt…');
+  const full = await buildPrompt();
+  out.value = full;
+  const words = full.trim().split(/\s+/).length;
+  document.getElementById('pStats').innerHTML = `<div class="stat"><b>${words.toLocaleString()}</b>words in prompt</div><div class="stat"><b>${state.examType}</b>exam type</div>`;
+  doCopy(full, btn, msg('pMsg'), 'Prompt copied — paste it into a new DeepSeek / ChatGPT / Claude chat, then come back with the reply.');
+}
+
+/* ================= STEP 2 — parse ================= */
+/* strip surrounding markdown code fences (```html ... ```), including several
+   stacked ones left behind when multiple "continue" chunks were concatenated */
+function stripFences(s){
+  s = String(s||'').trim();
+  // remove every fence line anywhere in the block: safe because our own content
+  // never legitimately contains a line that is only ``` or ```lang
+  s = s.replace(/^```[a-zA-Z]*\s*$/gm,'');
+  return s.trim();
+}
+function parseSentinels(raw){
+  const seoMatch = raw.match(/<<<SEO_JSON>>>([\s\S]*?)<<<END_SEO_JSON>>>/);
+  const bodyMatch = raw.match(/<<<NOTES_BODY_HTML>>>([\s\S]*?)(?:<<<END_NOTES_BODY_HTML>>>|$)/);
+  const pubMatch = raw.match(/<<<PUBLISHER_NOTES>>>([\s\S]*?)(?:<<<END_PUBLISHER_NOTES>>>|$)/);
+  if(!seoMatch || !bodyMatch) return null;
+  let seo;
+  try{
+    seo = JSON.parse(stripFences(seoMatch[1]));
+  }catch(e){ return null; }
+  return {
+    seo,
+    bodyHtml: stripFences(bodyMatch[1]),
+    publisherNotes: pubMatch ? stripFences(pubMatch[1]) : '',
+    method:'sentinel',
+    truncated: raw.indexOf('<<<END_PUBLISHER_NOTES>>>') === -1
+  };
+}
+
+function slugify(s){
+  return String(s||'').toLowerCase().trim()
+    .replace(/^\/+|\/+$/g,'').replace(/\/+$/,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+}
+
+function parseHeuristic(raw){
+  const get = (label) => {
+    const re = new RegExp(label + '\\s*:?\\s*(.+)', 'i');
+    const m = raw.match(re);
+    return m ? m[1].trim().replace(/[`*]/g,'').split(/\r?\n/)[0].trim() : '';
+  };
+  const focusKeyword = get('Focus Keyword');
+  const seoTitle = get('SEO Title');
+  const slugRaw = get('Permalink/Slug') || get('Slug');
+  const metaDescription = get('Meta Description');
+  let h1 = '';
+  const h1Match = raw.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if(h1Match) h1 = h1Match[1].replace(/<[^>]+>/g,'').trim();
+  else h1 = get('H1 \\(Post Title\\)') || get('H1');
+
+  let bodyHtml = '', publisherNotes = '';
+  const h2Start = raw.search(/<h2[\s>]/i);
+  let endIdx = raw.length;
+  const endMarkers = [/END OF NOTES/i, /SEO Linking Recommendations/i, /MNEMONICS ARCHIVE/i, /CONSOLIDATED FINAL CHECKS/i];
+  for(const m of endMarkers){
+    const idx = raw.search(m);
+    if(idx !== -1 && idx < endIdx && (h2Start===-1 || idx > h2Start)) endIdx = idx;
+  }
+  if(h2Start !== -1){
+    bodyHtml = raw.slice(h2Start, endIdx).trim();
+    publisherNotes = endIdx < raw.length ? raw.slice(endIdx).trim() : '';
+  }
+
+  return { seo: {focusKeyword, seoTitle, slug: slugify(slugRaw), metaDescription, h1}, bodyHtml, publisherNotes, method:'heuristic' };
+}
+
+function parseResponse(raw){
+  let result = parseSentinels(raw);
+  if(!result) result = parseHeuristic(raw);
+  const warnings = [];
+  if(!result.seo.focusKeyword) warnings.push('Focus Keyword missing — fill in manually on the next step.');
+  if(!result.seo.seoTitle) warnings.push('SEO Title missing — fill in manually.');
+  if(!result.seo.slug) warnings.push('URL Slug missing — fill in manually.');
+  if(!result.seo.metaDescription) warnings.push('Meta Description missing — fill in manually.');
+  if(!result.seo.h1) warnings.push('H1 missing — fill in manually.');
+  if(!result.bodyHtml || result.bodyHtml.length < 500) warnings.push('Notes body looks too short or missing — re-check the paste, or edit it manually on the next step.');
+  if(result.truncated) warnings.push('The reply looks CUT OFF midway (no closing marker found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
+  if(result.method==='heuristic') warnings.push('Markers were not found — used fallback parsing (reading the visible SEO panel + HTML). Double-check every field.');
+  result.warnings = warnings;
+  return result;
+}
+
+var accumulatedRaw = '';
+function copyContinue(btn){
+  const t = `Continue EXACTLY from where your previous reply stopped. Rules:
+- Do NOT repeat anything already written. Do NOT start over. No introduction, no summary of what came before.
+- Resume mid-block: if you stopped inside <<<NOTES_BODY_HTML>>>, continue the HTML from the next element, inside a new \`\`\`html code fence.
+- When the current block is complete, close it with its END marker and continue with the remaining blocks per the original PIPELINE OUTPUT CONTRACT (code fences mandatory).`;
+  doCopy(t, btn, msg('parseMsg'), '"Continue" prompt copied — paste it in the SAME chat, then paste the new reply here with the continuation checkbox ticked.');
+}
+function parseAndGo(){
+  let raw = document.getElementById('rawIn').value;
+  if(!raw.trim()){ show(msg('parseMsg'),'bad','Paste the AI reply first.'); return; }
+  if(document.getElementById('appendMode').checked && accumulatedRaw){
+    raw = accumulatedRaw + '\n' + raw;   // stitch continuation onto the earlier paste(s)
+  }
+  accumulatedRaw = raw;
+  const result = parseResponse(raw);
+  state.parsed = result;
+  state.seo = result.seo;
+  state.bodyHtml = result.bodyHtml;
+  state.publisherNotes = result.publisherNotes;
+
+  const issuesEl = document.getElementById('parseIssues');
+  if(result.warnings.length){
+    issuesEl.className = 'issues show';
+    issuesEl.innerHTML = result.warnings.map(w=>'<div>⚠ '+w+'</div>').join('');
+  } else { issuesEl.className = 'issues'; issuesEl.innerHTML=''; }
+
+  show(msg('parseMsg'), result.warnings.length ? 'warn' : 'ok',
+    result.warnings.length ? 'Parsed with '+result.warnings.length+' thing(s) to check — continue to Review.' : 'Parsed cleanly ('+result.method+' method) — continue to Review.');
+}
+
+/* ================= STEP 3 — review & edit ================= */
+function fillReviewForm(){
+  document.getElementById('fFocusKeyword').value = state.seo.focusKeyword || '';
+  document.getElementById('fSeoTitle').value = state.seo.seoTitle || '';
+  document.getElementById('fSlug').value = state.seo.slug || '';
+  document.getElementById('fMetaDescription').value = state.seo.metaDescription || '';
+  document.getElementById('fH1').value = state.seo.h1 || '';
+  document.getElementById('fBodyHtml').value = state.bodyHtml || '';
+  document.getElementById('fPublisherNotes').value = state.publisherNotes || '';
+}
+function syncFormToState(){
+  state.seo = {
+    focusKeyword: document.getElementById('fFocusKeyword').value.trim(),
+    seoTitle: document.getElementById('fSeoTitle').value.trim(),
+    slug: slugify(document.getElementById('fSlug').value.trim()),
+    metaDescription: document.getElementById('fMetaDescription').value.trim(),
+    h1: document.getElementById('fH1').value.trim()
+  };
+  state.bodyHtml = document.getElementById('fBodyHtml').value;
+  state.publisherNotes = document.getElementById('fPublisherNotes').value;
+}
+function updatePreview(){
+  syncFormToState();
+  const frame = document.getElementById('previewFrame');
+  /* the closing body tag below MUST keep its backslash escape: dev servers
+     (Live Server) inject their reload script before the first unescaped
+     closing-body sequence in the file, which would split this script element
+     and dump the rest of the source as visible page text */
+  frame.srcdoc = '<meta charset="utf-8"><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'<\/body>';
+  const text = state.bodyHtml.replace(/<[^>]+>/g,' ');
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  document.getElementById('bodyWords').textContent = words.toLocaleString();
+}
+['fFocusKeyword','fSeoTitle','fSlug','fMetaDescription','fH1','fPublisherNotes'].forEach(id=>{
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', syncFormToState);
+  });
+});
+
+/* ================= STEP 4 — hand off to GitHub ================= */
+function loadSettings(){
+  try{
+    const s = JSON.parse(localStorage.getItem('notesFactorySettings')||'{}');
+    document.getElementById('ghOwner').value = s.owner || 'bugignore';
+    document.getElementById('ghRepo').value = s.repo || 'question-factory';
+  }catch(e){}
+  document.getElementById('ghOwner').oninput = saveSettings;
+  document.getElementById('ghRepo').oninput = saveSettings;
+}
+function saveSettings(){
+  const s = { owner: document.getElementById('ghOwner').value.trim(), repo: document.getElementById('ghRepo').value.trim() };
+  localStorage.setItem('notesFactorySettings', JSON.stringify(s));
+  return s;
+}
+function getSettings(){
+  try{ return JSON.parse(localStorage.getItem('notesFactorySettings')||'{}'); }catch(e){ return {}; }
+}
+
+function downloadBundle(btn){
+  syncFormToState();
+  if(!state.seo.slug){ show(msg('sendMsg'),'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
+  const bundle = {
+    topic: state.topic, examType: state.examType, subject: state.subject, targetYear: 2026,
+    seo: state.seo, bodyHtml: state.bodyHtml, publisherNotes: state.publisherNotes,
+    createdAt: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = state.seo.slug + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  document.getElementById('dlSlug').textContent = state.seo.slug;
+  show(msg('sendMsg'),'ok','Downloaded '+state.seo.slug+'.json — now open the GitHub upload page and drop it into pending-notes/.');
+}
+function openGithubUpload(btn){
+  const s = saveSettings();
+  if(!s.owner || !s.repo){ show(msg('sendMsg'),'bad','Enter your GitHub username and repo name above first.'); return; }
+  const url = `https://github.com/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/upload/main/pending-notes`;
+  window.open(url, '_blank', 'noopener');
+  show(msg('sendMsg'),'ok','Opened the GitHub upload page in a new tab — drag the downloaded file in and commit.');
+}
+function copyBodyHtml(btn){
+  syncFormToState();
+  doCopy(state.bodyHtml, btn, msg('sendMsg'), 'Notes body HTML copied — paste into a WordPress Custom HTML block.');
+}
+function copySeoFields(btn){
+  syncFormToState();
+  const t = `Focus Keyword:      ${state.seo.focusKeyword}
+SEO Title:           ${state.seo.seoTitle}
+Permalink/Slug:      ${state.seo.slug}
+Meta Description:    ${state.seo.metaDescription}
+H1 (Post Title):     ${state.seo.h1}`;
+  doCopy(t, btn, msg('sendMsg'), 'Rank Math fields copied.');
+}
+function resetAll(){
+  if(!confirm('Clear this note and start over?')) return;
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'' };
+  accumulatedRaw = '';
+  document.getElementById('promptOut').value='';
+  document.getElementById('rawIn').value='';
+  document.getElementById('appendMode').checked=false;
+  document.getElementById('pStats').innerHTML='';
+  cur=0; render();
+}
+
+render();
+</script>
+</body>
+</html>

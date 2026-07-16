@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Content Factory</title>
+<style>
+  :root{
+    --paper:#F2F4F8; --card:#FFFFFF; --ink:#1B2A4A; --ink-soft:#51617F;
+    --line:#D8DEE9; --accent:#2A4D9B; --ok:#0E7C56;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.45}
+  .top{padding:22px 18px 14px;background:var(--card);border-bottom:1.5px solid var(--line);text-align:center}
+  .top h1{font-size:20px;margin:0 0 4px;font-weight:800}
+  .top p{margin:0;color:var(--ink-soft);font-size:13px}
+  main{max-width:560px;margin:0 auto;padding:18px}
+  a.card{display:block;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px;text-decoration:none;color:inherit}
+  a.card:active{border-color:var(--accent)}
+  a.card .emoji{font-size:26px}
+  a.card h2{font-size:17px;margin:10px 0 4px;color:var(--ink)}
+  a.card p{margin:0;color:var(--ink-soft);font-size:13px;line-height:1.5}
+  a.card .go{display:inline-block;margin-top:10px;color:var(--accent);font-weight:700;font-size:13px}
+  footer{text-align:center;color:var(--ink-soft);font-size:11.5px;padding:20px;}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>Content Factory</h1>
+  <p>Free tools that build exam-prep content, hosted entirely on GitHub Pages</p>
+</div>
+<main>
+  <a class="card" href="question-factory/">
+    <span class="emoji">📝</span>
+    <h2>Question Factory</h2>
+    <p>Build a bilingual MCQ-generation prompt, paste it into a free DeepSeek chat, check &amp; verify the answers, export a website-ready CSV. Runs entirely in the browser.</p>
+    <span class="go">Open tool →</span>
+  </a>
+  <a class="card" href="notes-factory/">
+    <span class="emoji">📚</span>
+    <h2>Notes Factory</h2>
+    <p>Build a topic-specific version of the ExamNotesPDF master prompt, paste it into a free chat tool, then review &amp; hand the finished notes off to WordPress publishing. No API keys, no passwords stored anywhere in the browser.</p>
+    <span class="go">Open tool →</span>
+  </a>
+</main>
+<footer>No servers, no accounts, no data leaves your device except what you choose to paste elsewhere.</footer>
+</body>
+</html>
