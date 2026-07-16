@@ -1,0 +1,17 @@
+{
+  "name": "Question Factory",
+  "short_name": "QFactory",
+  "description": "Generate, verify and export exam MCQ CSVs using DeepSeek",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F2F4F8",
+  "theme_color": "#1B2A4A",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
