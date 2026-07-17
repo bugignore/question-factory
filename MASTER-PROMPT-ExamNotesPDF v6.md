@@ -1,5 +1,18 @@
 # 🏆 MASTER PROMPT — "ExamNotesPDF" Premium Notes Engine (v1.1)
 
+## ⚡ TOP 10 NON-NEGOTIABLES (read first, hold ALL of these for the entire generation — every one is expanded in detail below, and every one has failed in a past run when a model "forgot" it mid-document)
+
+1. **Length:** 6,000–8,000 words of reader-visible prose (min 6,500). If you feel yourself running out of output space, do NOT compress or skip sections — stop cleanly mid-element and let the user send "continue."
+2. **One keyphrase, byte-identical everywhere:** the A0.5 panel decides the Focus Keyphrase/Title/Slug/Meta/H1 once; every later appearance is a character-exact copy. Year is 2026 everywhere.
+3. **Body = 100% pure HTML** (zero markdown), using the Part B card system at full visual richness from the FIRST section to the LAST — the final third of the document must look as premium as the first third. No fading out.
+4. **Every section of Part C appears, in order, through Section 9 (FAQ) + all 3 ad slots** — Sections 8 and 9 are where past runs silently died; they are as mandatory as Section 1.
+5. **Student voice, never teacher-training voice** (except Section 3, framed as exam content).
+6. **Exactly ONE locked tile (Section 7) and ONE memory-maps link** in the whole document.
+7. **Density 1–2%, readability first** — computed on visible prose only, never markup.
+8. **Direct answers win SERP features:** the first paragraph under the H1 includes a 40–60 word snippet-ready definition, and every H3/FAQ answer opens with the answer itself.
+9. **Real links only** — distinct plausible slugs, in-prose external links to official sources; never "#", never a footer link dump.
+10. **Truth over fluency:** every fact/PYQ/reference is real or explicitly flagged as an estimate. When unsure, flag it — never invent.
+
 ## INPUT VARIABLES (fill before running)
 - TOPIC: [ __________ ] — 🔒 **IF SUBJECT = CDP:** must be typed EXACTLY as it appears in the CDP MASTER TOPIC LIST below (same wording, e.g. "Factors Affecting Development & Individual Differences," not a paraphrase of it). TOPIC_NUMBER is then found automatically by matching this exact text against the list — do not ask the user for a separate number, and do not proceed if TOPIC doesn't match any list entry exactly (flag the mismatch and ask for the correct exact wording instead of guessing which topic was meant). **IF SUBJECT ≠ CDP** (Geography / History / Science / Maths / Hindi / English / EVS / Auto-detect that resolves to a non-CDP subject): TOPIC is free text — any topic within that subject's syllabus is valid. The CDP MASTER TOPIC LIST and TOPIC_NUMBER do not apply; skip TOPIC_NUMBER entirely and do not attempt to match TOPIC against the CDP list.
 - EXAM TYPE: [ CTET Paper I / II • PGT • TGT • KVS • NVS • DSSSB • UPTET • BPSC TRE — one or multiple ]
@@ -150,7 +163,12 @@ Treat a failing check the same as a compile error: fix silently, re-verify, then
    - Never confuse this with PYQ years in the 🔥 PYQ Alert box — those are real historical exam years (e.g. 2019, 2022) and must stay accurate; do not overwrite them with TARGET_YEAR.
    - Each mention must read as genuine exam-year context, never a mechanical filler repetition — vary the phrasing each time.
 
-**SEO rules recap:** Every H2 should lean toward a keyword variant; at least one H2 must carry the exact keyphrase. Every H3 must be phrased as a question a student would search.
+15. **Featured-snippet capture (SERP feature, separate from Rank Math's checker).** Immediately after the keyphrase-bearing opening sentence (item 6), include one **40–60 word, self-contained definition/answer paragraph** that directly answers "what is [Topic]?" in exam-precise language — the exact shape Google lifts into a featured snippet. It must stand alone (no "as discussed below"), contain the keyphrase once, and be genuinely quotable. This paragraph does double duty as the item-6 requirement; don't write two separate openers.
+16. **Answer-first H3s (People-Also-Ask capture).** Every H3 in the document is phrased as a real search question (already required) — AND the first sentence under every H3 must directly answer that question in 1–2 sentences before any elaboration. A student (or Google) reading only the H3 + first sentence gets a complete answer; the depth comes after. Never open an H3's body with background, a rhetorical question, or "let's understand."
+17. **Entity coverage (semantic SEO — how modern Google actually ranks beyond keyword matching).** Before drafting, list internally the 8–15 named entities a genuine expert document on this topic must mention (theorists, theory names, technical terms, policy documents, stage names, classic experiments — e.g. for learning theories: Pavlov, Skinner, Thorndike, classical/operant conditioning, law of effect, reinforcement schedules…). Every one of them must appear naturally somewhere in the body with at least a line of real substance — a topic page that covers all its entities outranks one that repeats its keyphrase. Do not print this internal list; its coverage IS the check.
+18. **Information gain — at least 3 elements a competitor's notes page won't have.** Generic coverage ranks nowhere. Include at minimum three of: a PYQ-derived trend insight (e.g. "this sub-topic's question count doubled after 2019"), an original comparison table no textbook prints, a misconception genuinely common among aspirants with its correction, a concrete NCERT page/chapter anchor, or a policy-to-exam mapping (NEP clause → the exact MCQ shape it produces). These are what make the page the one worth ranking — and they must be real, not manufactured filler (item 10 of the non-negotiables still rules).
+
+**SEO rules recap:** Every H2 should lean toward a keyword variant; at least one H2 must carry the exact keyphrase. Every H3 must be phrased as a question a student would search — and answered in its first sentence (item 16).
 
 ## A1.5 — CROSS-CHECK GATE (MANDATORY — run immediately after writing A1 items 1-5, before moving to Part A2)
 
@@ -691,6 +709,8 @@ This H2 MUST be added to the Table of Contents box (block 2) alongside all other
 - Delete any repeated point
 - Verify every data point (flag uncertainty explicitly)
 - Anti-boredom (non-negotiable): 💡 Surprise Fact every ~500 words • every section ends with a 1-line summary • reader must feel "I cannot stop"
+- **Prose quality bar:** every sentence earns its place — concrete over abstract ("Piaget ने 1936 में" beats "एक प्रसिद्ध मनोवैज्ञानिक ने"), varied sentence length and openings, zero throat-clearing ("यह एक महत्वपूर्ण topic है" says nothing — cut it). If a sentence would survive unchanged in any other topic's notes, it's filler — delete or make it topic-specific.
+- **No visual fade-out:** re-scan Sections 7–9 specifically — card density, box variety, and formatting richness there must match Sections 1–3. A document that starts with rich cards and ends in bare paragraphs is a known LLM failure mode and an instant AI tell.
 
 ## D1 — CONSOLIDATED FINAL CHECKS TABLE (MANDATORY — this is the ONE and ONLY checks table in the entire output, and it is the ABSOLUTE LAST thing printed, after Part E)
 
@@ -717,6 +737,9 @@ Freshness: TARGET_YEAR appears naturally in-body ≥4 times beyond SEO fields (o
 All 9 sections present in order incl. Section 9 FAQ (own H2 + TOC entry) and Section 8C roadmap with real <a> tags on 3 genuinely relevant topics? YES/NO
 No teacher-training language outside Sec 3; every flowchart traces real subject content for THIS topic (no generic placeholder)? YES/NO
 Mobile HTML rules followed: box-sizing/max-width on every card, correct table pattern per column count, no flush two-tone box? YES/NO
+SERP features: 40–60 word snippet-ready definition after the H1; every H3's first sentence directly answers its question? YES/NO
+Entity coverage + information gain: 8–15 topic entities each covered with substance; ≥3 elements a competitor page won't have (name them)? YES/NO + list
+Visual consistency: Sections 7–9 card density matches Sections 1–3 (no fade-out into bare paragraphs)? YES/NO
 
 — MONETIZATION & GATING —
 EXACTLY ONE locked tile (Section 7) + ONE memory-maps link; PYQ Alerts fully visible with soft upsell tag; 3 distinct AdSense slots present? YES/NO
