@@ -27,7 +27,7 @@ add_action( 'init', function () {
 		'rank_math_description',   // Meta Description
 	);
 	foreach ( $fields as $field ) {
-		register_post_meta( 'post', $field, array(
+		register_post_meta( 'free_notes', $field, array(
 			'show_in_rest'  => true,
 			'single'        => true,
 			'type'          => 'string',

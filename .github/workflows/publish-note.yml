@@ -90,7 +90,7 @@ jobs:
             } | if .title == null or .title == "" then .title = .slug else . end' "$f")"
 
             http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
-              -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/posts" \
+              -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/free_notes" \
               -H "Content-Type: application/json" \
               -u "$WP_USERNAME:$WP_APP_PASSWORD" \
               --data-binary "$payload" || echo "000")"
@@ -102,7 +102,7 @@ jobs:
                 echo "::warning::$slug — WordPress rejected the Rank Math meta fields. Install the register-rank-math-meta snippet (see notes-factory/README.md) to publish SEO fields automatically. Retrying WITHOUT meta so the draft still lands; paste the Rank Math fields manually for this post."
                 payload="$(echo "$payload" | jq 'del(.meta)')"
                 http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
-                  -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/posts" \
+                  -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/free_notes" \
                   -H "Content-Type: application/json" \
                   -u "$WP_USERNAME:$WP_APP_PASSWORD" \
                   --data-binary "$payload" || echo "000")"
