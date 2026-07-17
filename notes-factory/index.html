@@ -63,6 +63,11 @@
   .copyRow .cVal{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
   .copyRow .cVal:empty::before{content:"— empty —";color:var(--ink-soft);font-style:italic}
   .copyRow button{flex:none;width:auto;margin:0;padding:8px 12px;font-size:13px}
+  details.fieldRow{margin-top:8px}
+  details.fieldRow summary{display:flex;align-items:center;gap:8px}
+  details.fieldRow summary .fLabel{flex:1;min-width:0}
+  details.fieldRow>input,details.fieldRow>textarea{margin:0 12px 12px;width:calc(100% - 24px)}
+  .miniCopy{flex:none;border:1.5px solid var(--line);background:var(--card);border-radius:8px;padding:4px 10px;font-size:14px;cursor:pointer;line-height:1}
   fieldset{border:1.5px solid var(--line);border-radius:9px;padding:10px 12px;margin-top:10px}
   fieldset legend{font-size:12.5px;font-weight:600;color:var(--ink-soft);padding:0 4px}
   .privacyNote{background:#EDF1FA;border-radius:9px;padding:10px 12px;font-size:12px;color:var(--ink-soft);margin-top:10px}
@@ -140,33 +145,31 @@
   <h2>3 · Review &amp; edit</h2>
   <p class="hint">Fix anything the parser missed before handing it off. This is what actually gets published.</p>
 
-  <fieldset>
-    <legend>SEO fields (Rank Math panel)</legend>
-    <label>Focus Keyword</label>
-    <input type="text" id="fFocusKeyword">
-    <label>SEO Title</label>
-    <input type="text" id="fSeoTitle">
-    <label>URL Slug</label>
-    <input type="text" id="fSlug">
-    <label>Meta Description</label>
-    <textarea id="fMetaDescription" style="min-height:70px;font-family:inherit;font-size:14px"></textarea>
-    <label>H1</label>
-    <input type="text" id="fH1">
-    <label>Featured Image — ALT Text</label>
-    <input type="text" id="fImageAltText">
-    <label>Featured Image — Generation Prompt (for Midjourney/DALL·E/etc.)</label>
-    <textarea id="fImagePrompt" style="min-height:70px;font-family:inherit;font-size:14px"></textarea>
-  </fieldset>
+  <div class="msg" id="reviewMsg"></div>
 
-  <label>Notes body (HTML) — word count: <span id="bodyWords">0</span></label>
+  <details class="fieldRow"><summary><span class="fLabel">Focus Keyword</span><button class="miniCopy" onclick="copyReviewField(event,'fFocusKeyword','Focus Keyword')">📋</button></summary>
+    <input type="text" id="fFocusKeyword"></details>
+  <details class="fieldRow"><summary><span class="fLabel">SEO Title</span><button class="miniCopy" onclick="copyReviewField(event,'fSeoTitle','SEO Title')">📋</button></summary>
+    <input type="text" id="fSeoTitle"></details>
+  <details class="fieldRow"><summary><span class="fLabel">URL Slug</span><button class="miniCopy" onclick="copyReviewField(event,'fSlug','URL Slug')">📋</button></summary>
+    <input type="text" id="fSlug"></details>
+  <details class="fieldRow"><summary><span class="fLabel">Meta Description</span><button class="miniCopy" onclick="copyReviewField(event,'fMetaDescription','Meta Description')">📋</button></summary>
+    <textarea id="fMetaDescription" style="min-height:70px;font-family:inherit;font-size:14px"></textarea></details>
+  <details class="fieldRow"><summary><span class="fLabel">H1</span><button class="miniCopy" onclick="copyReviewField(event,'fH1','H1')">📋</button></summary>
+    <input type="text" id="fH1"></details>
+  <details class="fieldRow"><summary><span class="fLabel">Featured Image — ALT Text</span><button class="miniCopy" onclick="copyReviewField(event,'fImageAltText','Image ALT Text')">📋</button></summary>
+    <input type="text" id="fImageAltText"></details>
+  <details class="fieldRow"><summary><span class="fLabel">Featured Image — Generation Prompt</span><button class="miniCopy" onclick="copyReviewField(event,'fImagePrompt','Image Generation Prompt')">📋</button></summary>
+    <textarea id="fImagePrompt" style="min-height:70px;font-family:inherit;font-size:14px"></textarea></details>
+
+  <details class="fieldRow"><summary><span class="fLabel">Notes body HTML — <span id="bodyWords">0</span> words</span><button class="miniCopy" onclick="copyReviewField(event,'fBodyHtml','Notes body HTML')">📋</button></summary>
+    <textarea id="fBodyHtml" style="min-height:220px" oninput="updatePreview()"></textarea></details>
+
+  <details class="fieldRow"><summary><span class="fLabel">Publisher-only notes (SEO linking recs + mnemonics archive)</span><button class="miniCopy" onclick="copyReviewField(event,'fPublisherNotes','Publisher notes')">📋</button></summary>
+    <textarea id="fPublisherNotes" style="min-height:160px"></textarea></details>
+
+  <label>Preview (how the notes body will render)</label>
   <iframe class="previewFrame" id="previewFrame" sandbox=""></iframe>
-  <details><summary>Edit raw body HTML</summary><div>
-    <textarea id="fBodyHtml" style="min-height:220px" oninput="updatePreview()"></textarea>
-  </div></details>
-
-  <details><summary>Publisher-only notes (SEO linking recs + mnemonics archive)</summary><div>
-    <textarea id="fPublisherNotes" style="min-height:160px"></textarea>
-  </div></details>
 </section>
 
 <!-- STEP 4 -->
@@ -555,14 +558,26 @@ function syncFormToState(){
   state.bodyHtml = document.getElementById('fBodyHtml').value;
   state.publisherNotes = document.getElementById('fPublisherNotes').value;
 }
+function copyReviewField(e, id, label){
+  /* the copy button lives inside a <summary> — stop the click from also
+     toggling the collapsed section open/closed */
+  e.preventDefault(); e.stopPropagation();
+  syncFormToState();
+  const val = document.getElementById(id).value;
+  if(!val.trim()){ show(msg('reviewMsg'),'bad', label+' is empty — nothing to copy.'); return; }
+  doCopy(val, null, msg('reviewMsg'), label+' copied.');
+}
+
 function updatePreview(){
   syncFormToState();
   const frame = document.getElementById('previewFrame');
   /* the closing body tag below MUST keep its backslash escape: dev servers
      (Live Server) inject their reload script before the first unescaped
      closing-body sequence in the file, which would split this script element
-     and dump the rest of the source as visible page text */
-  frame.srcdoc = '<meta charset="utf-8"><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'<\/body>';
+     and dump the rest of the source as visible page text.
+     The DOCTYPE is load-bearing too: without it the iframe renders in quirks
+     mode, where the notes cards' box-sizing/margin CSS displays wrong. */
+  frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'<\/body></html>';
   const text = state.bodyHtml.replace(/<[^>]+>/g,' ');
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   document.getElementById('bodyWords').textContent = words.toLocaleString();
