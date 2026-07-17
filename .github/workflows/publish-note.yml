@@ -42,6 +42,56 @@ jobs:
             exit 1
           fi
 
+          # App label -> real taxonomy term name, matching what already exists on the
+          # site (see notes-factory/index.html's EXAM_TYPES/subject <select> for the
+          # full label list). Labels with no mapping here are skipped with a warning
+          # rather than auto-creating a stray near-duplicate term — add a line here
+          # once you decide what term a new label should map to.
+          declare -A EXAM_TERM_MAP=(
+            ["CTET Paper I"]="CTET"
+            ["CTET Paper II"]="CTET"
+            ["PGT"]="PGT"
+            ["TGT"]="TGT"
+            ["KVS"]="KVS"
+            ["NVS"]="NVS"
+            ["DSSSB"]="DSSSB PRT"
+            ["UPTET"]="UPTET"
+            ["BPSC TRE"]="BPSC TRE"
+          )
+          declare -A SUBJECT_TERM_MAP=(
+            ["CDP"]="Child Development & Pedagogy"
+            ["Geography"]="Geography"
+            ["History"]="History"
+            ["Science"]="Science"
+            ["Maths"]="Maths"
+            ["Hindi"]="Hindi"
+            ["English"]="English"
+            ["EVS"]="EVS"
+          )
+          # "Auto-detect" is intentionally unmapped — the app never resolves what
+          # subject it auto-detected to, so there's nothing reliable to assign.
+
+          # Look up a term by exact name in a taxonomy; create it if missing.
+          # Prints the term ID on success, prints nothing (just a ::warning::) on failure.
+          resolve_term_id(){
+            local tax="$1" name="$2" enc id http
+            enc="$(jq -rn --arg n "$name" '$n|@uri')"
+            id="$(curl -sS "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}?search=${enc}&per_page=100" \
+                    -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                  | jq -r --arg n "$name" '[.[] | select(.name==$n)] | .[0].id // empty')"
+            if [ -n "$id" ]; then echo "$id"; return; fi
+            http="$(curl -sS -o /tmp/term-resp.json -w "%{http_code}" \
+                      -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}" \
+                      -H "Content-Type: application/json" \
+                      -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                      --data-binary "$(jq -n --arg n "$name" '{name:$n}')" || echo "000")"
+            if [ "$http" = "201" ]; then
+              jq -r '.id' /tmp/term-resp.json
+            else
+              echo "::warning::Could not find or create $tax term \"$name\" (HTTP $http) — skipping this term assignment." >&2
+            fi
+          }
+
           shopt -s nullglob
           if [ -n "$ONLY_FILE" ]; then
             files=("$ONLY_FILE")
@@ -76,7 +126,39 @@ jobs:
               continue
             fi
 
-            payload="$(jq '{
+            # Resolve exam/subject taxonomy term IDs for this note (see the maps above).
+            exam_ids=()
+            raw_exam="$(jq -r '.examType // empty' "$f")"
+            if [ -n "$raw_exam" ]; then
+              IFS='/' read -ra exam_labels <<< "$raw_exam"
+              for raw_label in "${exam_labels[@]}"; do
+                label="$(echo "$raw_label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+                [ -z "$label" ] && continue
+                mapped="${EXAM_TERM_MAP[$label]:-}"
+                if [ -z "$mapped" ]; then
+                  echo "::warning::$slug — no exam-taxonomy mapping for \"$label\", leaving unassigned."
+                  continue
+                fi
+                tid="$(resolve_term_id exam "$mapped")"
+                [ -n "$tid" ] && exam_ids+=("$tid")
+              done
+            fi
+            exam_ids_json="[]"
+            [ ${#exam_ids[@]} -gt 0 ] && exam_ids_json="$(printf '%s\n' "${exam_ids[@]}" | jq -R . | jq -sc 'map(tonumber)')"
+
+            subject_ids_json="[]"
+            raw_subject="$(jq -r '.subject // empty' "$f")"
+            if [ -n "$raw_subject" ] && [ "$raw_subject" != "Auto-detect" ]; then
+              mapped="${SUBJECT_TERM_MAP[$raw_subject]:-}"
+              if [ -n "$mapped" ]; then
+                tid="$(resolve_term_id subject "$mapped")"
+                [ -n "$tid" ] && subject_ids_json="[$tid]"
+              else
+                echo "::warning::$slug — no subject-taxonomy mapping for \"$raw_subject\", leaving unassigned."
+              fi
+            fi
+
+            payload="$(jq --argjson exam "$exam_ids_json" --argjson subj "$subject_ids_json" '{
               title: .seo.h1,
               slug: .seo.slug,
               excerpt: .seo.metaDescription,
@@ -87,7 +169,9 @@ jobs:
                 rank_math_title: (.seo.seoTitle // ""),
                 rank_math_description: (.seo.metaDescription // "")
               }
-            } | if .title == null or .title == "" then .title = .slug else . end' "$f")"
+            } | if .title == null or .title == "" then .title = .slug else . end
+              | if ($exam|length) > 0 then .exam = $exam else . end
+              | if ($subj|length) > 0 then .subject = $subj else . end' "$f")"
 
             http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
               -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/free_notes" \
