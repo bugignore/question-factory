@@ -101,6 +101,10 @@
     <option>EVS</option>
   </select>
 
+  <label>Hindi / English mix — <span id="langMixLabel">Hindi 70% + English 30%</span></label>
+  <input type="range" id="hindiPercent" min="0" max="100" step="5" value="70" oninput="updateLangMixLabel()">
+  <p class="hint" style="margin-top:2px">Key terms, definitions, and technical labels always stay in English regardless of this split — this only controls the explanations/tricks/teacher-talk prose.</p>
+
   <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build &amp; copy prompt</button>
   <div class="msg" id="pMsg"></div>
   <div id="filePickWrap" style="display:none">
@@ -282,7 +286,12 @@ function fallbackCopy(text,done,msgEl){
 
 /* ================= STEP 1 — build prompt ================= */
 var masterPromptText = null;
-var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'' };
+var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70 };
+
+function updateLangMixLabel(){
+  const hindi = document.getElementById('hindiPercent').value;
+  document.getElementById('langMixLabel').textContent = `Hindi ${hindi}% + English ${100-hindi}%`;
+}
 
 async function loadMasterPrompt(){
   if(masterPromptText) return masterPromptText;
@@ -360,7 +369,8 @@ async function buildPrompt(){
   const topic = document.getElementById('topic').value;
   const examType = [...document.querySelectorAll('.examChk:checked')].map(c=>c.value).join(' / ') || 'CTET Paper I';
   const subject = document.getElementById('subject').value;
-  state.topic = topic; state.examType = examType; state.subject = subject;
+  const hindiPercent = parseInt(document.getElementById('hindiPercent').value, 10);
+  state.topic = topic; state.examType = examType; state.subject = subject; state.hindiPercent = hindiPercent;
 
   const master = await loadMasterPrompt();
 
@@ -369,6 +379,7 @@ TOPIC: ${topic}
 EXAM TYPE: ${examType}
 SUBJECT: ${subject}
 TARGET_YEAR: 2026 (this is the locked constant already specified inside the prompt below — do not change it)
+LANGUAGE MIX: Hindi ${hindiPercent}% + English ${100-hindiPercent}% — this OVERRIDES the "Hindi 70% + English 30%" default stated in the master prompt's "🌐 LANGUAGE & LENGTH" section below. Apply this ratio to the explanations/tricks/teacher-talk/connecting prose only — key terms, definitions, and technical labels still stay in English regardless of this split, exactly as that section already specifies.
 === END RUN CONFIGURATION — THE FULL MASTER PROMPT FOLLOWS BELOW, UNCHANGED ===
 
 `;
@@ -381,7 +392,7 @@ async function copyPrompt(btn){
   const full = await buildPrompt();
   out.value = full;
   const words = full.trim().split(/\s+/).length;
-  document.getElementById('pStats').innerHTML = `<div class="stat"><b>${words.toLocaleString()}</b>words in prompt</div><div class="stat"><b>${state.examType}</b>exam type</div>`;
+  document.getElementById('pStats').innerHTML = `<div class="stat"><b>${words.toLocaleString()}</b>words in prompt</div><div class="stat"><b>${state.examType}</b>exam type</div><div class="stat"><b>${state.hindiPercent}% / ${100-state.hindiPercent}%</b>Hindi / English</div>`;
   doCopy(full, btn, msg('pMsg'), 'Prompt copied — paste it into a new DeepSeek / ChatGPT / Claude chat, then come back with the reply.');
 }
 
@@ -582,6 +593,7 @@ async function unlockGithub(btn){
 function buildBundle(){
   return {
     topic: state.topic, examType: state.examType, subject: state.subject, targetYear: 2026,
+    hindiPercent: state.hindiPercent,
     seo: state.seo, bodyHtml: state.bodyHtml, publisherNotes: state.publisherNotes,
     createdAt: new Date().toISOString()
   };
@@ -669,12 +681,14 @@ H1 (Post Title):     ${state.seo.h1}`;
 }
 function resetAll(){
   if(!confirm('Clear this note and start over?')) return;
-  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'' };
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70 };
   accumulatedRaw = '';
   document.getElementById('promptOut').value='';
   document.getElementById('rawIn').value='';
   document.getElementById('appendMode').checked=false;
   document.getElementById('pStats').innerHTML='';
+  document.getElementById('hindiPercent').value = 70;
+  updateLangMixLabel();
   cur=0; render();
 }
 
