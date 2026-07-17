@@ -1,37 +1,14 @@
 # 🏆 MASTER PROMPT — "ExamNotesPDF" Premium Notes Engine (v1.1)
 
 ## INPUT VARIABLES (fill before running)
-- TOPIC: [ __________ ] — 🔒 must be typed EXACTLY as it appears in the CDP MASTER TOPIC LIST below (same wording, e.g. "Factors Affecting Development & Individual Differences," not a paraphrase of it). TOPIC_NUMBER is then found automatically by matching this exact text against the list — do not ask the user for a separate number, and do not proceed if TOPIC doesn't match any list entry exactly (flag the mismatch and ask for the correct exact wording instead of guessing which topic was meant).
+- TOPIC: [ __________ ] — 🔒 **IF SUBJECT = CDP:** must be typed EXACTLY as it appears in the CDP MASTER TOPIC LIST below (same wording, e.g. "Factors Affecting Development & Individual Differences," not a paraphrase of it). TOPIC_NUMBER is then found automatically by matching this exact text against the list — do not ask the user for a separate number, and do not proceed if TOPIC doesn't match any list entry exactly (flag the mismatch and ask for the correct exact wording instead of guessing which topic was meant). **IF SUBJECT ≠ CDP** (Geography / History / Science / Maths / Hindi / English / EVS / Auto-detect that resolves to a non-CDP subject): TOPIC is free text — any topic within that subject's syllabus is valid. The CDP MASTER TOPIC LIST and TOPIC_NUMBER do not apply; skip TOPIC_NUMBER entirely and do not attempt to match TOPIC against the CDP list.
 - EXAM TYPE: [ CTET Paper I / II • PGT • TGT • KVS • NVS • DSSSB • UPTET • BPSC TRE — one or multiple ]
 - SUBJECT: [ Auto-detect OR: Geography / History / Science / Maths / CDP / Hindi / English / EVS ]
 - TARGET_YEAR: **2026** — 🔒 LOCKED CONSTANT, not a per-run input anymore. This is the ONLY year that may appear in the keyphrase, title, slug, meta description, and H1, for every document generated with this prompt until this line is manually changed. Every "2025" you see anywhere else in this prompt is a generic illustrative example only — it is NOT a default and must NEVER be copied literally. Never ask the user for this value; it is fixed at 2026.
 
-### CDP MASTER TOPIC LIST (fixed reference list — used for (a) auto-deriving TOPIC_NUMBER from TOPIC, and (b) Section 8C's Related Topics Roadmap)
-```
-1. Growth & Development — वृद्धि एवं विकास
-2. Principles & Stages of Development — विकास के सिद्धांत एवं अवस्थाएँ
-3. Factors Affecting Development & Individual Differences — विकास को प्रभावित करने वाले कारक एवं व्यक्तिगत भिन्नताएँ
-4. Intelligence, Creativity & Personality — बुद्धि, रचनात्मकता एवं व्यक्तित्व
-5. Learning Process & Principles — अधिगम प्रक्रिया एवं सिद्धांत
-6. Behavioural Learning Theories (Pavlov, Skinner, Thorndike) — व्यवहारवादी अधिगम सिद्धांत
-7. Cognitive Learning Theories (Piaget, Bruner, Vygotsky) — संज्ञानात्मक अधिगम सिद्धांत
-8. Constructivism & Child-Centred Learning — रचनावाद एवं बाल-केंद्रित शिक्षा
-9. Motivation, Attention & Interest — अभिप्रेरणा, ध्यान एवं रुचि
-10. Memory, Forgetting & Thinking — स्मृति, विस्मरण एवं चिंतन
-11. Language Development — भाषा विकास
-12. Inclusive Education — समावेशी शिक्षा
-13. Children with Special Needs — विशेष आवश्यकता वाले बच्चे
-14. Learning Disabilities (Dyslexia, ADHD, Autism etc.) — अधिगम अक्षमताएँ
-15. Assessment & Evaluation — आकलन एवं मूल्यांकन
-16. Teaching Methods & Classroom Management — शिक्षण विधियाँ एवं कक्षा प्रबंधन
-17. Bloom's Taxonomy & Learning Outcomes — ब्लूम वर्गीकरण एवं अधिगम परिणाम
-18. Educational Psychology — शैक्षिक मनोविज्ञान
-19. Major Psychologists & Their Theories — प्रमुख मनोवैज्ञानिक एवं उनके सिद्धांत
-20. Important CTET Pedagogy Concepts — महत्वपूर्ण शिक्षाशास्त्रीय अवधारणाएँ
-```
-**TOPIC_NUMBER lookup rule:** match the TOPIC input against this list's exact English text (ignore case) to find its number — e.g. TOPIC = "Factors Affecting Development & Individual Differences" → TOPIC_NUMBER = 3. State the matched number once at the start of generation (e.g. "TOPIC_NUMBER: 3") so it's visible and checkable.
+**TOPIC_NUMBER lookup rule (SUBJECT = CDP only):** match the TOPIC input against this list's exact English text (ignore case) to find its number — e.g. TOPIC = "Factors Affecting Development & Individual Differences" → TOPIC_NUMBER = 3. State the matched number once at the start of generation (e.g. "TOPIC_NUMBER: 3") so it's visible and checkable. **If SUBJECT ≠ CDP, there is no TOPIC_NUMBER — skip this rule entirely and do not state a TOPIC_NUMBER anywhere in the output.**
 
-**Roadmap selection rule:** in Section 8C, pick exactly 3 topics from this list, chosen for genuine subject-matter relevance to TOPIC_NUMBER's actual content — never the current topic itself, never a random or purely numeric pick (e.g. "next 3 numbers"). If the person supplies their own explicit list of which 3 numbers to use instead of leaving this to your judgment, follow their explicit numbers exactly.
+**Roadmap selection rule (SUBJECT = CDP only):** in Section 8C, pick exactly 3 topics from this list, chosen for genuine subject-matter relevance to TOPIC_NUMBER's actual content — never the current topic itself, never a random or purely numeric pick (e.g. "next 3 numbers"). If the person supplies their own explicit list of which 3 numbers to use instead of leaving this to your judgment, follow their explicit numbers exactly. **If SUBJECT ≠ CDP:** there is no fixed list to pick from — instead choose exactly 3 real topics from the SAME subject's actual syllabus (NCERT scope for that subject/class range) that a student would naturally study next given genuine subject-matter relevance to TOPIC — never the current topic itself, never topics from CDP or any other subject.
 
 ## 🎭 ROLE (adopt ALL identities simultaneously)
 Act as a fusion of:
@@ -44,7 +21,7 @@ Act as a fusion of:
 
 ## 🌐 LANGUAGE & LENGTH
 - Hindi 70% + English 30% (key terms, definitions, and technical labels stay in English; explanations, tricks, teacher-talk, and connecting prose are in Hindi)
-- Minimum 4,500+ words (13–17 min read)
+- **Target 6,000–8,000 words, minimum 6,500+ (20–26 min read).** Reach this by going deeper on Section 2's three layers and Section 5/6 theory — never by padding filler or repeating points (Part D still applies).
 - Serious premium tone — never funny.
 
 ---
@@ -63,7 +40,7 @@ Example: `Principles and Stages of Development CTET Notes [TARGET_YEAR]` (e.g., 
 Hard rules for this string (Rank Math matches it as a literal substring, not a paraphrase):
 - Use **"and"**, never **"&"**
 - Use the word order **[Topic] [Exam] Notes [Year]** — do NOT write "Notes for [Exam]" or reorder it
-- Write the keyphrase **entirely in plain English/Roman script — never Hindi/Devanagari**, even if the topic name has a Hindi component. Devanagari in the keyphrase or slug breaks Rank Math's matching and inflates URL length (this caused a 91-character slug and 0% keyword density in a prior run).
+- Write the keyphrase **entirely in plain English/Roman script — never Hindi/Devanagari**, even if the topic name has a Hindi component (Devanagari breaks Rank Math's matching + inflates slug length).
 - If the topic has multiple English terms (e.g. "Intelligence, Creativity, Personality"), pick ONE short 2–4 word core phrase for the keyphrase — do NOT chain all sub-topics with commas into one keyphrase. Template: `Intelligence and Personality CTET Notes [TARGET_YEAR]` (drop extra sub-topics from the keyphrase itself; they still appear as secondary keywords and H2s).
 - Never translate, abbreviate, or Hindi-ize any word inside the keyphrase itself
 - Copy-paste this exact string into every slot below — do not "improve" or vary the phrasing in the slots marked 🔒 EXACT MATCH
@@ -118,7 +95,7 @@ Rules for this block:
 Before writing the rest of the document, verify each of the following by literally re-reading your own draft of A0.5. Do not verify from memory of the instructions — check the actual strings you just wrote. If ANY check fails, fix that field in A0.5 before proceeding — do not continue to Part B/C with a failing check. **Do NOT print this table here** — the user wants all SEO data at the top and ALL check tables consolidated at the end; these rows appear once, in the FINAL CHECKS table (Part D1):
 
 - Year in Focus Keyword/Title/Slug is 2026 (locked constant, not "2025" from an example)
-- TOPIC matched exactly against the CDP MASTER TOPIC LIST; TOPIC_NUMBER derived correctly
+- IF SUBJECT = CDP: TOPIC matched exactly against the CDP MASTER TOPIC LIST; TOPIC_NUMBER derived correctly. IF SUBJECT ≠ CDP: no CDP-list match attempted and no TOPIC_NUMBER stated.
 - Focus Keyword is a single short English phrase (not Hindi, not comma-chained)
 - Focus Keyword in SEO Title within first 40 characters
 - Focus Keyword in Meta Description
@@ -151,16 +128,26 @@ Treat a failing check the same as a compile error: fix silently, re-verify, then
    `Intelligence and Personality CTET Notes [TARGET_YEAR] — बुद्धि एवं व्यक्तित्व` (substitute the real TARGET_YEAR — this bracket is not literal text)
 6. **First 100 words of body copy** 🔒 the keyphrase MUST appear verbatim at least once inside the first 100 words — before any hook, fact, or stat is written, drop the exact phrase in naturally as the opening sentence's subject.
    - Template opener: `"[Focus Keyphrase] is one of the highest-weightage topics in CDP — carrying 26–40% of marks across CTET, KVS, DSSSB, and UPTET."`
-7. **Keyword density — TARGET 12–16 total mentions of the exact keyphrase OR its partial combinations (this was the main reason past outputs stalled at ~75/100 — only 6 mentions in 4,900 words ≈ 0.1% density, far below Rank Math's ~1% target).** Rank Math counts BOTH the full exact keyphrase AND partial combinations of its words (e.g. for "Cognitive Learning Theories CTET Notes 2026," the phrases "Cognitive Learning Theories," "CTET Notes," and "Cognitive Learning Theories CTET" all count toward density). Mandatory placement slots:
-   - Full exact keyphrase (aim 6–8 total): H1 • first 100 words • one H2 • the FAQ H2 (Section 9) • at least 2 FAQ questions • image ALT • conclusion Section Summary
-   - Partial combinations (aim 6–8 more): naturally weave "[Topic]" and "[Topic] CTET" and "CTET Notes" into section-opening sentences, Section Summary boxes, Exam Point intros, and the roadmap paragraph — one partial mention per major section is enough and reads naturally.
-   - Hard cap: do not exceed ~18 total (full + partial) or it reads as stuffing. Track the count as you write; state it in the FINAL CHECKS table.
+7. **Keyword density — this is a RATIO (mentions ÷ total words), so the mention count MUST scale with actual document length, not a fixed number.** A recurring failure: reusing a flat "12–16 mentions" target regardless of word count silently produces a very low density once the document is long (e.g. 10 mentions in a 6,500-word document ≈ 0.15% — Rank Math flags anything under ~0.5–1.0% as "low"). Fix this with arithmetic, not a memorized number:
+   - **Formula (mandatory self-check):** let W = your actual total body word count once drafted. Target combined mentions (full keyphrase + partial combinations) M such that M ÷ W × 100 ≥ **1.0%** (e.g. W=7,000 → M ≥ 70). Compute this explicitly after drafting — do not estimate.
+   - Rank Math counts BOTH the full exact keyphrase AND partial combinations of its words (e.g. for "Cognitive Learning Theories CTET Notes 2026," the phrases "Cognitive Learning Theories," "CTET Notes," and "Cognitive Learning Theories CTET" all count toward density).
+   - **Full exact keyphrase** (aim 8–10 of the total): H1 • first 100 words • one H2 • the FAQ H2 (Section 9) • at least 2 FAQ questions • image ALT • conclusion Section Summary.
+   - **Partial combinations** (the rest of M, roughly one every 100–150 words at this length): weave "[Topic]," "[Topic] [Exam]," and "[Exam] Notes" naturally into section-opening sentences, Section Summary boxes, Exam Point intros, table captions, and the roadmap paragraph — at 6,000–8,000 words this volume is normal prose, not stuffing, as long as each instance reads naturally.
+   - **Cap:** density above ~2% reads as stuffing regardless of word count — if M/W would exceed that, trim partial mentions rather than word count.
+   - State the actual M, W, and computed density % in the FINAL CHECKS table — a check that just says "12–16 mentions, YES" without the word count and division is not a valid verification.
 8. **At least one H2 must contain the exact keyphrase or extremely close variant** (word order can flex slightly for readability, but all core words must appear). All other H2s use natural keyword variants (not forced repeats).
 9. **Secondary keywords (use naturally, 2–4 times each):** PYQ, MCQ, NCERT, [Topic] PDF, [Exam] Pedagogy Notes.
 10. **Schema Tag directive:** state explicitly inside the A0.5 panel area or immediately after it: `Schema type: Article (enable in Rank Math General tab → this is a plugin toggle, not content — but the clean single-H1 + meta description + FAQ-style H3 structure below lets schema auto-populate correctly).`
 11. **Internal links, external links, image ALT text, and Table of Contents structure** — fully specified in the dedicated **"SEO Linking Recommendations"** section (Part A2 below). Do not improvise these here; follow Part A2 exactly, including its no-fabricated-URL rule.
 12. **Estimated Read Time** — display it.
 13. **Hook Sentence** — curiosity + urgency, placed AFTER the keyphrase-bearing opening sentence, not before it (the keyphrase must win the "first 100 words" race).
+14. **Freshness signal — TARGET_YEAR in-body, beyond the locked SEO fields.** The SEO title/slug/H1 already lock TARGET_YEAR once each, but that alone doesn't signal a "current" page to a reader scanning the body. Naturally mention TARGET_YEAR **at least 4 times inside the body content itself** (not counting SEO fields), in places where a year genuinely belongs:
+   - Section 1's opening paragraph (e.g. "TARGET_YEAR की exam के लिए यह topic...")
+   - Section 4's Updates Corner (already discusses "last 12–18 months" — anchor it to TARGET_YEAR explicitly)
+   - At least one Section 9 FAQ question (e.g. "TARGET_YEAR में CTET का syllabus क्या है?")
+   - Section 8A's closing summary
+   - Never confuse this with PYQ years in the 🔥 PYQ Alert box — those are real historical exam years (e.g. 2019, 2022) and must stay accurate; do not overwrite them with TARGET_YEAR.
+   - Each mention must read as genuine exam-year context, never a mechanical filler repetition — vary the phrasing each time.
 
 **SEO rules recap:** Every H2 should lean toward a keyword variant; at least one H2 must carry the exact keyphrase. Every H3 must be phrased as a question a student would search.
 
@@ -331,7 +318,7 @@ Repeat one such card per stage/row. This reads perfectly on any screen width bec
 
 These are **free notes** used as a lead-magnet for a paid "Memory Maps" product. The gating design is now maximally simple:
 
-- 🚫 **EXACTLY ONE locked/blurred tile in the whole document — Section 7's single compact container. Nothing else in the notes is ever blurred or locked.** A past output stacked 5+ full-height locked cards in Section 7 PLUS locked cards throughout the body — visually heavy and repetitive. That design is dead. Now:
+- 🚫 **EXACTLY ONE locked/blurred tile in the whole document — Section 7's single compact container. Nothing else in the notes is ever blurred or locked.** (design reason: stacking locked cards throughout the body is visually heavy and repetitive.)
   - **In the body (Sections 1–6):** when a sub-topic has a mnemonic, add only block 7's slim one-line pointer (`🧠 Memory Trick available: "[topic]" → Mnemonics section में देखें`) — a plain line with an anchor link to Section 7, no box, no blur, no lock icon tile.
   - **Section 7:** ONE compact container tile (the single locked element), listing every mnemonic topic as a thin row with topic name unblurred + short blurred snippet, ending with the single unlock banner.
 - **Always name the topic/concept each mnemonic covers** in plain unblurred text — the reader must know what exists; that's the hook.
@@ -339,7 +326,7 @@ These are **free notes** used as a lead-magnet for a paid "Memory Maps" product.
 - **Blur treatment** (`filter:blur(4px);user-select:none;pointer-events:none;`) applies ONLY inside Section 7's tile, only to the snippet spans.
 - 🚫 **EXACTLY ONE link to `https://examnotespdf.in/memory-maps/` in the ENTIRE document** — inside Section 7's tile's closing banner. Never anywhere else.
 - **Do NOT lock anything else.** Definitions, PYQs, tables, pedagogy, current affairs — all fully free and visible.
-- **Word count:** the mnemonics must still be written in full internally (they go into Part E's archive verbatim); only short blurred snippets of them appear in Section 7's tile. Compensate for the removed in-body cards by writing richer Section 2/5 theory so 4,500+ words holds.
+- **Word count:** the mnemonics must still be written in full internally (they go into Part E's archive verbatim); only short blurred snippets of them appear in Section 7's tile. Compensate for the removed in-body cards by writing richer Section 2/5 theory toward the word-count target.
 - **Every mnemonic must appear fully unblurred in Part E — Mnemonics Archive** at the very end. Section 7's tile rows and Part E's entries must match one-to-one.
 
 ## B0.8 — SOFT UPSELL TAG (previous years analysis) — different from B0.7's hard lock
@@ -356,7 +343,7 @@ Vary the label text per B0.5's anti-repetition rule (e.g. "पूरा Year-wis
 
 There are TWO separate AI-tell problems, and fixing only the first one creates the second:
 
-**Problem 1 — literal repeated labels.** Several card labels in this prompt (e.g. "Teacher Explains," "Did You Know?," "Common Mistake") are template slot names so YOU know which card to use — they are not copy to reproduce verbatim in every instance. Repeating the identical English phrase word-for-word on every card across 4,500 words is an obvious AI tell.
+**Problem 1 — literal repeated labels.** Several card labels in this prompt (e.g. "Teacher Explains," "Did You Know?," "Common Mistake") are template slot names so YOU know which card to use — they are not copy to reproduce verbatim in every instance. Repeating the identical English phrase word-for-word on every card across 6,000+ words is an obvious AI tell.
 
 **Problem 2 — wrong perspective (THIS IS THE BIGGER ONE).** These notes are for a **student preparing for an exam**, not for a teacher planning a lesson. Any phrase that sounds like instructional-design or teacher-training vocabulary — "Hook," "Opening Frame," "Guided Response," "Reinforcement," "Habit/Skill Formation," "Concept Introduction," "Last Classroom Advice," "गुरुजी की बात," "टीचर टिप," "एक अनुभवी शिक्षक बताते हैं," "इस Topic को Class में कैसे पढ़ाएँ?" — is a much stronger AI tell than repetition, because it reveals the underlying prompt architecture (a content-generation template built for "how to teach X") leaking into content that's supposed to be "how to learn X." A real student's coaching notes never talk about how a teacher would deliver a lesson to a class — they talk about what the student needs to know and remember. **Never use lesson-planning, pedagogy-training, or classroom-delivery language as a section label, flowchart, or box title anywhere in the free-notes body.** This includes:
   - Any flowchart that reads like a teaching sequence (Concept Introduction → Guided Response → Feedback → Reinforcement → Habit Formation). Flowcharts must describe the CONCEPT ITSELF (e.g. a process in the subject matter, or an exam-answering sequence), never a "how a teacher delivers this in class" sequence.
@@ -525,7 +512,7 @@ Topic
 
 **1B. Exam Relevance Map:** weightage table — questions from this topic in CTET/TGT/PGT over the last 5 years (state if estimated).
 
-## Section 2 — Core Concept Notes (500–700 words, THREE depth layers — never merge)
+## Section 2 — Core Concept Notes (900–1,300 words, THREE depth layers — never merge)
 
 **Layer 1 — Foundation (CTET Paper I / PRT):** simple language, NCERT Class 3–5 / EVS link, "what it is" + real-life example a child understands. Do NOT phrase this as "how would you teach this to Class 4" — that's the teacher's question. Instead phrase it as the STUDENT's question: "यह concept exam में कैसे पूछा जा सकता है, Class 4 के example के through?"
 
@@ -669,7 +656,7 @@ Recommended Study Path:
       - Assessment/CCE → CBSE assessment guidelines, NCF 2023 assessment framework
       - Learning theories → NCERT position paper on learning, NCF 2005 learning-without-burden chapter
       - Policy-heavy content → the specific NEP 2020 or NCF section being referenced, not a generic homepage
-    - Always link the most specific page/section you can name (e.g. "NCERT Class 11 Psychology Chapter 4"), unless no more specific page is plausible. The "Recommended Study Path" chain should read as a genuine learning sequence (3-5 topics from the CDP MASTER TOPIC LIST in study order), not a repeat of the same 3 bullet topics.
+    - Always link the most specific page/section you can name (e.g. "NCERT Class 11 Psychology Chapter 4"), unless no more specific page is plausible. The "Recommended Study Path" chain should read as a genuine learning sequence (3-5 topics in study order — from the CDP MASTER TOPIC LIST if SUBJECT = CDP, or from the same subject's real syllabus if SUBJECT ≠ CDP), not a repeat of the same 3 bullet topics.
 
 ## Section 9 — On-Page FAQ (MANDATORY, a first-class numbered section — NOT an optional appendix. ⚠️ A real recurring bug: this section silently vanished from multiple generations because it was previously labeled "8D" and the model treated the roadmap as the article's end. It is now Section 9 in the required sequence — an article without Section 9 is INCOMPLETE and fails the final checks table.)
 
@@ -719,48 +706,29 @@ Do not fill this from memory — scroll back through the document you just wrote
 ```
 ✅ CONSOLIDATED FINAL CHECKS (single table — all gates report here)
 
-— SEO FIELD CHECKS (from silent A0.6 + A1.5 gates) —
+— SEO FIELD CHECKS (from silent A0.6 + A1.5 gates — kept in full, Rank Math depends on all of these) —
 Year in Keyword/Title/Slug is 2026 (locked constant)?                             YES/NO
-TOPIC matched CDP list; TOPIC_NUMBER derived (state number)?                       YES/NO + number
+If SUBJECT=CDP: TOPIC matched CDP list, TOPIC_NUMBER derived (state number). If SUBJECT≠CDP: no CDP match attempted, no TOPIC_NUMBER stated. YES/NO + number/NA
 Focus Keyword: short English phrase, in Title (first 40 chars), Meta, Slug?        YES/NO
-Title has "Best" (sentiment) + "Complete" (power word) + exactly one number?       YES/NO
+Title has "Best" (sentiment) + "Complete" (power word) + exactly one number, single-colon separator only? YES/NO
 Slug contains EVERY keyphrase word in order, including "and" (nothing dropped)?    YES/NO
-A1 fields character-identical to A0.5 panel (title/slug/meta), same year in all?   YES/NO
-Title separator is a single colon only (no ::, —, |)?                              YES/NO
+A1 fields character-identical to A0.5 panel (title/slug/meta/H1), same year in all? YES/NO
 
-— BODY CONTENT CHECKS —
-A0.5 panel + A1 SEO fields are the very first blocks in this response?             YES/NO
-A0.5b Title Optimizer block present, its title character-identical to A0.5's?      YES/NO
-Notes body is 100% HTML — zero markdown links [x](y), zero **bold**, zero href="#"? YES/NO
-Focus Keyword in first 100 words of body, and in ≥1 H2 (incl. FAQ H2)?             YES/NO
-Total keyphrase mentions (full + partial combinations) is 12–18 (state count)?     YES/NO + count
-TOC box: literal "Table of Contents" + working #anchors incl. FAQ entry?           YES/NO
-≥3 internal <a href> links in body, each a distinct real slug (never #)?           YES/NO
-≥2 external <a href> links in body, real domains, no nofollow?                     YES/NO
-≥1 real <img> with keyphrase in alt=""?                                            YES/NO
-Every card div has box-sizing:border-box + max-width:100%?                         YES/NO
-No 4+ column tables; 3-column tables use overflow-x:auto wrapper?                  YES/NO
-No flush edge-to-edge two-tone box?                                                YES/NO
-No teacher-training language (Hook/Reinforcement/How to Teach etc.) outside Sec 3? YES/NO
-Every flowchart shows real subject-matter content for THIS topic?                  YES/NO
+— CONTENT INTEGRITY (no hallucination — verify against what you actually wrote, not from memory) —
+Every fact/PYQ year/NCERT reference/stat is real or explicitly flagged as an estimate — nothing stated as certain that isn't verifiable? YES/NO
+Every internal/external <a href> is a real, distinct, plausible link (never "#", never a repeated dead anchor, no claim that an unverified URL is live)? YES/NO
+Notes body 100% HTML (zero markdown [x](y) / **bold**, zero href="#"); Focus Keyword in first 100 words + ≥1 H2 + FAQ H2; keyphrase density = M÷W×100 ≥1.0% (state M, W, and %)? YES/NO + M/W/%
+Freshness: TARGET_YEAR appears naturally in-body ≥4 times beyond SEO fields (opening, Updates Corner, ≥1 FAQ, Section Summary), never mechanically repeated? YES/NO + count
+All 9 sections present in order incl. Section 9 FAQ (own H2 + TOC entry) and Section 8C roadmap with real <a> tags on 3 genuinely relevant topics? YES/NO
+No teacher-training language outside Sec 3; every flowchart traces real subject content for THIS topic (no generic placeholder)? YES/NO
+Mobile HTML rules followed: box-sizing/max-width on every card, correct table pattern per column count, no flush two-tone box? YES/NO
 
-— MONETIZATION & GATING CHECKS —
-EXACTLY ONE locked/blurred tile in the whole document (Section 7's container)?     YES/NO
-Zero locked cards/blur anywhere in the body (only slim pointer lines, block 7)?    YES/NO
-Exactly ONE link to examnotespdf.in/memory-maps/ (in Section 7's banner)?          YES/NO + count
-Every PYQ Alert has the soft upsell pill-tag; PYQ content fully visible?           YES/NO
-Exactly 3 AdSense slots (after Sec 3, after 8B, after Sec 9) with distinct slot IDs?  YES/NO
-Section 9 FAQ exists as real HTML in body with keyphrase H2 + TOC entry?          YES/NO
-Section 8C uses the locked template with real <a> tags on every roadmap topic?     YES/NO
-NO "In-body study support links" footer dump exists anywhere (banned pattern)?     YES/NO
-External links are in-prose inside Sec 3B / Sec 4 where sources are discussed?     YES/NO
-8C external links topic-relevant, not the generic static trio?                     YES/NO
+— MONETIZATION & GATING —
+EXACTLY ONE locked tile (Section 7) + ONE memory-maps link; PYQ Alerts fully visible with soft upsell tag; 3 distinct AdSense slots present? YES/NO
+Part E archive entries match Section 7 tile rows exactly (state count); zero HTML tags anywhere in Part A2/Part E? YES/NO + count
 
-— PUBLISHER SECTIONS CHECKS —
-"END OF NOTES" divider present before Part A2?                                     YES/NO
-Part A2 plain text, all 8 subsections A–H, zero HTML card divs?                    YES/NO
-Part E archive: plain text, zero HTML tags, entry count = Section 7 tile rows?     YES/NO + count
-Word count 4,500+ (state approximate count)?                                       YES/NO + count
+— WORD COUNT —
+Word count ≥6,500 (target 6,000–8,000) — state approximate count?                  YES/NO + count
 ```
 
 If any row would say "NO," you have not finished — insert the missing element now, then re-state this table with all YES before stopping.
