@@ -158,11 +158,16 @@ jobs:
               fi
             fi
 
+            # Wrap the body in Gutenberg Custom-HTML block markup so the editor
+            # shows ONE proper Custom HTML block (the only block type that renders
+            # the inline-styled cards verbatim) instead of unstructured classic
+            # content. A leading <h1> is stripped first: the post title already IS
+            # the page H1, so one inside the body would double the H1 on-page.
             payload="$(jq --argjson exam "$exam_ids_json" --argjson subj "$subject_ids_json" '{
               title: .seo.h1,
               slug: .seo.slug,
               excerpt: .seo.metaDescription,
-              content: .bodyHtml,
+              content: ("<!-- wp:html -->\n" + (.bodyHtml | sub("^\\s*<h1[^>]*>[\\s\\S]*?</h1>\\s*"; "")) + "\n<!-- /wp:html -->"),
               status: "draft",
               meta: {
                 rank_math_focus_keyword: (.seo.focusKeyword // ""),
