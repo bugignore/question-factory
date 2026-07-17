@@ -535,11 +535,9 @@ Topic
 
 **3B. Policy Connections:** NCF 2005 principle • NEP 2020 (FLN / competency-based / multilingualism) • RTE Act 2009 (if any) • NIPUN Bharat (primary topics).
 
-📢 **AD SLOT (early-mid document)** — insert here, after Section 3, before Section 4:
+📢 **AD SLOT (early-mid document)** — insert here, after Section 3, before Section 4. **`<ins>` tag ONLY — no `<script>` tags.** The site already loads the AdSense library and initializes ad units sitewide; a `<script>` tag placed inside post content gets silently stripped by WordPress (the publishing account doesn't have the `unfiltered_html` capability), which used to leave the raw JS visible as broken text on the page. The bare `<ins>` tag alone is picked up correctly:
 ```html
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7389686596343881" crossorigin="anonymous"></script>
 <ins class="adsbygoogle" style="display:block;text-align:center;margin:16px 0;" data-ad-client="ca-pub-7389686596343881" data-ad-slot="0000000003" data-ad-format="auto" data-full-width-responsive="true"></ins>
-<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
 ```
 
 ## Section 4 — Current Updates Injection (short)
@@ -596,11 +594,9 @@ Rules:
 - 8A. Summary paragraph (100 words) → Section Summary Box
 - 8B. ⚡ 20-Second Revision Box (final full-topic recall)
 
-📢 **AD SLOT 1** — insert immediately after 8B, before 8C:
+📢 **AD SLOT 1** — insert immediately after 8B, before 8C. **`<ins>` tag ONLY — no `<script>` tags** (see the note at the first AD SLOT above):
 ```html
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7389686596343881" crossorigin="anonymous"></script>
 <ins class="adsbygoogle" style="display:block;text-align:center;margin:16px 0;" data-ad-client="ca-pub-7389686596343881" data-ad-slot="0000000001" data-ad-format="auto" data-full-width-responsive="true"></ins>
-<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
 ```
 
 - 8C. **Related Topics Roadmap — use this EXACT structure (this is a locked, working template, not a loose spec — copy this pattern precisely, only swapping in the real topic names/slugs/reasons for THIS document):**
@@ -680,11 +676,9 @@ Take the 5-8 FAQ questions you will also list in Part A2 Section F and render th
 
 This H2 MUST be added to the Table of Contents box (block 2) alongside all other sections. The Focus Keyphrase should appear in at least 2 of the FAQ questions — this is one of your easiest opportunities to hit the "keyword in H2/H3" Rank Math check, so don't skip it or leave it only in Part A2.
 
-📢 **AD SLOT 2** — insert immediately after Section 9's FAQ block, before Part A2's divider:
+📢 **AD SLOT 2** — insert immediately after Section 9's FAQ block, before Part A2's divider. **`<ins>` tag ONLY — no `<script>` tags** (see the note at the first AD SLOT above):
 ```html
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7389686596343881" crossorigin="anonymous"></script>
 <ins class="adsbygoogle" style="display:block;text-align:center;margin:16px 0;" data-ad-client="ca-pub-7389686596343881" data-ad-slot="0000000002" data-ad-format="auto" data-full-width-responsive="true"></ins>
-<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
 ```
 
 ---
