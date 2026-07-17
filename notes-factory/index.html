@@ -57,6 +57,12 @@
   .previewFrame{width:100%;height:360px;border:1.5px solid var(--line);border-radius:9px;background:#fff}
   .noteRow{display:flex;gap:8px;align-items:center;margin:4px 0}
   .noteRow input[type=checkbox]{width:auto}
+  .copyRow{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+  .copyRow:last-child{border-bottom:none}
+  .copyRow .cLabel{font-weight:600;font-size:11.5px;color:var(--ink-soft)}
+  .copyRow .cVal{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+  .copyRow .cVal:empty::before{content:"— empty —";color:var(--ink-soft);font-style:italic}
+  .copyRow button{flex:none;width:auto;margin:0;padding:8px 12px;font-size:13px}
   fieldset{border:1.5px solid var(--line);border-radius:9px;padding:10px 12px;margin-top:10px}
   fieldset legend{font-size:12.5px;font-weight:600;color:var(--ink-soft);padding:0 4px}
   .privacyNote{background:#EDF1FA;border-radius:9px;padding:10px 12px;font-size:12px;color:var(--ink-soft);margin-top:10px}
@@ -146,6 +152,10 @@
     <textarea id="fMetaDescription" style="min-height:70px;font-family:inherit;font-size:14px"></textarea>
     <label>H1</label>
     <input type="text" id="fH1">
+    <label>Featured Image — ALT Text</label>
+    <input type="text" id="fImageAltText">
+    <label>Featured Image — Generation Prompt (for Midjourney/DALL·E/etc.)</label>
+    <textarea id="fImagePrompt" style="min-height:70px;font-family:inherit;font-size:14px"></textarea>
   </fieldset>
 
   <label>Notes body (HTML) — word count: <span id="bodyWords">0</span></label>
@@ -175,15 +185,17 @@
   <button class="btn green" onclick="tryRun(autoSaveToGithub,this)">☁️ Auto-save to GitHub</button>
   <div class="msg" id="sendMsg"></div>
 
+  <fieldset>
+    <legend>All fields — tap 📋 to copy any single one</legend>
+    <div id="copyFieldRows"></div>
+    <button class="btn small ghost" onclick="tryRun(copyBodyHtml,this)">📋 Copy notes body HTML</button>
+    <button class="btn small ghost" onclick="tryRun(copySeoFields,this)">📋 Copy all SEO fields (bulk, for pasting into Rank Math)</button>
+  </fieldset>
+
   <details><summary>Fallback: manual download + GitHub upload page</summary><div>
     <button class="btn small ghost" onclick="tryRun(downloadBundle,this)">⬇ Download note file (<span id="dlSlug">note</span>.json)</button>
     <button class="btn small ghost" onclick="tryRun(openGithubUpload,this)">🚀 Open GitHub upload page</button>
     <div class="privacyNote">Drop the downloaded file into <code>pending-notes/</code> on that page and commit.</div>
-  </div></details>
-
-  <details><summary>Fallback: copy HTML / SEO fields manually instead</summary><div>
-    <button class="btn small ghost" onclick="tryRun(copyBodyHtml,this)">📋 Copy notes body HTML</button>
-    <button class="btn small ghost" onclick="tryRun(copySeoFields,this)">📋 Copy Rank Math fields</button>
   </div></details>
 
   <button class="btn ghost" onclick="tryRun(resetAll,this)" style="border-color:var(--bad);color:var(--bad)">Start a new note (clear everything)</button>
@@ -263,7 +275,7 @@ function render(){
   document.getElementById('nextBtn').textContent = cur===3 ? 'Done' : 'Next →';
   document.getElementById('nextBtn').disabled = cur===3;
   if(cur===2){ fillReviewForm(); updatePreview(); }
-  if(cur===3){ loadSettings(); document.getElementById('dlSlug').textContent = (state.seo && state.seo.slug) || 'note'; }
+  if(cur===3){ loadSettings(); document.getElementById('dlSlug').textContent = (state.seo && state.seo.slug) || 'note'; renderCopyFields(); }
   document.querySelector('main').scrollTop=0;
 }
 function msg(id){ return document.getElementById(id); }
@@ -337,6 +349,10 @@ Output exactly three blocks, in this order, with nothing outside them (no extra 
 
 CRITICAL RENDERING RULE: the content of EVERY block (including the HTML body and the plain-text publisher notes) MUST sit inside a fenced code block (three backticks on their own line before and after the content, immediately inside the sentinel markers). This is because chat interfaces render raw HTML visually — without the code fence, the person copying your reply gets rendered text with every tag destroyed. The fence is what keeps your output copyable as source. Never skip it.
 
+ADDITIVE FIELDS — two extra fields in SEO_JSON beyond what's specified above:
+- "imageAltText": ONE single ALT text string for the article's featured/OG image — pick the strongest of the 5 "Image ALT Suggestions" you already write in Part A2 Section E and adapt it if needed so it stands alone as the featured-image ALT (contains the Focus Keyphrase or a close variant, plus a concrete description of what the image shows).
+- "imagePrompt": a complete, ready-to-paste AI image-generation prompt (for Midjourney/DALL·E/Stable Diffusion) for that same featured image. Describe subject, composition, and a professional exam-prep/coaching-brand visual style (clean, premium, Indian-classroom-adjacent iconography where relevant) — 16:9 aspect ratio suitable for a WordPress featured image, and explicitly specify NO readable text/typography baked into the image (WordPress overlays the title separately).
+
 <<<SEO_JSON>>>
 \`\`\`json
 {
@@ -344,7 +360,9 @@ CRITICAL RENDERING RULE: the content of EVERY block (including the HTML body and
   "seoTitle": "...",
   "slug": "...",
   "metaDescription": "...",
-  "h1": "..."
+  "h1": "...",
+  "imageAltText": "...",
+  "imagePrompt": "..."
 }
 \`\`\`
 <<<END_SEO_JSON>>>
@@ -440,6 +458,8 @@ function parseHeuristic(raw){
   const seoTitle = get('SEO Title');
   const slugRaw = get('Permalink/Slug') || get('Slug');
   const metaDescription = get('Meta Description');
+  const imageAltText = get('Image ALT Text') || get('Image Alt Text') || get('Image ALT');
+  const imagePrompt = get('Image (Generation )?Prompt') || get('Image Prompt');
   let h1 = '';
   const h1Match = raw.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
   if(h1Match) h1 = h1Match[1].replace(/<[^>]+>/g,'').trim();
@@ -458,7 +478,7 @@ function parseHeuristic(raw){
     publisherNotes = endIdx < raw.length ? raw.slice(endIdx).trim() : '';
   }
 
-  return { seo: {focusKeyword, seoTitle, slug: slugify(slugRaw), metaDescription, h1}, bodyHtml, publisherNotes, method:'heuristic' };
+  return { seo: {focusKeyword, seoTitle, slug: slugify(slugRaw), metaDescription, h1, imageAltText, imagePrompt}, bodyHtml, publisherNotes, method:'heuristic' };
 }
 
 function parseResponse(raw){
@@ -470,6 +490,8 @@ function parseResponse(raw){
   if(!result.seo.slug) warnings.push('URL Slug missing — fill in manually.');
   if(!result.seo.metaDescription) warnings.push('Meta Description missing — fill in manually.');
   if(!result.seo.h1) warnings.push('H1 missing — fill in manually.');
+  if(!result.seo.imageAltText) warnings.push('Image ALT text missing — fill in manually (or pick one of the 5 suggestions in the publisher notes).');
+  if(!result.seo.imagePrompt) warnings.push('Image generation prompt missing — fill in manually if you want one.');
   if(!result.bodyHtml || result.bodyHtml.length < 500) warnings.push('Notes body looks too short or missing — re-check the paste, or edit it manually on the next step.');
   if(result.truncated) warnings.push('The reply looks CUT OFF midway (no closing marker found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
   if(result.method==='heuristic') warnings.push('Markers were not found — used fallback parsing (reading the visible SEO panel + HTML). Double-check every field.');
@@ -515,6 +537,8 @@ function fillReviewForm(){
   document.getElementById('fSlug').value = state.seo.slug || '';
   document.getElementById('fMetaDescription').value = state.seo.metaDescription || '';
   document.getElementById('fH1').value = state.seo.h1 || '';
+  document.getElementById('fImageAltText').value = state.seo.imageAltText || '';
+  document.getElementById('fImagePrompt').value = state.seo.imagePrompt || '';
   document.getElementById('fBodyHtml').value = state.bodyHtml || '';
   document.getElementById('fPublisherNotes').value = state.publisherNotes || '';
 }
@@ -524,7 +548,9 @@ function syncFormToState(){
     seoTitle: document.getElementById('fSeoTitle').value.trim(),
     slug: slugify(document.getElementById('fSlug').value.trim()),
     metaDescription: document.getElementById('fMetaDescription').value.trim(),
-    h1: document.getElementById('fH1').value.trim()
+    h1: document.getElementById('fH1').value.trim(),
+    imageAltText: document.getElementById('fImageAltText').value.trim(),
+    imagePrompt: document.getElementById('fImagePrompt').value.trim()
   };
   state.bodyHtml = document.getElementById('fBodyHtml').value;
   state.publisherNotes = document.getElementById('fPublisherNotes').value;
@@ -541,7 +567,7 @@ function updatePreview(){
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   document.getElementById('bodyWords').textContent = words.toLocaleString();
 }
-['fFocusKeyword','fSeoTitle','fSlug','fMetaDescription','fH1','fPublisherNotes'].forEach(id=>{
+['fFocusKeyword','fSeoTitle','fSlug','fMetaDescription','fH1','fImageAltText','fImagePrompt','fPublisherNotes'].forEach(id=>{
   document.addEventListener('DOMContentLoaded', ()=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', syncFormToState);
@@ -666,18 +692,49 @@ function openGithubUpload(btn){
   window.open(url, '_blank', 'noopener');
   show(msg('sendMsg'),'ok','Opened the GitHub upload page in a new tab — drag the downloaded file in and commit.');
 }
+const COPY_FIELDS = [
+  ['focusKeyword','Focus Keyword'],
+  ['seoTitle','SEO Title'],
+  ['slug','URL Slug'],
+  ['metaDescription','Meta Description'],
+  ['h1','H1'],
+  ['imageAltText','Featured Image — ALT Text'],
+  ['imagePrompt','Featured Image — Generation Prompt']
+];
+function renderCopyFields(){
+  syncFormToState();
+  const wrap = document.getElementById('copyFieldRows');
+  wrap.innerHTML = COPY_FIELDS.map(([key,label])=>{
+    const val = state.seo[key] || '';
+    const esc = val.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return `<div class="copyRow">
+      <div style="flex:1;min-width:0">
+        <div class="cLabel">${label}</div>
+        <div class="cVal">${esc}</div>
+      </div>
+      <button class="btn small ghost" onclick="tryRun(()=>copyField('${key}','${label.replace(/'/g,"\\'")}'),this)">📋</button>
+    </div>`;
+  }).join('');
+}
+function copyField(key, label){
+  const val = state.seo[key] || '';
+  if(!val){ show(msg('sendMsg'),'bad', label+' is empty — nothing to copy.'); return; }
+  doCopy(val, null, msg('sendMsg'), label+' copied.');
+}
 function copyBodyHtml(btn){
   syncFormToState();
   doCopy(state.bodyHtml, btn, msg('sendMsg'), 'Notes body HTML copied — paste into a WordPress Custom HTML block.');
 }
 function copySeoFields(btn){
   syncFormToState();
-  const t = `Focus Keyword:      ${state.seo.focusKeyword}
+  const t = `Focus Keyword:       ${state.seo.focusKeyword}
 SEO Title:           ${state.seo.seoTitle}
 Permalink/Slug:      ${state.seo.slug}
 Meta Description:    ${state.seo.metaDescription}
-H1 (Post Title):     ${state.seo.h1}`;
-  doCopy(t, btn, msg('sendMsg'), 'Rank Math fields copied.');
+H1 (Post Title):     ${state.seo.h1}
+Image ALT Text:      ${state.seo.imageAltText || ''}
+Image Gen Prompt:    ${state.seo.imagePrompt || ''}`;
+  doCopy(t, btn, msg('sendMsg'), 'All SEO fields copied.');
 }
 function resetAll(){
   if(!confirm('Clear this note and start over?')) return;
