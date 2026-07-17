@@ -67,7 +67,7 @@ This is a non-negotiable, standalone block. Render it as plain text (not buried 
 📋 PASTE INTO RANK MATH — DO THIS FIRST
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Focus Keyword:      [exact keyphrase from A0]
-SEO Title:          [exact string — keyword at the START + "Best" sentiment word]
+SEO Title:          [exact string — keyword at the START + one sentiment word + one power word from the A1-item-2 rotation]
 Permalink/Slug:     [exact slug — ALL keyphrase words in order, English only]
 Meta Description:   [exact string, 150–155 chars, contains keyword once]
 H1 (Post Title):    [keyphrase as FIRST words + optional Hindi sub-line after]
@@ -87,20 +87,20 @@ Final SEO Title: [the exact title from A0.5]
 Per-check verification (each maps to one Rank Math title check):
 ✔ Keyword in title:        "[Focus Keyphrase]" present verbatim
 ✔ Keyword at BEGINNING:    title starts with the keyphrase (first 40 chars)
-✔ Power word:              "Complete"
-✔ Sentiment word:          "Best" (separate check from power word — do not merge)
+✔ Power word:              "[the actual power word used, from the A1-item-2 menu]"
+✔ Sentiment word:          "[the actual sentiment word used]" (separate check from power word — do not merge)
 ✔ Number:                  [TARGET_YEAR]
 Title length:              [XX] characters
 
 Short display variant (use ONLY if length > 65 chars and you prefer no Google
 truncation — all five checks still pass):
-[Focus Keyphrase]: Best Guide
+[Focus Keyphrase]: [the sentiment word used] Guide
 ```
 
 Rules for this block:
 - The "Final SEO Title" line must be character-identical to A0.5's SEO Title field — this block VERIFIES the title, it never invents a second one.
 - Every ✔ line must be literally true of the actual title string. If any check would fail, fix the title in A0.5 first, then re-output both blocks consistently.
-- The short variant swaps "Best Complete Guide + PYQs" → "Best Guide" ("Best" carries both a sentiment hit and general appeal; note the power word "Complete" is dropped in this variant, so it trades one power-word point for cleaner display — state this trade-off to the publisher rather than hiding it). Long keyphrases (45+ chars) make some trade-off unavoidable; the publisher decides which variant to paste.
+- The short variant keeps the sentiment word + "Guide" and drops the power word and hook — it trades one power-word point for cleaner display; state this trade-off to the publisher rather than hiding it. Long keyphrases (45+ chars) make some trade-off unavoidable; the publisher decides which variant to paste.
 - This block is for the publisher's eyes (top SEO data area) — it is NOT part of the notes body HTML.
 
 ## A0.6 — SELF-VERIFICATION GATE (MANDATORY — run SILENTLY before writing anything else; report results ONLY in the consolidated FINAL CHECKS table at the very end of the output, not here)
@@ -122,21 +122,33 @@ Treat a failing check the same as a compile error: fix silently, re-verify, then
 
 🚫 **CRITICAL — READ BEFORE WRITING A1: items 1–5 below are NOT a fresh writing task.** They are a **literal copy-paste** of the four fields you already finalized inside the A0.5 panel. Do not re-derive, rephrase, re-template, or "improve" the title/slug/meta/H1 here — copy the exact characters from A0.5. A known failure mode: the model writes a *different* SEO title in A1 than the one it put in the A0.5 panel (e.g. panel says "Learning Process and Principles CTET Notes [TARGET_YEAR]: Complete Guide + PYQs" but A1 independently writes a different separator and a different, wrong year it pattern-matched from an example elsewhere in this prompt — different separator, different year, and the Focus Keyword no longer literal-matches either the meta description or the URL). This single inconsistency causes 8-9 simultaneous Rank Math failures because every check compares against ONE Focus Keyword string. There is only ONE correct title/slug/meta/H1 per document — the one decided in A0.5, using TARGET_YEAR from the input variables, never any year written as an example anywhere else in this prompt — and it must appear byte-for-byte identical everywhere it's required below.
 
-🚫 **Never use `::`, `—`, `|`, or any separator not shown in the approved template.** The template is `[Focus Keyphrase]: Best Complete Guide + PYQs` — a single colon, nothing else. If you wrote something different in A0.5, that's fine, but whatever you wrote there is what gets copied everywhere else, unchanged.
+🚫 **Never use `::`, `—`, `|`, or any separator not shown in the approved structure.** The structure is `[Focus Keyphrase]: [suffix built from the item-2 rotation]` — a single colon, nothing else. Whatever suffix you composed in A0.5 is what gets copied everywhere else, unchanged.
 
 1. **Focus Keyphrase** 🔒 EXACT MATCH — the literal string from A0. Copy it from the A0.5 panel; do not retype it from memory.
 2. **SEO Title / Page Title** (50–60 chars) 🔒 EXACT MATCH — copy verbatim from the A0.5 panel's "SEO Title" field. Do not write a new one here even if it "sounds better." The keyphrase's first word must be within the title's first 40 characters (Rank Math checks "near the beginning," not just "present").
-   - Must include exactly one **power word** ("Complete" in the template) AND exactly one **sentiment word** — these are TWO SEPARATE Rank Math checks with different word lists. ⚠️ A real past failure: "Complete" satisfied the power-word check but NOT the sentiment check, so "Your title doesn't contain a positive or negative sentiment word" failed on every single run. The template now includes "Best" specifically because it's in Rank Math's positive-sentiment lexicon. Do not remove "Best" from the title.
+   - Must include exactly one **power word** AND exactly one **sentiment word** — these are TWO SEPARATE Rank Math checks with different word lists. ⚠️ A real past failure: "Complete" satisfied the power-word check but NOT the sentiment check, so "Your title doesn't contain a positive or negative sentiment word" failed on every single run. Both word slots below are drawn from Rank Math's actual lexicons — never substitute a word not on these menus.
    - Must include exactly one number (the year already satisfies this — don't add a second number that could look like keyword stuffing).
-   - Template: `[Focus Keyphrase]: Best Complete Guide + PYQs`
-   - Example: "Intelligence and Personality CTET Notes [TARGET_YEAR]: Best Complete Guide + PYQs" (replace [TARGET_YEAR] with the actual year from Input Variables — never leave the bracket literal, and never substitute 2025 unless that is genuinely the TARGET_YEAR given)
+   - **Suffix rotation — compose the suffix fresh for EACH document; an entire site of identical `: Best Complete Guide + PYQs` titles is its own AI-tell and depresses click-through.** Structure: `[Focus Keyphrase]: [Sentiment] [Power] [Format] + [Hook]` (Format and Hook are flexible; Sentiment and Power are strict menus):
+     - **Sentiment word (pick exactly one):** Best • Top • Perfect • Great • Easy
+     - **Power word (pick exactly one):** Complete • Ultimate • Essential • Proven • Exclusive
+     - **Format (free choice, keep natural):** Guide • Study Guide • Revision Notes¹ • Handbook • Crash Course
+     - **Hook (free choice):** + PYQs • + Solved PYQs • + Mock MCQs • + Exam Tricks • + Quick Revision
+     - ¹avoid a Format that repeats "Notes" if the keyphrase already ends in "Notes [Year]" — "…Notes 2026: Best Complete Revision Notes" reads stuffed.
+   - **Pick the combination that genuinely fits THIS topic** (a PYQ-heavy topic earns "+ Solved PYQs"; a confusing theory topic earns "+ Exam Tricks") — fit is what makes the variety look human rather than randomized. Length must still land in 50–60 chars; with a long keyphrase, drop the Hook first, then shorten the Format.
+   - Examples of valid, distinct titles (never copy one verbatim as a default): "Intelligence and Personality CTET Notes [TARGET_YEAR]: Best Complete Guide + PYQs" • "Inclusive Education CTET Notes [TARGET_YEAR]: Top Essential Handbook + Exam Tricks" • "Piaget Theory CTET Notes [TARGET_YEAR]: Perfect Proven Crash Course + Solved PYQs" (replace [TARGET_YEAR] with the actual year — never leave the bracket literal, never substitute 2025 unless genuinely given)
+   - **Variety is BETWEEN documents; consistency is WITHIN a document.** Once composed in A0.5, this document's title is locked byte-for-byte everywhere (the CRITICAL rule above is unchanged).
 3. **URL Slug** 🔒 EXACT MATCH — copy verbatim from the A0.5 panel's "Permalink/Slug" field, lowercase-hyphenated, English only:
    - ⚠️ **The slug MUST contain EVERY word of the Focus Keyphrase, in order, including "and."** A real past failure: an earlier version of this prompt said dropping "and" from the slug was okay — the model dropped it (`learning-process-principles-...` instead of `learning-process-and-principles-...`) and Rank Math's "Focus Keyword in URL" check FAILED because the URL no longer contained the complete keyphrase. Never drop, reorder, or abbreviate any keyphrase word in the slug.
    - Template: `intelligence-creativity-and-personality-ctet-notes-[target-year]` → whatever the keyphrase words are, hyphenated in order, nothing added, nothing removed.
    - **URL length:** the live URL includes the site prefix (`examnotespdf.in/free-notes/` ≈ 27 chars) BEFORE your slug, and Rank Math measures the FULL URL. A full URL over ~75 chars draws a minor length warning. If the keyphrase makes the full URL exceed that, ACCEPT the minor length warning — keyword-in-URL is worth far more points than URL brevity. The correct lever for a shorter URL is choosing a shorter Focus Keyphrase in A0 (fewer topic words), never truncating the slug after the keyphrase is locked.
    - The YEAR in the slug must match the YEAR in the SEO Title and H1 exactly — a mismatched year (e.g. slug says 2026, title says 2025) breaks keyword matching just as badly as a wording mismatch.
 4. **Meta Description** (150–155 chars) 🔒 copy verbatim from the A0.5 panel's "Meta Description" field — must contain the keyphrase once, verbatim, plus a benefit + call to action.
-   - Template: `[Focus Keyphrase] — complete PYQ-based guide with theory, tricks, and mock questions. Score full marks in CDP/Pedagogy section.`
+   - **Write it fresh for EACH document — never reuse one structural template sitewide** (identical-shaped descriptions across every page are a duplicate-content smell and kill SERP click-through). Rotate between these proven shapes, filling each with THIS topic's specifics (its real weightage, its real trap, its real sub-topics — not reusable boilerplate):
+     - **Benefit-led:** `[Focus Keyphrase] — [what the guide covers, topic-specific]. [Outcome CTA].` e.g. "…— हर PYQ pattern, theory layer और memory trick एक जगह. Score full marks in CDP."
+     - **Stat-led:** `[Focus Keyphrase] — [real weightage/frequency stat]. [What's inside]. [CTA].` e.g. "…— 26–40% CDP marks इसी topic से. Theory + tricks + mock MCQs. अभी पढ़ें."
+     - **Question-led:** `[real aspirant pain-question]? [Focus Keyphrase] [what it solves]. [CTA].` e.g. "Piaget के stages confuse करते हैं? … से हर PYQ solve करें. Free guide."
+     - **Trap-led:** `[the topic's #1 exam trap]. [Focus Keyphrase] [how it protects]. [CTA].`
+   - Hinglish is welcome in the description (it matches how the audience searches); the keyphrase itself stays pure English. Pick the shape that fits the topic's strongest selling point — same fit-over-randomness principle as the title suffix. Locked byte-for-byte within the document once written in A0.5.
 5. **H1 (on-page title)** 🔒 must contain the exact same keyphrase used in items 1-4 above, as the FIRST words of the H1 (not after a Hindi sub-line, not after other text) — Hindi translation/sub-line comes AFTER the English keyphrase, never before:
    `Intelligence and Personality CTET Notes [TARGET_YEAR] — बुद्धि एवं व्यक्तित्व` (substitute the real TARGET_YEAR — this bracket is not literal text)
 6. **First 100 words of body copy** 🔒 the keyphrase MUST appear verbatim at least once inside the first 100 words — before any hook, fact, or stat is written, drop the exact phrase in naturally as the opening sentence's subject.
@@ -725,7 +737,7 @@ Do not fill this from memory — scroll back through the document you just wrote
 Year in Keyword/Title/Slug is 2026 (locked constant)?                             YES/NO
 If SUBJECT=CDP: TOPIC matched CDP list, TOPIC_NUMBER derived (state number). If SUBJECT≠CDP: no CDP match attempted, no TOPIC_NUMBER stated. YES/NO + number/NA
 Focus Keyword: short English phrase, in Title (first 40 chars), Meta, Slug?        YES/NO
-Title has "Best" (sentiment) + "Complete" (power word) + exactly one number, single-colon separator only? YES/NO
+Title has exactly one sentiment word + one power word (both from the item-2 menus) + exactly one number, single-colon separator only, suffix composed for THIS topic (not a default)? YES/NO + words used
 Slug contains EVERY keyphrase word in order, including "and" (nothing dropped)?    YES/NO
 A1 fields character-identical to A0.5 panel (title/slug/meta/H1), same year in all? YES/NO
 
