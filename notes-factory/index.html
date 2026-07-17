@@ -81,8 +81,9 @@
   <h2>1 · Build &amp; copy the prompt</h2>
   <p class="hint">Fills your exact TOPIC / EXAM TYPE / SUBJECT into the ExamNotesPDF master prompt (the file itself is never edited) and copies the whole thing — paste it into a new DeepSeek / ChatGPT / Claude chat.</p>
 
-  <label>Topic (must match the CDP list exactly — pick from the list)</label>
-  <select id="topic"></select>
+  <label>Topic (type any topic — suggestions shown from the CDP list, but any subject's topic is fine)</label>
+  <input type="text" id="topic" list="topicSuggestions" placeholder="e.g. Photosynthesis, Mughal Empire, Growth & Development...">
+  <datalist id="topicSuggestions"></datalist>
 
   <label>Exam type (select one or more)</label>
   <div id="examTypes"></div>
@@ -226,8 +227,8 @@ const CDP_TOPICS = [
 const EXAM_TYPES = ["CTET Paper I","CTET Paper II","PGT","TGT","KVS","NVS","DSSSB","UPTET","BPSC TRE"];
 
 function initSelectors(){
-  const topicSel = document.getElementById('topic');
-  topicSel.innerHTML = CDP_TOPICS.map(t=>`<option>${t}</option>`).join('');
+  const topicList = document.getElementById('topicSuggestions');
+  topicList.innerHTML = CDP_TOPICS.map(t=>`<option value="${t}"></option>`).join('');
   const wrap = document.getElementById('examTypes');
   wrap.innerHTML = EXAM_TYPES.map((e,i)=>`<label style="font-weight:500"><input type="checkbox" class="examChk" value="${e}" ${i===0?'checked':''} style="width:auto;margin-right:6px">${e}</label>`).join('');
 }
