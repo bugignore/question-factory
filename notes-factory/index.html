@@ -26,7 +26,7 @@
   h2{font-size:16px;margin:0 0 2px}
   .hint{color:var(--ink-soft);font-size:12.5px;margin:0 0 12px}
   label{display:block;font-weight:600;font-size:12.5px;margin:11px 0 4px}
-  input[type=text],input[type=number],textarea,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;color:var(--ink);background:var(--card);font-size:15px}
+  input[type=text],input[type=number],input[type=password],textarea,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;color:var(--ink);background:var(--card);font-size:15px}
   textarea{min-height:110px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12px}
   input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -157,8 +157,8 @@
 
 <!-- STEP 4 -->
 <section class="step" id="step3">
-  <h2>4 · Hand off to GitHub</h2>
-  <p class="hint">No password or API key is ever entered here. You hand the file to GitHub using your own existing GitHub login — a workflow already in this repo then publishes it to WordPress as a draft using a secret only GitHub Actions can see.</p>
+  <h2>4 · Save to GitHub</h2>
+  <p class="hint">Auto-save pushes the note straight into <code>pending-notes/</code> using a GitHub token stored only in this browser — no manual upload step. GitHub Actions takes it from there and publishes it to WordPress as a draft.</p>
 
   <fieldset>
     <legend>Your repo (saved on this device only)</legend>
@@ -166,12 +166,19 @@
       <div><label>GitHub username / org</label><input type="text" id="ghOwner" placeholder="bugignore"></div>
       <div><label>Repo name</label><input type="text" id="ghRepo" placeholder="question-factory"></div>
     </div>
+    <label>GitHub token <span style="font-weight:400;color:var(--ink-soft)">(fine-grained, this repo only, Contents: Read & write — <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">create one</a>)</span></label>
+    <input type="password" id="ghToken" placeholder="github_pat_…" autocomplete="off">
   </fieldset>
 
-  <button class="btn" onclick="tryRun(downloadBundle,this)">⬇ Download note file (<span id="dlSlug">note</span>.json)</button>
-  <button class="btn green" onclick="tryRun(openGithubUpload,this)">🚀 Open GitHub upload page</button>
+  <button class="btn green" onclick="tryRun(autoSaveToGithub,this)">☁️ Auto-save to GitHub (pending-notes/)</button>
   <div class="msg" id="sendMsg"></div>
-  <div class="privacyNote">Drop the downloaded file into <code>pending-notes/</code> on that page and commit — that's the only manual step. GitHub Actions takes it from there and moves it to <code>published-notes/</code> once WordPress confirms the draft was created.</div>
+  <div class="privacyNote">The token is stored only in this browser's local storage and sent only to <code>api.github.com</code> to save this one file — never anywhere else. Don't want to store a token? Use the manual fallback below instead.</div>
+
+  <details><summary>Fallback: manual download + GitHub upload page (no token needed)</summary><div>
+    <button class="btn small ghost" onclick="tryRun(downloadBundle,this)">⬇ Download note file (<span id="dlSlug">note</span>.json)</button>
+    <button class="btn small ghost" onclick="tryRun(openGithubUpload,this)">🚀 Open GitHub upload page</button>
+    <div class="privacyNote">Drop the downloaded file into <code>pending-notes/</code> on that page and commit.</div>
+  </div></details>
 
   <details><summary>Fallback: copy HTML / SEO fields manually instead</summary><div>
     <button class="btn small ghost" onclick="tryRun(copyBodyHtml,this)">📋 Copy notes body HTML</button>
@@ -533,18 +540,24 @@ function updatePreview(){
   });
 });
 
-/* ================= STEP 4 — hand off to GitHub ================= */
+/* ================= STEP 4 — save to GitHub ================= */
 function loadSettings(){
   try{
     const s = JSON.parse(localStorage.getItem('notesFactorySettings')||'{}');
     document.getElementById('ghOwner').value = s.owner || 'bugignore';
     document.getElementById('ghRepo').value = s.repo || 'question-factory';
+    document.getElementById('ghToken').value = s.token || '';
   }catch(e){}
   document.getElementById('ghOwner').oninput = saveSettings;
   document.getElementById('ghRepo').oninput = saveSettings;
+  document.getElementById('ghToken').oninput = saveSettings;
 }
 function saveSettings(){
-  const s = { owner: document.getElementById('ghOwner').value.trim(), repo: document.getElementById('ghRepo').value.trim() };
+  const s = {
+    owner: document.getElementById('ghOwner').value.trim(),
+    repo: document.getElementById('ghRepo').value.trim(),
+    token: document.getElementById('ghToken').value.trim()
+  };
   localStorage.setItem('notesFactorySettings', JSON.stringify(s));
   return s;
 }
@@ -552,14 +565,68 @@ function getSettings(){
   try{ return JSON.parse(localStorage.getItem('notesFactorySettings')||'{}'); }catch(e){ return {}; }
 }
 
-function downloadBundle(btn){
-  syncFormToState();
-  if(!state.seo.slug){ show(msg('sendMsg'),'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
-  const bundle = {
+function buildBundle(){
+  return {
     topic: state.topic, examType: state.examType, subject: state.subject, targetYear: 2026,
     seo: state.seo, bodyHtml: state.bodyHtml, publisherNotes: state.publisherNotes,
     createdAt: new Date().toISOString()
   };
+}
+
+function utf8ToBase64(str){
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+
+/* Create-or-update a file in a GitHub repo via the Contents API — runs entirely
+   from the browser using a user-supplied token, no backend involved. */
+async function githubPutFile(owner, repo, token, path, content, message){
+  const api = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`;
+  const headers = {
+    'Authorization': 'token ' + token,
+    'Accept': 'application/vnd.github+json'
+  };
+  let sha;
+  const getRes = await fetch(api + '?ref=main', { headers });
+  if(getRes.status === 200){
+    sha = (await getRes.json()).sha;
+  } else if(getRes.status !== 404){
+    throw new Error(`GitHub check failed (${getRes.status}): ${(await getRes.text()).slice(0,200)}`);
+  }
+  const body = { message, content: utf8ToBase64(content), branch: 'main' };
+  if(sha) body.sha = sha;
+  const putRes = await fetch(api, { method:'PUT', headers: {...headers,'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if(!putRes.ok){
+    throw new Error(`GitHub save failed (${putRes.status}): ${(await putRes.text()).slice(0,300)}`);
+  }
+  return putRes.json();
+}
+
+async function autoSaveToGithub(btn){
+  syncFormToState();
+  const m = msg('sendMsg');
+  if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
+  const s = saveSettings();
+  if(!s.owner || !s.repo){ show(m,'bad','Enter your GitHub username and repo name above first.'); return; }
+  if(!s.token){ show(m,'bad','Enter a GitHub token above first, or use the manual fallback below.'); return; }
+  show(m,'warn','Saving to GitHub…');
+  const bundle = buildBundle();
+  const path = `pending-notes/${state.seo.slug}.json`;
+  try{
+    const res = await githubPutFile(s.owner, s.repo, s.token, path, JSON.stringify(bundle, null, 2), `Add note: ${state.seo.slug}`);
+    document.getElementById('dlSlug').textContent = state.seo.slug;
+    show(m,'ok',`Saved to ${path} — GitHub Actions will publish it to WordPress as a draft within a minute or two. Commit: ${res.commit && res.commit.sha ? res.commit.sha.slice(0,7) : 'ok'}`);
+  }catch(e){
+    show(m,'bad','Auto-save failed: '+e.message+' — check the token has Contents: Read & write on this repo, then try again, or use the manual fallback below.');
+  }
+}
+
+function downloadBundle(btn){
+  syncFormToState();
+  if(!state.seo.slug){ show(msg('sendMsg'),'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
+  const bundle = buildBundle();
   const blob = new Blob([JSON.stringify(bundle, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

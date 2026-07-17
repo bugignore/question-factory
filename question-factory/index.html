@@ -26,7 +26,7 @@
   h2{font-size:16px;margin:0 0 2px}
   .hint{color:var(--ink-soft);font-size:12.5px;margin:0 0 12px}
   label{display:block;font-weight:600;font-size:12.5px;margin:11px 0 4px}
-  input[type=text],input[type=number],textarea,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;color:var(--ink);background:var(--card);font-size:15px}
+  input[type=text],input[type=number],input[type=password],textarea,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;color:var(--ink);background:var(--card);font-size:15px}
   textarea{min-height:110px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12px}
   input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -57,6 +57,10 @@
   .fixzone.show{display:block}
   .fixzone h3{margin:0 0 4px;font-size:14px;color:var(--warn)}
   .chip{display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:2px 9px;font-size:11.5px;margin:2px 2px 0 0}
+  fieldset{border:1.5px solid var(--line);border-radius:9px;padding:10px 12px;margin-top:10px}
+  fieldset legend{font-size:12.5px;font-weight:600;color:var(--ink-soft);padding:0 4px}
+  .privacyNote{background:#EDF1FA;border-radius:9px;padding:10px 12px;font-size:12px;color:var(--ink-soft);margin-top:10px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 </style>
 </head>
 <body>
@@ -153,6 +157,19 @@
   <button class="btn ghost" onclick="tryRun(downloadCsv,this)">⬇ Download file</button>
   <div class="msg" id="dlMsg"></div>
   <details><summary>Preview final CSV</summary><div><textarea id="finalOut" readonly style="min-height:160px"></textarea></div></details>
+
+  <fieldset>
+    <legend>Save to GitHub (saved on this device only)</legend>
+    <div class="row2">
+      <div><label>GitHub username / org</label><input type="text" id="qfGhOwner" placeholder="bugignore"></div>
+      <div><label>Repo name</label><input type="text" id="qfGhRepo" placeholder="question-factory"></div>
+    </div>
+    <label>GitHub token <span style="font-weight:400;color:var(--ink-soft)">(fine-grained, this repo only, Contents: Read & write — <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">create one</a>)</span></label>
+    <input type="password" id="qfGhToken" placeholder="github_pat_…" autocomplete="off">
+  </fieldset>
+  <button class="btn green" onclick="tryRun(autoSaveQuestionsToGithub,this)">☁️ Auto-save to GitHub (pending-questions/)</button>
+  <div class="msg" id="qfSendMsg"></div>
+  <div class="privacyNote">Pushes the CSV straight into <code>pending-questions/</code> in your repo — the token is stored only in this browser and sent only to <code>api.github.com</code>. Uploading to your website's question bank from there is still a separate manual step for now.</div>
   <details><summary>🔍 Verify answer-index conversion (recommended before first upload)</summary><div>
     <p class="hint">This shows exactly what will be sent to the website. "Shown as" is what the site stores (0=A, 1=B, 2=C, 3=D) — check a few rows against the question text to be sure.</p>
     <div id="convCheck" style="font-size:12px;max-height:220px;overflow-y:auto"></div>
@@ -200,7 +217,7 @@ function render(){
   document.getElementById('nextBtn').textContent = cur===3 ? 'Done' : 'Next →';
   document.getElementById('nextBtn').disabled = cur===3;
   if(cur===2) buildChecker();
-  if(cur===3) updateDl();
+  if(cur===3){ updateDl(); loadQfSettings(); }
   document.querySelector('main').scrollTop=0;
 }
 function okRows(){ return rows.filter(r=>r.status==='ok'); }
@@ -634,6 +651,66 @@ function downloadCsv(){
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
   show(m,'ok',p.length+' question(s) saved as '+name);
+}
+/* ---------- Save to GitHub ---------- */
+function loadQfSettings(){
+  try{
+    const s = JSON.parse(localStorage.getItem('questionFactorySettings')||'{}');
+    document.getElementById('qfGhOwner').value = s.owner || '';
+    document.getElementById('qfGhRepo').value = s.repo || 'question-factory';
+    document.getElementById('qfGhToken').value = s.token || '';
+  }catch(e){}
+  document.getElementById('qfGhOwner').oninput = saveQfSettings;
+  document.getElementById('qfGhRepo').oninput = saveQfSettings;
+  document.getElementById('qfGhToken').oninput = saveQfSettings;
+}
+function saveQfSettings(){
+  const s = {
+    owner: document.getElementById('qfGhOwner').value.trim(),
+    repo: document.getElementById('qfGhRepo').value.trim(),
+    token: document.getElementById('qfGhToken').value.trim()
+  };
+  localStorage.setItem('questionFactorySettings', JSON.stringify(s));
+  return s;
+}
+function utf8ToBase64(str){
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+async function githubPutFile(owner, repo, token, path, content, message){
+  const api = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`;
+  const headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' };
+  let sha;
+  const getRes = await fetch(api + '?ref=main', { headers });
+  if(getRes.status === 200){ sha = (await getRes.json()).sha; }
+  else if(getRes.status !== 404){ throw new Error(`GitHub check failed (${getRes.status}): ${(await getRes.text()).slice(0,200)}`); }
+  const body = { message, content: utf8ToBase64(content), branch: 'main' };
+  if(sha) body.sha = sha;
+  const putRes = await fetch(api, { method:'PUT', headers: {...headers,'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if(!putRes.ok){ throw new Error(`GitHub save failed (${putRes.status}): ${(await putRes.text()).slice(0,300)}`); }
+  return putRes.json();
+}
+async function autoSaveQuestionsToGithub(btn){
+  const p=pickRows(), m=msg('qfSendMsg');
+  if(!p.length){ show(m,'bad','Nothing to export — verify questions first or choose "All rows".'); return; }
+  let csv;
+  try{ csv = toCSV(exportRows(p)); }
+  catch(e){ show(m,'bad','⚠ '+e.message); return; }
+  let name=(document.getElementById('fileName').value.trim()||suggestName());
+  if(!/\.csv$/i.test(name)) name+='.csv';
+  const s = saveQfSettings();
+  if(!s.owner || !s.repo){ show(m,'bad','Enter your GitHub username and repo name above first.'); return; }
+  if(!s.token){ show(m,'bad','Enter a GitHub token above first, or use Download file instead.'); return; }
+  show(m,'warn','Saving to GitHub…');
+  const path = `pending-questions/${name}`;
+  try{
+    await githubPutFile(s.owner, s.repo, s.token, path, csv, `Add questions: ${name}`);
+    show(m,'ok',`Saved ${p.length} question(s) to ${path}.`);
+  }catch(e){
+    show(m,'bad','Auto-save failed: '+e.message+' — check the token has Contents: Read & write on this repo, then try again.');
+  }
 }
 function resetAll(){
   if(!confirm('Clear all questions and start fresh?')) return;
