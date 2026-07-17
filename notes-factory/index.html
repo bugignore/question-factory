@@ -158,23 +158,20 @@
 <!-- STEP 4 -->
 <section class="step" id="step3">
   <h2>4 · Save to GitHub</h2>
-  <p class="hint">Auto-save pushes the note straight into <code>pending-notes/</code> using a GitHub token stored only in this browser — no manual upload step. GitHub Actions takes it from there and publishes it to WordPress as a draft.</p>
+  <p class="hint">Auto-save pushes the note straight into <code>pending-notes/</code> — GitHub Actions takes it from there and publishes it to WordPress as a draft.</p>
 
-  <fieldset>
-    <legend>Your repo (saved on this device only)</legend>
-    <div class="row2">
-      <div><label>GitHub username / org</label><input type="text" id="ghOwner" placeholder="bugignore"></div>
-      <div><label>Repo name</label><input type="text" id="ghRepo" placeholder="question-factory"></div>
-    </div>
-    <label>GitHub token <span style="font-weight:400;color:var(--ink-soft)">(fine-grained, this repo only, Contents: Read & write — <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">create one</a>)</span></label>
-    <input type="password" id="ghToken" placeholder="github_pat_…" autocomplete="off">
+  <fieldset id="ghLockBox">
+    <legend>Unlock saving (once per browser)</legend>
+    <label>App Password</label>
+    <input type="password" id="ghAppPassword" placeholder="Ask for the app password" autocomplete="off">
+    <button class="btn small" onclick="tryRun(unlockGithub,this)">🔓 Unlock</button>
+    <div class="msg" id="unlockMsg"></div>
   </fieldset>
 
-  <button class="btn green" onclick="tryRun(autoSaveToGithub,this)">☁️ Auto-save to GitHub (pending-notes/)</button>
+  <button class="btn green" onclick="tryRun(autoSaveToGithub,this)">☁️ Auto-save to GitHub</button>
   <div class="msg" id="sendMsg"></div>
-  <div class="privacyNote">The token is stored only in this browser's local storage and sent only to <code>api.github.com</code> to save this one file — never anywhere else. Don't want to store a token? Use the manual fallback below instead.</div>
 
-  <details><summary>Fallback: manual download + GitHub upload page (no token needed)</summary><div>
+  <details><summary>Fallback: manual download + GitHub upload page</summary><div>
     <button class="btn small ghost" onclick="tryRun(downloadBundle,this)">⬇ Download note file (<span id="dlSlug">note</span>.json)</button>
     <button class="btn small ghost" onclick="tryRun(openGithubUpload,this)">🚀 Open GitHub upload page</button>
     <div class="privacyNote">Drop the downloaded file into <code>pending-notes/</code> on that page and commit.</div>
@@ -541,28 +538,45 @@ function updatePreview(){
 });
 
 /* ================= STEP 4 — save to GitHub ================= */
+const GH_OWNER = 'bugignore';
+const GH_REPO = 'question-factory';
+/* Paste the blob produced by admin-encrypt-token.html here (owner-only tool, not linked from this app). */
+const ENCRYPTED_GH_TOKEN = 'REPLACE_WITH_BLOB_FROM_admin-encrypt-token.html';
+
 function loadSettings(){
+  const unlocked = !!sessionStorage.getItem('ghUnlockedToken');
+  document.getElementById('ghLockBox').style.display = unlocked ? 'none' : '';
+}
+
+function b64ToBytes(b64){ return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+
+async function deriveKey(password, salt){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations:200000, hash:'SHA-256' },
+    keyMaterial, { name:'AES-GCM', length:256 }, false, ['decrypt']
+  );
+}
+
+async function unlockGithub(btn){
+  const m = msg('unlockMsg');
+  const password = document.getElementById('ghAppPassword').value;
+  if(!password){ show(m,'bad','Enter the app password first.'); return; }
+  if(ENCRYPTED_GH_TOKEN.startsWith('REPLACE_WITH')){ show(m,'bad','This app has not been set up yet — the owner needs to run admin-encrypt-token.html first.'); return; }
   try{
-    const s = JSON.parse(localStorage.getItem('notesFactorySettings')||'{}');
-    document.getElementById('ghOwner').value = s.owner || 'bugignore';
-    document.getElementById('ghRepo').value = s.repo || 'question-factory';
-    document.getElementById('ghToken').value = s.token || '';
-  }catch(e){}
-  document.getElementById('ghOwner').oninput = saveSettings;
-  document.getElementById('ghRepo').oninput = saveSettings;
-  document.getElementById('ghToken').oninput = saveSettings;
-}
-function saveSettings(){
-  const s = {
-    owner: document.getElementById('ghOwner').value.trim(),
-    repo: document.getElementById('ghRepo').value.trim(),
-    token: document.getElementById('ghToken').value.trim()
-  };
-  localStorage.setItem('notesFactorySettings', JSON.stringify(s));
-  return s;
-}
-function getSettings(){
-  try{ return JSON.parse(localStorage.getItem('notesFactorySettings')||'{}'); }catch(e){ return {}; }
+    const raw = b64ToBytes(ENCRYPTED_GH_TOKEN);
+    const salt = raw.slice(0,16), iv = raw.slice(16,28), ct = raw.slice(28);
+    const key = await deriveKey(password, salt);
+    const ptBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+    const token = new TextDecoder().decode(ptBuf);
+    sessionStorage.setItem('ghUnlockedToken', token);
+    document.getElementById('ghAppPassword').value = '';
+    document.getElementById('ghLockBox').style.display = 'none';
+    show(m,'ok','Unlocked for this browser session.');
+  }catch(e){
+    show(m,'bad','Wrong password — try again.');
+  }
 }
 
 function buildBundle(){
@@ -581,7 +595,7 @@ function utf8ToBase64(str){
 }
 
 /* Create-or-update a file in a GitHub repo via the Contents API — runs entirely
-   from the browser using a user-supplied token, no backend involved. */
+   from the browser using the session-unlocked token, no backend involved. */
 async function githubPutFile(owner, repo, token, path, content, message){
   const api = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`;
   const headers = {
@@ -608,18 +622,17 @@ async function autoSaveToGithub(btn){
   syncFormToState();
   const m = msg('sendMsg');
   if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
-  const s = saveSettings();
-  if(!s.owner || !s.repo){ show(m,'bad','Enter your GitHub username and repo name above first.'); return; }
-  if(!s.token){ show(m,'bad','Enter a GitHub token above first, or use the manual fallback below.'); return; }
+  const token = sessionStorage.getItem('ghUnlockedToken');
+  if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
   show(m,'warn','Saving to GitHub…');
   const bundle = buildBundle();
   const path = `pending-notes/${state.seo.slug}.json`;
   try{
-    const res = await githubPutFile(s.owner, s.repo, s.token, path, JSON.stringify(bundle, null, 2), `Add note: ${state.seo.slug}`);
+    const res = await githubPutFile(GH_OWNER, GH_REPO, token, path, JSON.stringify(bundle, null, 2), `Add note: ${state.seo.slug}`);
     document.getElementById('dlSlug').textContent = state.seo.slug;
     show(m,'ok',`Saved to ${path} — GitHub Actions will publish it to WordPress as a draft within a minute or two. Commit: ${res.commit && res.commit.sha ? res.commit.sha.slice(0,7) : 'ok'}`);
   }catch(e){
-    show(m,'bad','Auto-save failed: '+e.message+' — check the token has Contents: Read & write on this repo, then try again, or use the manual fallback below.');
+    show(m,'bad','Auto-save failed: '+e.message+' — use the manual fallback below if this keeps happening.');
   }
 }
 
@@ -637,9 +650,7 @@ function downloadBundle(btn){
   show(msg('sendMsg'),'ok','Downloaded '+state.seo.slug+'.json — now open the GitHub upload page and drop it into pending-notes/.');
 }
 function openGithubUpload(btn){
-  const s = saveSettings();
-  if(!s.owner || !s.repo){ show(msg('sendMsg'),'bad','Enter your GitHub username and repo name above first.'); return; }
-  const url = `https://github.com/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/upload/main/pending-notes`;
+  const url = `https://github.com/${encodeURIComponent(GH_OWNER)}/${encodeURIComponent(GH_REPO)}/upload/main/pending-notes`;
   window.open(url, '_blank', 'noopener');
   show(msg('sendMsg'),'ok','Opened the GitHub upload page in a new tab — drag the downloaded file in and commit.');
 }

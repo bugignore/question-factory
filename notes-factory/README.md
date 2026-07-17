@@ -1,6 +1,6 @@
 # Notes Factory
 
-Generates premium exam notes from the `MASTER-PROMPT-ExamNotesPDF v6.md` master prompt using any **free** chat AI (DeepSeek recommended — the prompt is large), then publishes them to WordPress as drafts. The GitHub save step can be one-click automatic (a GitHub token you provide is stored only in your browser) or fully manual with no token at all — your choice. WordPress credentials never enter the browser or the repo either way.
+Generates premium exam notes from the `MASTER-PROMPT-ExamNotesPDF v6.md` master prompt using any **free** chat AI (DeepSeek recommended — the prompt is large), then publishes them to WordPress as drafts. Saving to GitHub is one-click automatic — the person using the app day-to-day (e.g. a client) only ever needs a short **app password** you give them, never a GitHub token. You (the owner) set the real GitHub token up once, encrypted, using the separate `admin-encrypt-token.html` tool.
 
 **Live app:** `https://bugignore.github.io/question-factory/notes-factory/`
 
@@ -14,11 +14,11 @@ You, in the browser tool (phone or desktop):
    (If the AI stopped midway: "Copy continue prompt" → paste in the same chat →
    paste the new reply with the continuation checkbox ticked.)
 3. Review the parsed SEO fields + HTML preview, fix anything.
-4. Tap "Auto-save to GitHub" → the tool pushes <slug>.json straight into
-   pending-notes/ using a GitHub token you set up once (step 0 below).
-   No download, no manual upload page. (Prefer no token stored in the
-   browser? Use the manual download + GitHub upload page fallback instead —
-   still one tap away.)
+4. First time on a given browser: type the app password (given by the
+   owner) into "Unlock saving" once. Then tap "Auto-save to GitHub" →
+   the tool pushes <slug>.json straight into pending-notes/. No download,
+   no manual upload page, no GitHub knowledge needed. (Manual download +
+   GitHub upload page fallback is still there if you ever prefer it.)
 
 GitHub Actions (automatic, seconds later):
 5. The workflow posts the note to your WordPress site as a DRAFT and
@@ -31,15 +31,19 @@ You, in WordPress:
 
 If step 5 fails, the file simply stays in `pending-notes/`, the failure is visible in the **Actions** tab, and you can re-run it from there once the cause is fixed. Nothing is ever lost — the JSON in the repo is the permanent backup of every note.
 
-## One-time setup
+## One-time setup (you, the owner — do this before handing the tool to anyone else)
 
-### 0. GitHub token (only if you want one-tap auto-save — skip for the manual fallback)
+### 0. GitHub token + app password (enables one-tap auto-save for everyone who uses the tool)
 
 1. Go to **[github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)** (fine-grained tokens).
 2. **Resource owner:** your account/org. **Repository access:** "Only select repositories" → pick this repo.
 3. **Permissions → Repository permissions → Contents:** Read and write. Leave everything else as "No access."
-4. Generate, copy the token (starts `github_pat_…`), paste it into the app's "GitHub token" field in Step 4. It's saved only in this browser's local storage and sent only to `api.github.com` when you tap "Auto-save."
-5. Tokens can be revoked any time from the same GitHub settings page if you ever want to invalidate it.
+4. Generate, **copy the token immediately** (starts `github_pat_…`) — GitHub only shows it once.
+5. Open **`https://bugignore.github.io/question-factory/admin-encrypt-token.html`** (it needs to run over `https://` for the browser's encryption API to work — don't just double-click the file locally) — paste the raw token, choose an **app password** (this is what you'll give your client — pick something short and memorable, not the same as any real credential), click **Encrypt**.
+6. Copy the output blob and paste it as the `ENCRYPTED_GH_TOKEN` constant near the top of the script in **both** `notes-factory/index.html` and `question-factory/index.html`, then commit.
+7. Reload `admin-encrypt-token.html` (or just don't leave the raw token sitting in the input) — it never gets saved anywhere by that page.
+8. Give the app password to your client via a private channel (chat, verbally) — never write it into any repo file. She types it once per browser in the app's "Unlock saving" box; it's remembered for that browser after that.
+9. Tokens can be revoked any time from the same GitHub settings page — if you ever need to rotate it, generate a new token, re-encrypt with `admin-encrypt-token.html`, and repeat steps 5–6.
 
 ### 1. WordPress Application Password (no plugin needed)
 
@@ -84,7 +88,8 @@ The workflow (`.github/workflows/publish-note.yml`) and folders (`pending-notes/
 |---|---|---|
 | Master prompt | repo file, public | no |
 | Generated notes | `pending-notes/` → `published-notes/`, public repo | no (they're going on a public website anyway) |
-| GitHub username/repo | browser `localStorage` only | no |
-| GitHub token (optional, for auto-save) | browser `localStorage` only, sent only to `api.github.com` | yes — scope it to Contents-only on this one repo, skip it entirely if you'd rather use the manual fallback |
+| Encrypted GitHub token | `ENCRYPTED_GH_TOKEN` constant in the committed source, public | the ciphertext itself is safe to be public — it's useless without the app password, which is never written to any file |
+| App password | given verbally/privately to whoever uses the tool; the decrypted token then lives only in that browser's `sessionStorage` (cleared when the tab/browser closes) | **yes — the only real secret in this whole flow; don't post it publicly or commit it anywhere** |
+| Raw GitHub token | exists only briefly in your clipboard/the admin-encrypt-token.html input while you set this up — never committed | **yes — never paste it anywhere except that one-time encryption step** |
 | WP credentials | GitHub Actions encrypted secrets only | **yes — never anywhere else** |
 | AI chat account | your own DeepSeek/ChatGPT session | never touches this tool |

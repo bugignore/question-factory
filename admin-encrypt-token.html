@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin: Encrypt GitHub Token</title>
+<style>
+  body{margin:0;background:#F2F4F8;color:#1B2A4A;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.5}
+  main{max-width:640px;margin:0 auto;padding:20px}
+  h1{font-size:18px}
+  label{display:block;font-weight:600;font-size:12.5px;margin:14px 0 4px}
+  input[type=password],input[type=text],textarea{width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid #D8DEE9;border-radius:9px;font:inherit}
+  textarea{min-height:100px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  button{display:block;width:100%;padding:13px;border-radius:10px;border:1.5px solid #2A4D9B;background:#2A4D9B;color:#fff;font:inherit;font-weight:700;font-size:15px;cursor:pointer;margin-top:14px}
+  .warn{background:#FFF5D6;color:#8A6400;border-radius:9px;padding:12px 14px;font-size:13px;margin:14px 0}
+  .ok{background:#E4F4EC;color:#0E7C56;border-radius:9px;padding:12px 14px;font-size:13px;margin-top:14px;display:none}
+  .bad{background:#FBEAE7;color:#B3362B;border-radius:9px;padding:12px 14px;font-size:13px;margin-top:14px;display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>🔐 Admin: Encrypt GitHub Token</h1>
+<div class="warn">
+  <b>Owner-only tool — never share this page's inputs with your client.</b><br>
+  This runs 100% in your browser. Nothing here is ever sent anywhere, uploaded, or saved automatically. Paste your real GitHub token, choose an app password to give your client, click Encrypt, then copy the output blob into <code>notes-factory/index.html</code> and <code>question-factory/index.html</code> (replace the <code>ENCRYPTED_GH_TOKEN</code> constant near the top of each file's script).
+</div>
+
+<label>Your real GitHub fine-grained token (github_pat_…)</label>
+<input type="password" id="rawToken" placeholder="github_pat_..." autocomplete="off">
+
+<label>App password to give your client (share this with her separately, e.g. via WhatsApp — never commit it anywhere)</label>
+<input type="password" id="appPassword" placeholder="choose a password" autocomplete="off">
+
+<button onclick="doEncrypt()">🔒 Encrypt</button>
+
+<div class="ok" id="okBox">
+  <b>Paste this into both index.html files as the ENCRYPTED_GH_TOKEN constant:</b>
+  <textarea id="output" readonly onclick="this.select()"></textarea>
+</div>
+<div class="bad" id="badBox"></div>
+
+<div class="warn">
+  After pasting the blob into both files and committing, <b>clear this page's inputs</b> (just reload the page) and never store the raw token anywhere else — this encrypted blob is the only copy that should live in the repo.
+</div>
+</main>
+<script>
+function b64(bytes){ let s=''; bytes.forEach(b=>s+=String.fromCharCode(b)); return btoa(s); }
+
+async function deriveKey(password, salt){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations:200000, hash:'SHA-256' },
+    keyMaterial, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
+  );
+}
+
+async function doEncrypt(){
+  const okBox = document.getElementById('okBox'), badBox = document.getElementById('badBox');
+  okBox.style.display = 'none'; badBox.style.display = 'none';
+  const token = document.getElementById('rawToken').value.trim();
+  const password = document.getElementById('appPassword').value;
+  if(!token || !password){ badBox.textContent = 'Fill in both fields first.'; badBox.style.display='block'; return; }
+  try{
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(password, salt);
+    const ctBuf = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(token));
+    const combined = new Uint8Array(salt.length + iv.length + ctBuf.byteLength);
+    combined.set(salt, 0);
+    combined.set(iv, salt.length);
+    combined.set(new Uint8Array(ctBuf), salt.length + iv.length);
+    document.getElementById('output').value = b64(combined);
+    okBox.style.display = 'block';
+  }catch(e){
+    badBox.textContent = 'Encryption failed: ' + e.message;
+    badBox.style.display = 'block';
+  }
+}
+</script>
+</body>
+</html>

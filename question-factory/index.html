@@ -158,18 +158,16 @@
   <div class="msg" id="dlMsg"></div>
   <details><summary>Preview final CSV</summary><div><textarea id="finalOut" readonly style="min-height:160px"></textarea></div></details>
 
-  <fieldset>
-    <legend>Save to GitHub (saved on this device only)</legend>
-    <div class="row2">
-      <div><label>GitHub username / org</label><input type="text" id="qfGhOwner" placeholder="bugignore"></div>
-      <div><label>Repo name</label><input type="text" id="qfGhRepo" placeholder="question-factory"></div>
-    </div>
-    <label>GitHub token <span style="font-weight:400;color:var(--ink-soft)">(fine-grained, this repo only, Contents: Read & write — <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">create one</a>)</span></label>
-    <input type="password" id="qfGhToken" placeholder="github_pat_…" autocomplete="off">
+  <fieldset id="qfGhLockBox">
+    <legend>Unlock saving (once per browser)</legend>
+    <label>App Password</label>
+    <input type="password" id="qfGhAppPassword" placeholder="Ask for the app password" autocomplete="off">
+    <button class="btn small" onclick="tryRun(unlockQfGithub,this)">🔓 Unlock</button>
+    <div class="msg" id="qfUnlockMsg"></div>
   </fieldset>
-  <button class="btn green" onclick="tryRun(autoSaveQuestionsToGithub,this)">☁️ Auto-save to GitHub (pending-questions/)</button>
+  <button class="btn green" onclick="tryRun(autoSaveQuestionsToGithub,this)">☁️ Auto-save to GitHub</button>
   <div class="msg" id="qfSendMsg"></div>
-  <div class="privacyNote">Pushes the CSV straight into <code>pending-questions/</code> in your repo — the token is stored only in this browser and sent only to <code>api.github.com</code>. Uploading to your website's question bank from there is still a separate manual step for now.</div>
+  <div class="privacyNote">Pushes the CSV straight into <code>pending-questions/</code> in the repo. Uploading from there into your website's question bank is still a separate manual step for now.</div>
   <details><summary>🔍 Verify answer-index conversion (recommended before first upload)</summary><div>
     <p class="hint">This shows exactly what will be sent to the website. "Shown as" is what the site stores (0=A, 1=B, 2=C, 3=D) — check a few rows against the question text to be sure.</p>
     <div id="convCheck" style="font-size:12px;max-height:220px;overflow-y:auto"></div>
@@ -653,26 +651,47 @@ function downloadCsv(){
   show(m,'ok',p.length+' question(s) saved as '+name);
 }
 /* ---------- Save to GitHub ---------- */
+const GH_OWNER = 'bugignore';
+const GH_REPO = 'question-factory';
+/* Paste the blob produced by admin-encrypt-token.html here (owner-only tool, not linked from this app). */
+const ENCRYPTED_GH_TOKEN = 'REPLACE_WITH_BLOB_FROM_admin-encrypt-token.html';
+
 function loadQfSettings(){
+  const unlocked = !!sessionStorage.getItem('ghUnlockedToken');
+  document.getElementById('qfGhLockBox').style.display = unlocked ? 'none' : '';
+}
+
+function b64ToBytes(b64){ return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+
+async function deriveKey(password, salt){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations:200000, hash:'SHA-256' },
+    keyMaterial, { name:'AES-GCM', length:256 }, false, ['decrypt']
+  );
+}
+
+async function unlockQfGithub(btn){
+  const m = msg('qfUnlockMsg');
+  const password = document.getElementById('qfGhAppPassword').value;
+  if(!password){ show(m,'bad','Enter the app password first.'); return; }
+  if(ENCRYPTED_GH_TOKEN.startsWith('REPLACE_WITH')){ show(m,'bad','This app has not been set up yet — the owner needs to run admin-encrypt-token.html first.'); return; }
   try{
-    const s = JSON.parse(localStorage.getItem('questionFactorySettings')||'{}');
-    document.getElementById('qfGhOwner').value = s.owner || '';
-    document.getElementById('qfGhRepo').value = s.repo || 'question-factory';
-    document.getElementById('qfGhToken').value = s.token || '';
-  }catch(e){}
-  document.getElementById('qfGhOwner').oninput = saveQfSettings;
-  document.getElementById('qfGhRepo').oninput = saveQfSettings;
-  document.getElementById('qfGhToken').oninput = saveQfSettings;
+    const raw = b64ToBytes(ENCRYPTED_GH_TOKEN);
+    const salt = raw.slice(0,16), iv = raw.slice(16,28), ct = raw.slice(28);
+    const key = await deriveKey(password, salt);
+    const ptBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+    const token = new TextDecoder().decode(ptBuf);
+    sessionStorage.setItem('ghUnlockedToken', token);
+    document.getElementById('qfGhAppPassword').value = '';
+    document.getElementById('qfGhLockBox').style.display = 'none';
+    show(m,'ok','Unlocked for this browser session.');
+  }catch(e){
+    show(m,'bad','Wrong password — try again.');
+  }
 }
-function saveQfSettings(){
-  const s = {
-    owner: document.getElementById('qfGhOwner').value.trim(),
-    repo: document.getElementById('qfGhRepo').value.trim(),
-    token: document.getElementById('qfGhToken').value.trim()
-  };
-  localStorage.setItem('questionFactorySettings', JSON.stringify(s));
-  return s;
-}
+
 function utf8ToBase64(str){
   const bytes = new TextEncoder().encode(str);
   let binary = '';
@@ -700,16 +719,15 @@ async function autoSaveQuestionsToGithub(btn){
   catch(e){ show(m,'bad','⚠ '+e.message); return; }
   let name=(document.getElementById('fileName').value.trim()||suggestName());
   if(!/\.csv$/i.test(name)) name+='.csv';
-  const s = saveQfSettings();
-  if(!s.owner || !s.repo){ show(m,'bad','Enter your GitHub username and repo name above first.'); return; }
-  if(!s.token){ show(m,'bad','Enter a GitHub token above first, or use Download file instead.'); return; }
+  const token = sessionStorage.getItem('ghUnlockedToken');
+  if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
   show(m,'warn','Saving to GitHub…');
   const path = `pending-questions/${name}`;
   try{
-    await githubPutFile(s.owner, s.repo, s.token, path, csv, `Add questions: ${name}`);
+    await githubPutFile(GH_OWNER, GH_REPO, token, path, csv, `Add questions: ${name}`);
     show(m,'ok',`Saved ${p.length} question(s) to ${path}.`);
   }catch(e){
-    show(m,'bad','Auto-save failed: '+e.message+' — check the token has Contents: Read & write on this repo, then try again.');
+    show(m,'bad','Auto-save failed: '+e.message);
   }
 }
 function resetAll(){

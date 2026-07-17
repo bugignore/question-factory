@@ -10,7 +10,7 @@ A single-page tool for generating verified, bilingual exam MCQs (CTET / KVS / DS
 1. **Build prompt** — pick a subject preset (Pedagogy, Mathematics, Reasoning, GS, English-only, Hindi-only). It generates a strict prompt for DeepSeek: topic column locked, formulas in plain Unicode, data-interpretation questions self-contained in text, correct language rules per subject.
 2. **Check, fix & shuffle** — paste DeepSeek's CSV. The tool validates all 15 columns, fixes the topic column, normalizes `exam_type_year`, enforces the language rules, removes duplicates, and **shuffles answer positions locally** so correct answers are evenly spread across options 1–4.
 3. **Verify** — a checker prompt (questions only, answers stripped) goes into a *new* DeepSeek chat. The tool compares both passes; mismatches can be fixed via a third "resolver" pass that also rewrites the explanation, or discarded.
-4. **Export** — copy the final verified CSV to clipboard (mobile-friendly), download it as a file, or tap **"Auto-save to GitHub"** to push it straight into `pending-questions/` in this repo using a GitHub token stored only in your browser (same one-time token setup as Notes Factory — see below). Uploading from `pending-questions/` into your website's question bank is still a manual step; auto-save only removes the download-then-upload dance for getting the file into the repo.
+4. **Export** — copy the final verified CSV to clipboard (mobile-friendly), download it as a file, or unlock with the app password (once per browser) and tap **"Auto-save to GitHub"** to push it straight into `pending-questions/` in this repo — no GitHub login or token needed by whoever's using the tool. Uploading from `pending-questions/` into your website's question bank is still a manual step; auto-save only removes the download-then-upload dance for getting the file into the repo.
 
 ## CSV format
 
@@ -30,13 +30,9 @@ explanation_hi,exam_type_year
 
 Share that link. On the phone, open it in Chrome → menu (⋮) → **Add to Home screen** → it now opens full-screen like an app.
 
-## GitHub token (only if you want one-tap auto-save)
+## Enabling one-tap auto-save (owner-only, one time)
 
-1. Go to **[github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)** (fine-grained tokens).
-2. **Resource owner:** your account/org. **Repository access:** "Only select repositories" → pick this repo.
-3. **Permissions → Repository permissions → Contents:** Read and write. Leave everything else as "No access."
-4. Generate, copy the token, paste it into the app's "GitHub token" field in Step 4. It's saved only in this browser's local storage and sent only to `api.github.com` when you tap "Auto-save to GitHub."
-5. Don't want to store a token in the browser at all? Skip this — "Download file" still works exactly as before.
+This uses the same encrypted-token setup as Notes Factory — see [`../notes-factory/README.md`](../notes-factory/README.md#0-github-token--app-password-enables-one-tap-auto-save-for-everyone-who-uses-the-tool) for the full steps. In short: generate a fine-grained GitHub token (Contents: Read & write, scoped to this repo), encrypt it with `../admin-encrypt-token.html` using an app password, paste the resulting blob into this file's `ENCRYPTED_GH_TOKEN` constant, and give the app password to whoever uses this tool. They never see or handle the GitHub token — just that one short password, typed once per browser.
 
 ## Updating the tool later
 
