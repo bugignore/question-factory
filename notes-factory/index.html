@@ -579,13 +579,22 @@ function extractPublisherNotes(raw, bodyEndIdx){
   return { publisherNotes: tail, found: tail.length > 0 };
 }
 
+/* Scaffolding comments (<!-- SECTION 1 -->, <!-- SVG 2: ... -->, <!-- End of
+   Notes Body -->, <!-- Ad Slots... -->, etc.) are the AI organizing its own
+   output — never reader-facing, and a dead giveaway of AI-generated content
+   if they ride through to the published page source. Strip every HTML
+   comment from the body regardless of which extraction path found it. */
+function stripHtmlComments(html){
+  return String(html||'').replace(/<!--[\s\S]*?-->/g, '').trim();
+}
+
 function parseResponse(raw){
   const seoResult = extractSEO(raw);
   const bodyResult = extractBody(raw);
   const pubResult = extractPublisherNotes(raw, bodyResult.endIdx);
   const result = {
     seo: seoResult.seo,
-    bodyHtml: bodyResult.bodyHtml,
+    bodyHtml: stripHtmlComments(bodyResult.bodyHtml),
     publisherNotes: pubResult.publisherNotes,
     method: seoResult.method + ' + ' + bodyResult.method,
     truncated: bodyResult.cutOff && !pubResult.found

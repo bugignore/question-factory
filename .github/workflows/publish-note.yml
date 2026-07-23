@@ -163,11 +163,17 @@ jobs:
             # the inline-styled cards verbatim) instead of unstructured classic
             # content. A leading <h1> is stripped first: the post title already IS
             # the page H1, so one inside the body would double the H1 on-page.
+            # HTML comments (AI scaffolding like <!-- SECTION 1 --> or
+            # <!-- End of Notes Body -->) are stripped too — they're invisible to
+            # readers but sit in the page source as a giveaway that the content
+            # is AI-generated, and files can land here via the manual upload
+            # fallback without ever passing through the notes-factory tool's own
+            # comment-stripping, so this is the last guaranteed gate before WordPress.
             payload="$(jq --argjson exam "$exam_ids_json" --argjson subj "$subject_ids_json" '{
               title: .seo.h1,
               slug: .seo.slug,
               excerpt: .seo.metaDescription,
-              content: ("<!-- wp:html -->\n" + (.bodyHtml | sub("^\\s*<h1[^>]*>[\\s\\S]*?</h1>\\s*"; "")) + "\n<!-- /wp:html -->"),
+              content: ("<!-- wp:html -->\n" + (.bodyHtml | gsub("<!--.*?-->"; ""; "s") | sub("^\\s*<h1[^>]*>[\\s\\S]*?</h1>\\s*"; "")) + "\n<!-- /wp:html -->"),
               status: "draft",
               meta: {
                 rank_math_focus_keyword: (.seo.focusKeyword // ""),
