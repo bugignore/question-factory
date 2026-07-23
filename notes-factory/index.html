@@ -119,12 +119,14 @@
   <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build &amp; copy prompt</button>
   <div class="msg" id="pMsg"></div>
   <div id="filePickWrap" style="display:none">
-    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF v6.md</code> in the folder above this one:</label>
+    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v8.md</code> in the folder above this one:</label>
     <input type="file" id="masterPromptFile" accept=".md,.txt">
   </div>
   <div class="stats" id="pStats"></div>
-  <details><summary>View full prompt (optional)</summary><div>
-    <textarea id="promptOut" style="min-height:260px" placeholder="Tap the button above — the full prompt appears here too." readonly></textarea>
+
+  <details id="partsWrap"><summary>📱 On phone and the paste comes out cut off? Copy in parts instead</summary><div>
+    <p class="hint" style="margin-top:8px">The full prompt is ~20,000+ characters. Some phone keyboards (Gboard/Samsung/SwiftKey clipboard) and mobile browsers silently truncate a single copy that long. Tap "Build &amp; copy prompt" above first, then use these buttons <b>in order</b> — paste each one as its own message in the SAME chat before sending the next. Tell the AI to wait until you say "generation config: go" if it starts replying early.</p>
+    <div id="partsButtons"></div>
   </div></details>
 </section>
 
@@ -310,7 +312,7 @@ function updateLangMixLabel(){
 
 async function loadMasterPrompt(){
   if(masterPromptText) return masterPromptText;
-  const candidates = ['../MASTER-PROMPT-ExamNotesPDF%20v6.md', '../MASTER-PROMPT-ExamNotesPDF v6.md'];
+  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v8.md'];
   let lastErr;
   for(const url of candidates){
     try{
@@ -324,7 +326,7 @@ async function loadMasterPrompt(){
   const hint = location.protocol === 'file:'
     ? 'This page was opened straight from the folder (file://), where browsers block reading other files automatically.'
     : 'Could not load the master prompt file from the repo root ('+(lastErr?lastErr.message:'')+').';
-  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF v6.md manually — then tap "Build & copy prompt" again.');
+  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v8.md manually — then tap "Build & copy prompt" again.');
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -353,7 +355,7 @@ Output exactly three blocks, in this order, with nothing outside them (no extra 
 CRITICAL RENDERING RULE: the content of EVERY block (including the HTML body and the plain-text publisher notes) MUST sit inside a fenced code block (three backticks on their own line before and after the content, immediately inside the sentinel markers). This is because chat interfaces render raw HTML visually — without the code fence, the person copying your reply gets rendered text with every tag destroyed. The fence is what keeps your output copyable as source. Never skip it.
 
 ADDITIVE FIELDS — two extra fields in SEO_JSON beyond what's specified above:
-- "imageAltText": ONE single ALT text string for the article's featured/OG image — pick the strongest of the 5 "Image ALT Suggestions" you already write in Part A2 Section E and adapt it if needed so it stands alone as the featured-image ALT (contains the Focus Keyphrase or a close variant, plus a concrete description of what the image shows).
+- "imageAltText": ONE single ALT text string for the article's featured/OG image, derived from whichever of your visuals best represents the topic as a whole — contains the Focus Keyphrase or a close variant, plus a concrete description of what the image shows.
 - "imagePrompt": a complete, ready-to-paste AI image-generation prompt (for Midjourney/DALL·E/Stable Diffusion) for that same featured image. Describe subject, composition, and a professional exam-prep/coaching-brand visual style (clean, premium, Indian-classroom-adjacent iconography where relevant) — 16:9 aspect ratio suitable for a WordPress featured image, and explicitly specify NO readable text/typography baked into the image (WordPress overlays the title separately).
 
 <<<SEO_JSON>>>
@@ -378,7 +380,7 @@ ADDITIVE FIELDS — two extra fields in SEO_JSON beyond what's specified above:
 
 <<<PUBLISHER_NOTES>>>
 \`\`\`
-(Part A2 SEO Linking Recommendations + Part E Mnemonics Archive + the Part D1 consolidated checks table, exactly as specified above, plain text as required)
+(the publisher-facing notes exactly as specified above — sources to verify, softened/omitted claims, PYQ label counts, visuals list, variation picks used — plain text)
 \`\`\`
 <<<END_PUBLISHER_NOTES>>>
 
@@ -400,7 +402,7 @@ TOPIC: ${topic}
 EXAM TYPE: ${examType}
 SUBJECT: ${subject}
 TARGET_YEAR: 2026 (this is the locked constant already specified inside the prompt below — do not change it)
-LANGUAGE MIX: Hindi ${hindiPercent}% + English ${100-hindiPercent}% — this OVERRIDES the "Hindi 70% + English 30%" default stated in the master prompt's "🌐 LANGUAGE & LENGTH" section below. Apply this ratio to the explanations/tricks/teacher-talk/connecting prose only — key terms, definitions, and technical labels still stay in English regardless of this split, exactly as that section already specifies.
+LANGUAGE MIX: Hindi ${hindiPercent}% + English ${100-hindiPercent}% — this OVERRIDES any Hindi/English language-mix default stated elsewhere in the master prompt below. Apply this ratio to the explanations/tricks/teacher-talk/connecting prose only — key terms, definitions, and technical labels still stay in English regardless of this split.
 === END RUN CONFIGURATION — THE FULL MASTER PROMPT FOLLOWS BELOW, UNCHANGED ===
 
 `;
@@ -493,7 +495,7 @@ function parseResponse(raw){
   if(!result.seo.slug) warnings.push('URL Slug missing — fill in manually.');
   if(!result.seo.metaDescription) warnings.push('Meta Description missing — fill in manually.');
   if(!result.seo.h1) warnings.push('H1 missing — fill in manually.');
-  if(!result.seo.imageAltText) warnings.push('Image ALT text missing — fill in manually (or pick one of the 5 suggestions in the publisher notes).');
+  if(!result.seo.imageAltText) warnings.push('Image ALT text missing — fill in manually.');
   if(!result.seo.imagePrompt) warnings.push('Image generation prompt missing — fill in manually if you want one.');
   if(!result.bodyHtml || result.bodyHtml.length < 500) warnings.push('Notes body looks too short or missing — re-check the paste, or edit it manually on the next step.');
   if(result.truncated) warnings.push('The reply looks CUT OFF midway (no closing marker found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
