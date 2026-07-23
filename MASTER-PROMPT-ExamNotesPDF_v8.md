@@ -72,8 +72,13 @@ Card grammar (colors fixed, labels rotate per seed):
 
 **SVG visuals (4–6/article — mix: 1–2 larger multi-step + 3–4 small single-concept minis, chosen for TOPIC):** flowchart (real subject process, never a teaching sequence) / concept map / timeline (real chronology only) / labeled schematic / small mini-diagram per major sub-topic (tiny 2–3 node relationship, mini axis, small labeled shape — viewBox height as low as 80–120) / data chart (citable or "Illustrative/अनुमानित"-labeled, plus a matching HTML table). More small visuals through Section 2 beats only 2 large ones — density matters as much as size. Rules: `viewBox="0 0 360 H"` `width="100%"` in a white card, `role="img"` + aria-label, unique marker ids, node text ≤26 chars, palette #2563eb/#1e3a8a/#eff6ff, #16a34a/#dcfce7 outcomes, #9333ea loops, #e11d48 warnings, #0f172a ink. Rotate the Hindi diagram-intro line, never repeat. Bold first term occurrence; emojis as functional anchors only, max 2–3/section. **No fade-out:** last third as rich as first.
 
-## AD SLOTS — exactly 3, `<ins>` only, seed-randomized positions
-Allowed: after Section 2 / 3 / 5 / 6 / 7 / FAQ. Pick **3 different positions via seed** (e.g. seed%6, then +2/+4 mod 6 skipping dupes) so placement differs per article. **Report actual section names in Publisher Notes (e.g. "after Section 3, after Section 6, after FAQ") — never digits**, which only label `data-ad-slot` ids. Each slot uses this labeled wrapper — 🚫 **no `<script>` inside it, ever**:
+## AD SLOTS — exactly 3, `<ins>` only, seed-randomized positions, SPREAD ACROSS THE WHOLE ARTICLE
+🚫 **HARD BAN: never place all 3 ad slots bunched at/near the end (e.g. never all three among Section 6/7/FAQ, never "after Section 7 + after FAQ + nothing earlier").** This is a real bug that has shipped before — ads must be genuinely distributed through the reading experience, not stacked at the tail.
+Split the article into three zones and pick exactly **one slot per zone** (seed decides which option within each zone, so the exact spot still varies article to article):
+- **Early zone (pick one):** after Section 2.
+- **Middle zone (pick one):** after Section 3 or after Section 5.
+- **Late zone (pick one):** after Section 6, after Section 7, or after FAQ.
+**Report actual section names in Publisher Notes (e.g. "after Section 2, after Section 5, after FAQ") — never digits**, which only label `data-ad-slot` ids. Each slot uses this labeled wrapper — 🚫 **no `<script>` inside it, ever**:
 ```html
 <div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:10px 14px;margin:18px 0;text-align:center;box-sizing:border-box;max-width:100%;">
 <div style="font-size:11px;color:#94a3b8;letter-spacing:0.5px;margin-bottom:6px;">— Advertisement — <span style="background:#eef2f7;padding:2px 8px;border-radius:10px;margin-left:6px;">📢 Sponsored</span></div>
@@ -83,9 +88,18 @@ Allowed: after Section 2 / 3 / 5 / 6 / 7 / FAQ. Pick **3 different positions via
 Before ads are live, this just shows a quiet label with no visible ad — no broken layout either way.
 🔧 **Publisher one-time setup (site-wide, not per-article):** add the AdSense loader script + a small on-load loop calling `push({})` for every `ins.adsbygoogle` on the page, once in your theme/Site Kit header. This is what activates the article body's plain `<ins>` tags with zero script risk inside the notes content.
 
+## QUESTION TYPE DIVERSITY (subject-aware, mandatory — never repeat one MCQ style throughout)
+Across the whole article's Question boxes/PYQs/practice questions, use **4–5 genuinely different question TYPES**, picked from the bank matching SUBJECT below — never the same style (e.g. plain fill-in-the-blank MCQ) copy-pasted with only the topic word swapped. State the mix used in Publisher Notes (e.g. "Question types used: word-problem, diagram-based, error-spotting, data-interpretation").
+- **Maths:** direct calculation · word/story problem · diagram-or-figure-based · error-spotting (find the mistake in a shown solution/steps) · data/table interpretation.
+- **EVS / Environmental Studies:** fact-recall · match-the-following · assertion-reason · scenario/case-based (a classroom or field situation) · picture-or-diagram identification.
+- **Reasoning:** pattern/series completion · coding-decoding · analogy · blood-relation-or-direction-sense · statement-and-conclusion (syllogism).
+- **CDP / Pedagogy / other Education-Psychology subjects:** classroom-scenario · direct definition/concept-based · assertion-reason · case-study (a described child/teacher situation) · comparison-based ("which theorist/approach fits this").
+- **Any other SUBJECT not listed above:** rotate direct-recall · scenario-based · comparison-based · assertion-reason · data-interpretation, adapted to the subject's real exam pattern.
+Each Question box still follows all HARD BANS above (no invented PYQs, honest "PYQ" vs "Practice Question" labeling) — only the *type* of question varies, never the honesty rules.
+
 ## CONTENT ARCHITECTURE (9 sections; TOC after Section 1's opening)
 1. **[Topic] कितना Important है? — Exam Weightage.** Seed-styled opening (100–120 words): keyphrase + sourced fact + premium-hint line + what the reader will know + read time; then the 40–60 word snippet definition; then the mandatory image; then the TOC. Weightage table only with verified figures or explicit "estimated" labels.
-2. **Core Concept Notes** (longest; 3 depth layers, never merged): Foundation (simple + real-life example + NCERT link) → Intermediate (definitions, classifications, comparison tables, sourced context) → Advanced (nuances, exceptions, NEP/NCF links → Advanced Insight card). Per sub-topic: Definition → Key Points → Misconception (seed-rotated) → Memory Trick fully open → source → one honestly-labeled question. **Mechanism depth:** always WHY/HOW + boundary cases, not just WHAT.
+2. **Core Concept Notes** (longest; 3 depth layers, never merged): Foundation (simple + real-life example + NCERT link) → Intermediate (definitions, classifications, comparison tables, sourced context) → Advanced (nuances, exceptions, NEP/NCF links → Advanced Insight card). Per sub-topic: Definition → Key Points → Misconception (seed-rotated) → Memory Trick fully open → source → one honestly-labeled question (type per QUESTION TYPE DIVERSITY above — vary across sub-topics, never the same type twice in a row). **Mechanism depth:** always WHY/HOW + boundary cases, not just WHAT.
 3. **Pedagogy & NCF/NEP Angle** (teaching exams only; shrink/skip otherwise). Constructivist approach, one activity idea, Bloom's mapping, common error+correction, inclusive-education note. Policy Connections cite the specific provision (NCF 2005/NEP 2020/RTE 2009/NIPUN Bharat), not just the Act name.
 4. **हाल के Updates** — only genuinely sourced items; omit if nothing verifiable.
 5. **Deep Theory + Flowchart(s)** — extended theory + ≥1 SVG flowchart of the real concept chain.
@@ -139,6 +153,8 @@ Seed variation visible (uneven sections, rotated labels/box styles)?       YES/N
 Word count ≥4,500 prose, OR topic is genuinely narrow (no sub-structure) —
   never shortened for generation-convenience reasons? State which.          YES/NO + count
 Ad positions in Publisher Notes are real section names, not digits 1/2/3?   YES/NO
+Ad slots spread early/middle/late — NOT all bunched near the end?           YES/NO + positions
+4-5 different question TYPES used per SUBJECT bank, not one repeated style? YES/NO + types listed
 ```
 
 **>>> END OF MASTER PROMPT — NOW GENERATE THE NOTES <<<**
