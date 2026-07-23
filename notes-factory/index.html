@@ -507,6 +507,41 @@ function parseSentinels(raw){
   };
 }
 
+/* Fallback for AI replies that followed the master prompt's own OUTPUT FORMAT
+   (a ```json {...}``` SEO block + <!-- NOTES BODY START/END --> comments) but
+   skipped the notes-factory pipeline's <<<SEO_JSON>>> sentinel wrapper — e.g.
+   when someone pastes MASTER-PROMPT-ExamNotesPDF_v8.md straight into a chat
+   tool instead of using "Build & copy prompt" here. */
+function parseNativeMarkers(raw){
+  let seo = null;
+  const jsonFenceRe = /```json([\s\S]*?)```/gi;
+  let m;
+  while((m = jsonFenceRe.exec(raw))){
+    try{
+      const obj = JSON.parse(m[1].trim());
+      if(obj && typeof obj==='object' && (obj.focusKeyword || obj.seoTitle || obj.slug)){ seo = obj; break; }
+    }catch(e){ /* not the SEO block, keep scanning */ }
+  }
+  if(!seo) return null;
+
+  const bodyMatch = raw.match(/<!--\s*NOTES BODY START\s*-->([\s\S]*?)<!--\s*NOTES BODY END\s*-->/i);
+  if(!bodyMatch) return null;
+  const bodyHtml = stripFences(bodyMatch[1]).trim();
+  if(!bodyHtml) return null;
+
+  let publisherNotes = '';
+  const pubMatch = raw.match(/===\s*PUBLISHER NOTES\s*===([\s\S]*?)(?:```|$)/i);
+  if(pubMatch) publisherNotes = stripFences(pubMatch[1]).trim();
+
+  return {
+    seo,
+    bodyHtml,
+    publisherNotes,
+    method: 'native',
+    truncated: !/<!--\s*NOTES BODY END\s*-->/i.test(raw) || (!pubMatch && !/=== ?PUBLISHER NOTES ?===/i.test(raw))
+  };
+}
+
 function slugify(s){
   return String(s||'').toLowerCase().trim()
     .replace(/^\/+|\/+$/g,'').replace(/\/+$/,'')
@@ -548,6 +583,7 @@ function parseHeuristic(raw){
 
 function parseResponse(raw){
   let result = parseSentinels(raw);
+  if(!result) result = parseNativeMarkers(raw);
   if(!result) result = parseHeuristic(raw);
   const warnings = [];
   if(!result.seo.focusKeyword) warnings.push('Focus Keyword missing — fill in manually on the next step.');
@@ -560,6 +596,7 @@ function parseResponse(raw){
   if(!result.bodyHtml || result.bodyHtml.length < 500) warnings.push('Notes body looks too short or missing — re-check the paste, or edit it manually on the next step.');
   if(result.truncated) warnings.push('The reply looks CUT OFF midway (no closing marker found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
   if(result.method==='heuristic') warnings.push('Markers were not found — used fallback parsing (reading the visible SEO panel + HTML). Double-check every field.');
+  if(result.method==='native') warnings.push('Pipeline sentinel markers were not found, but the plain master-prompt format (SEO JSON block + NOTES BODY comments) was recognized and parsed directly — double-check the fields below anyway.');
   result.warnings = warnings;
   return result;
 }
