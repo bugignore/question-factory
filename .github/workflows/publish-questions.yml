@@ -1,0 +1,123 @@
+name: Publish questions to WordPress
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pending-questions/**.csv"
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Retry a specific file (path like pending-questions/my-batch.csv). Leave empty to process every pending file."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-questions
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # loop guard: never re-run on the bot's own commit that moves files to published-questions/
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Import pending questions into WordPress as drafts
+        env:
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          QUIZ_IMPORT_SECRET: ${{ secrets.QUIZ_IMPORT_SECRET }}
+          ONLY_FILE: ${{ inputs.file }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${WP_SITE_URL:-}" ] || [ -z "${WP_USERNAME:-}" ] || [ -z "${WP_APP_PASSWORD:-}" ] || [ -z "${QUIZ_IMPORT_SECRET:-}" ]; then
+            echo "::error::Missing secrets. Set WP_SITE_URL, WP_USERNAME, WP_APP_PASSWORD and QUIZ_IMPORT_SECRET in Settings -> Secrets and variables -> Actions. QUIZ_IMPORT_SECRET must match the QUIZ_IMPORT_SECRET constant defined in wp-config.php on the server (see question-factory/README.md)."
+            exit 1
+          fi
+
+          shopt -s nullglob
+          if [ -n "$ONLY_FILE" ]; then
+            files=("$ONLY_FILE")
+          else
+            files=(pending-questions/*.csv)
+          fi
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "Nothing to publish — pending-questions/ has no CSV files."
+            exit 0
+          fi
+
+          mkdir -p published-questions
+          failed=0
+
+          for f in "${files[@]}"; do
+            [ -f "$f" ] || { echo "::warning::$f not found, skipping"; continue; }
+            slug="$(basename "$f" .csv)"
+            echo "── Importing $slug ──"
+
+            # dedupe guard: re-pushing the same filename must not double-import it
+            if [ -f "published-questions/$slug.csv" ]; then
+              echo "::warning::$slug was already imported earlier (published-questions/$slug.csv exists) — skipping to avoid duplicate questions. Delete that file first if you really want to re-import."
+              git rm -q "$f"
+              continue
+            fi
+
+            # Wrap the raw CSV text as a JSON string value for the REST body,
+            # without loading it into a shell variable (keeps large batches safe).
+            csv_json="$(jq -Rs '.' "$f")"
+
+            http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+              -X POST "${WP_SITE_URL%/}/wp-json/quiz/v1/import" \
+              -H "Content-Type: application/json" \
+              -H "X-Quiz-Import-Secret: $QUIZ_IMPORT_SECRET" \
+              -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+              --data-binary "{\"csv\": $csv_json}" || echo "000")
+
+            imported="$(jq -r '.imported // 0' /tmp/wp-response.json 2>/dev/null || echo 0)"
+            skipped="$(jq -r '.skipped // 0' /tmp/wp-response.json 2>/dev/null || echo 0)"
+
+            if [ "$http_code" = "200" ] || [ "$http_code" = "422" ]; then
+              # 200 = at least the batch was processed (some rows may still be
+              # skipped — see errors[]); 422 = validation rejected the whole
+              # file (e.g. bad header) before any row was touched.
+              echo "Imported: $imported  Skipped: $skipped"
+              jq -r '.errors[]? | "  • " + .' /tmp/wp-response.json 2>/dev/null || true
+
+              if [ "$http_code" = "422" ]; then
+                echo "::error::$slug — WordPress rejected the whole file (HTTP 422). See errors above. File stays in pending-questions/."
+                failed=1
+                continue
+              fi
+
+              jq -n --argjson imported "$imported" --argjson skipped "$skipped" \
+                    --slurpfile errors <(jq -c '.errors // []' /tmp/wp-response.json) \
+                    --arg at "$(date -u +%FT%TZ)" \
+                    '{imported: $imported, skipped: $skipped, errors: $errors[0], importedAt: $at, status: "draft"}' \
+                    > "published-questions/$slug.result.json"
+              mv "$f" "published-questions/$slug.csv"
+              git add "published-questions/$slug.csv" "published-questions/$slug.result.json"
+              echo "✔ $slug imported as draft(s) — review and publish from Quiz App -> Preview."
+            else
+              echo "::error::WordPress rejected $slug (HTTP $http_code). Response follows. File stays in pending-questions/ — fix the cause and re-run this workflow from the Actions tab."
+              cat /tmp/wp-response.json || true
+              failed=1
+            fi
+          done
+
+          # commit whatever succeeded, even if something else failed
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Import question batch(es) to WordPress as draft [skip ci]"
+            git push
+          fi
+
+          exit $failed

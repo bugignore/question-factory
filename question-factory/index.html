@@ -167,9 +167,9 @@
   </fieldset>
   <button class="btn green" onclick="tryRun(autoSaveQuestionsToGithub,this)">☁️ Auto-save to GitHub</button>
   <div class="msg" id="qfSendMsg"></div>
-  <div class="privacyNote">Pushes the CSV straight into <code>pending-questions/</code> in the repo. Uploading from there into your website's question bank is still a separate manual step for now.</div>
-  <details><summary>🔍 Verify answer-index conversion (recommended before first upload)</summary><div>
-    <p class="hint">This shows exactly what will be sent to the website. "Shown as" is what the site stores (0=A, 1=B, 2=C, 3=D) — check a few rows against the question text to be sure.</p>
+  <div class="privacyNote">Pushes the CSV straight into <code>pending-questions/</code> in the repo. If the owner has set up the <code>publish-questions.yml</code> workflow, it's imported into the website automatically within about a minute (as draft — still needs a human to publish it). If not set up yet, it just sits in <code>pending-questions/</code> until someone uploads it manually via Quiz App → Import CSV.</div>
+  <details><summary>🔍 Verify answer index (recommended before first upload)</summary><div>
+    <p class="hint">This shows exactly what will be sent to the website. The "correct" column stays 1=A, 2=B, 3=C, 4=D — check a few rows against the question text to be sure.</p>
     <div id="convCheck" style="font-size:12px;max-height:220px;overflow-y:auto"></div>
   </div></details>
   <button class="btn ghost" onclick="tryRun(resetAll,this)" style="border-color:var(--bad);color:var(--bad)">Start a new batch (clear everything)</button>
@@ -348,8 +348,14 @@ function parseCSV(text){
 }
 function csvField(v){ v=String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
 function toCSV(rws){ return HEADER.join(',')+'\n'+rws.map(r=>r.fields.map(csvField).join(',')).join('\n'); }
-/* website stores correct as 0-3 (0=option A). Tool works in 1-4 internally; convert ONLY on export.
-   This conversion is intentionally strict: it never guesses. Any value outside 1-4 is a bug
+/* The website's CSV importer (custom-quiz/admin/csv-import.php and the REST
+   import route) expects correct to be 1-indexed (1=option1/A ... 4=option4/D)
+   in the uploaded CSV — it does its own -1 conversion internally when saving
+   to the DB. Tool works in 1-4 internally too, so export is a straight
+   passthrough, no conversion here. (Previously this function subtracted 1
+   before export, which double-converted every value and shifted every
+   correct answer down one letter — B marked as A, C as B, D as C. Fixed.)
+   This validation is intentionally strict: it never guesses. Any value outside 1-4 is a bug
    upstream (validation should have excluded it already) and we fail loudly rather than silently
    shifting the wrong thing. */
 function exportRows(rws){
@@ -359,7 +365,7 @@ function exportRows(rws){
     if(!Number.isInteger(n) || n<1 || n>4){
       throw new Error('Row '+(i+1)+' has an invalid correct value ("'+f[11]+'") — expected 1, 2, 3 or 4. This row was not exported correctly; please re-check it in Step 2/3 before exporting again.');
     }
-    f[11] = String(n-1); // 1-4 -> 0-3, the ONLY place this conversion happens
+    f[11] = String(n); // stays 1-4, matching what the website importer expects
     return {fields:f};
   });
 }
@@ -620,7 +626,7 @@ function updateDl(){
       const letters=['A','B','C','D'];
       conv.innerHTML = pick.slice(0,8).map((r,i)=>{
         const n=+r.fields[11];
-        return '<div style="padding:4px 0;border-bottom:1px solid var(--line)">#'+(i+1)+' — internal <b>'+n+'</b> → shown as <b>'+(n-1)+'</b> ('+letters[n-1]+') · "'+esc(r.fields[1]).slice(0,60)+'…"</div>';
+        return '<div style="padding:4px 0;border-bottom:1px solid var(--line)">#'+(i+1)+' — correct = <b>'+n+'</b> ('+letters[n-1]+') · "'+esc(r.fields[1]).slice(0,60)+'…"</div>';
       }).join('') + (pick.length>8? '<div style="padding:6px 0;color:var(--ink-soft)">…and '+(pick.length-8)+' more row(s), same pattern.</div>' : '');
     } else conv.innerHTML = '<span style="color:var(--ink-soft)">Nothing to export yet.</span>';
   }catch(e){
