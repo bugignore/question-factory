@@ -489,102 +489,107 @@ function stripFences(s){
   s = s.replace(/^```[a-zA-Z]*\s*$/gm,'');
   return s.trim();
 }
-function parseSentinels(raw){
-  const seoMatch = raw.match(/<<<SEO_JSON>>>([\s\S]*?)<<<END_SEO_JSON>>>/);
-  const bodyMatch = raw.match(/<<<NOTES_BODY_HTML>>>([\s\S]*?)(?:<<<END_NOTES_BODY_HTML>>>|$)/);
-  const pubMatch = raw.match(/<<<PUBLISHER_NOTES>>>([\s\S]*?)(?:<<<END_PUBLISHER_NOTES>>>|$)/);
-  if(!seoMatch || !bodyMatch) return null;
-  let seo;
-  try{
-    seo = JSON.parse(stripFences(seoMatch[1]));
-  }catch(e){ return null; }
-  return {
-    seo,
-    bodyHtml: stripFences(bodyMatch[1]),
-    publisherNotes: pubMatch ? stripFences(pubMatch[1]) : '',
-    method:'sentinel',
-    truncated: raw.indexOf('<<<END_PUBLISHER_NOTES>>>') === -1
-  };
-}
-
-/* Fallback for AI replies that followed the master prompt's own OUTPUT FORMAT
-   (a ```json {...}``` SEO block + <!-- NOTES BODY START/END --> comments) but
-   skipped the notes-factory pipeline's <<<SEO_JSON>>> sentinel wrapper — e.g.
-   when someone pastes MASTER-PROMPT-ExamNotesPDF_v8.md straight into a chat
-   tool instead of using "Build & copy prompt" here. */
-function parseNativeMarkers(raw){
-  let seo = null;
-  const jsonFenceRe = /```json([\s\S]*?)```/gi;
-  let m;
-  while((m = jsonFenceRe.exec(raw))){
-    try{
-      const obj = JSON.parse(m[1].trim());
-      if(obj && typeof obj==='object' && (obj.focusKeyword || obj.seoTitle || obj.slug)){ seo = obj; break; }
-    }catch(e){ /* not the SEO block, keep scanning */ }
-  }
-  if(!seo) return null;
-
-  const bodyMatch = raw.match(/<!--\s*NOTES BODY START\s*-->([\s\S]*?)<!--\s*NOTES BODY END\s*-->/i);
-  if(!bodyMatch) return null;
-  const bodyHtml = stripFences(bodyMatch[1]).trim();
-  if(!bodyHtml) return null;
-
-  let publisherNotes = '';
-  const pubMatch = raw.match(/===\s*PUBLISHER NOTES\s*===([\s\S]*?)(?:```|$)/i);
-  if(pubMatch) publisherNotes = stripFences(pubMatch[1]).trim();
-
-  return {
-    seo,
-    bodyHtml,
-    publisherNotes,
-    method: 'native',
-    truncated: !/<!--\s*NOTES BODY END\s*-->/i.test(raw) || (!pubMatch && !/=== ?PUBLISHER NOTES ?===/i.test(raw))
-  };
-}
-
 function slugify(s){
   return String(s||'').toLowerCase().trim()
     .replace(/^\/+|\/+$/g,'').replace(/\/+$/,'')
     .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 }
 
-function parseHeuristic(raw){
+/* ================= RESILIENT PARSING =================
+   Different AIs (and the same AI on different days) wrap the three pieces —
+   SEO fields, notes body, publisher notes — in different envelopes: the
+   pipeline's own <<<SEO_JSON>>> sentinels, the master prompt's native
+   ```json fence + <!-- NOTES BODY START/END --> comments, or a plain
+   labeled text panel (older/looser replies). Rather than requiring one
+   strategy to match ALL THREE pieces at once (which breaks the moment any
+   one piece uses a different envelope than the others — exactly what
+   happened with Gemini vs DeepSeek), each piece is extracted independently
+   by trying its own list of known envelopes in order. Mixed-format replies
+   (e.g. JSON SEO block + label-text body) still parse correctly this way. */
+
+function extractSEO(raw){
+  // 1) pipeline sentinel wrapper
+  let m = raw.match(/<<<SEO_JSON>>>([\s\S]*?)<<<END_SEO_JSON>>>/);
+  if(m){
+    try{ return { seo: JSON.parse(stripFences(m[1])), method:'sentinel-json' }; }catch(e){ /* fall through */ }
+  }
+  // 2) any ```json fence whose parsed object looks like our SEO shape
+  const jsonFenceRe = /```json([\s\S]*?)```/gi;
+  while((m = jsonFenceRe.exec(raw))){
+    try{
+      const obj = JSON.parse(m[1].trim());
+      if(obj && typeof obj==='object' && (obj.focusKeyword || obj.seoTitle || obj.slug)){
+        return { seo: obj, method:'json-fence' };
+      }
+    }catch(e){ /* not the SEO block, keep scanning */ }
+  }
+  // 3) plain labeled text panel (oldest/loosest format, also the final fallback)
   const get = (label) => {
     const re = new RegExp(label + '\\s*:?\\s*(.+)', 'i');
-    const m = raw.match(re);
-    return m ? m[1].trim().replace(/[`*]/g,'').split(/\r?\n/)[0].trim() : '';
+    const mm = raw.match(re);
+    return mm ? mm[1].trim().replace(/[`*]/g,'').split(/\r?\n/)[0].trim() : '';
   };
   const focusKeyword = get('Focus Keyword');
   const seoTitle = get('SEO Title');
   const slugRaw = get('Permalink/Slug') || get('Slug');
   const metaDescription = get('Meta Description');
   const imageAltText = get('Image ALT Text') || get('Image Alt Text') || get('Image ALT');
-  const imagePrompt = get('Image (Generation )?Prompt') || get('Image Prompt');
+  const imagePrompt = get('Image (?:Generation )?Prompt') || get('Image Prompt');
   let h1 = '';
   const h1Match = raw.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
   if(h1Match) h1 = h1Match[1].replace(/<[^>]+>/g,'').trim();
   else h1 = get('H1 \\(Post Title\\)') || get('H1');
+  return { seo: {focusKeyword, seoTitle, slug: slugify(slugRaw), metaDescription, h1, imageAltText, imagePrompt}, method:'label-text' };
+}
 
-  let bodyHtml = '', publisherNotes = '';
+function extractBody(raw){
+  // 1) pipeline sentinel wrapper
+  let m = raw.match(/<<<NOTES_BODY_HTML>>>([\s\S]*?)(?:<<<END_NOTES_BODY_HTML>>>|$)/);
+  if(m){
+    const html = stripFences(m[1]).trim();
+    if(html) return { bodyHtml: html, method:'sentinel-html', cutOff: raw.indexOf('<<<END_NOTES_BODY_HTML>>>')===-1, endIdx: m.index + m[0].length };
+  }
+  // 2) master prompt's native <!-- NOTES BODY START/END --> comments
+  m = raw.match(/<!--\s*NOTES BODY START\s*-->([\s\S]*?)<!--\s*NOTES BODY END\s*-->/i);
+  if(m){
+    const html = stripFences(m[1]).trim();
+    if(html) return { bodyHtml: html, method:'body-comments', cutOff: false, endIdx: m.index + m[0].length };
+  }
+  // 3) heuristic: first <h2> through the first recognizable end-of-notes marker
   const h2Start = raw.search(/<h2[\s>]/i);
+  if(h2Start === -1) return { bodyHtml:'', method:'none', cutOff:true, endIdx: raw.length };
   let endIdx = raw.length;
-  const endMarkers = [/END OF NOTES/i, /SEO Linking Recommendations/i, /MNEMONICS ARCHIVE/i, /CONSOLIDATED FINAL CHECKS/i];
-  for(const m of endMarkers){
-    const idx = raw.search(m);
-    if(idx !== -1 && idx < endIdx && (h2Start===-1 || idx > h2Start)) endIdx = idx;
+  const endMarkers = [/END OF NOTES/i, /SEO Linking Recommendations/i, /MNEMONICS ARCHIVE/i, /CONSOLIDATED FINAL CHECKS/i, /===\s*PUBLISHER NOTES\s*===/i];
+  for(const em of endMarkers){
+    const idx = raw.search(em);
+    if(idx !== -1 && idx < endIdx && idx > h2Start) endIdx = idx;
   }
-  if(h2Start !== -1){
-    bodyHtml = raw.slice(h2Start, endIdx).trim();
-    publisherNotes = endIdx < raw.length ? raw.slice(endIdx).trim() : '';
-  }
+  return { bodyHtml: raw.slice(h2Start, endIdx).trim(), method:'h2-scan', cutOff: endIdx===raw.length, endIdx };
+}
 
-  return { seo: {focusKeyword, seoTitle, slug: slugify(slugRaw), metaDescription, h1, imageAltText, imagePrompt}, bodyHtml, publisherNotes, method:'heuristic' };
+function extractPublisherNotes(raw, bodyEndIdx){
+  // 1) pipeline sentinel wrapper
+  let m = raw.match(/<<<PUBLISHER_NOTES>>>([\s\S]*?)(?:<<<END_PUBLISHER_NOTES>>>|$)/);
+  if(m) return { publisherNotes: stripFences(m[1]).trim(), found: true };
+  // 2) "=== PUBLISHER NOTES ===" block, up to the next fence close or end
+  m = raw.match(/===\s*PUBLISHER NOTES\s*===([\s\S]*?)(?:```|$)/i);
+  if(m) return { publisherNotes: ('=== PUBLISHER NOTES ===' + m[1]).trim(), found: true };
+  // 3) whatever trails after the body, if anything
+  const tail = bodyEndIdx < raw.length ? raw.slice(bodyEndIdx).trim() : '';
+  return { publisherNotes: tail, found: tail.length > 0 };
 }
 
 function parseResponse(raw){
-  let result = parseSentinels(raw);
-  if(!result) result = parseNativeMarkers(raw);
-  if(!result) result = parseHeuristic(raw);
+  const seoResult = extractSEO(raw);
+  const bodyResult = extractBody(raw);
+  const pubResult = extractPublisherNotes(raw, bodyResult.endIdx);
+  const result = {
+    seo: seoResult.seo,
+    bodyHtml: bodyResult.bodyHtml,
+    publisherNotes: pubResult.publisherNotes,
+    method: seoResult.method + ' + ' + bodyResult.method,
+    truncated: bodyResult.cutOff && !pubResult.found
+  };
   const warnings = [];
   if(!result.seo.focusKeyword) warnings.push('Focus Keyword missing — fill in manually on the next step.');
   if(!result.seo.seoTitle) warnings.push('SEO Title missing — fill in manually.');
@@ -595,8 +600,8 @@ function parseResponse(raw){
   if(!result.seo.imagePrompt) warnings.push('Image generation prompt missing — fill in manually if you want one.');
   if(!result.bodyHtml || result.bodyHtml.length < 500) warnings.push('Notes body looks too short or missing — re-check the paste, or edit it manually on the next step.');
   if(result.truncated) warnings.push('The reply looks CUT OFF midway (no closing marker found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
-  if(result.method==='heuristic') warnings.push('Markers were not found — used fallback parsing (reading the visible SEO panel + HTML). Double-check every field.');
-  if(result.method==='native') warnings.push('Pipeline sentinel markers were not found, but the plain master-prompt format (SEO JSON block + NOTES BODY comments) was recognized and parsed directly — double-check the fields below anyway.');
+  if(seoResult.method==='label-text') warnings.push('SEO fields: no JSON block found — read from the plain labeled panel instead. Double-check every field.');
+  if(bodyResult.method==='h2-scan') warnings.push('Notes body: no marker comments found — guessed the body by scanning from the first <h2> to the next recognizable end-of-notes marker. Double-check the body did not get cut short or include trailing text.');
   result.warnings = warnings;
   return result;
 }
