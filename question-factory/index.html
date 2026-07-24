@@ -607,9 +607,17 @@ function pickRows(){
   const g=okRows();
   return mode==='verified'? g.filter(r=>r.verified===true) : g;
 }
+function truncateBytes(str, maxBytes){
+  const bytes = new TextEncoder().encode(str);
+  if(bytes.length <= maxBytes) return str;
+  const cut = new TextDecoder('utf-8').decode(bytes.slice(0, maxBytes)).replace(/\uFFFD+$/, '');
+  return cut.replace(/_+$/, '');
+}
 function suggestName(){
-  const s=(document.getElementById('subject').value.trim()||'Questions').replace(/[^\w\u0900-\u097F]+/g,'_');
-  const t=(document.getElementById('subtopic').value.trim()||'Batch').replace(/[^\w\u0900-\u097F]+/g,'_');
+  // Long pasted subject/subtopic text can otherwise produce filenames past the 255-byte
+  // ext4/NTFS limit, which breaks `git checkout` (both locally and in GitHub Actions).
+  const s=truncateBytes((document.getElementById('subject').value.trim()||'Questions').replace(/[^\w\u0900-\u097F]+/g,'_'), 40);
+  const t=truncateBytes((document.getElementById('subtopic').value.trim()||'Batch').replace(/[^\w\u0900-\u097F]+/g,'_'), 100);
   const d=new Date().toISOString().slice(0,10);
   return s+'_'+t+'_'+d+'_'+pickRows().length+'q.csv';
 }
