@@ -81,8 +81,9 @@
   .copyRow{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line-soft)}
   .copyRow:last-child{border-bottom:none}
   .copyRow .cLabel{font-weight:600;font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em}
-  .copyRow .cVal{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);margin-top:2px}
-  .copyRow .cVal:empty::before{content:"— empty —";color:var(--ink-soft);font-style:italic}
+  .copyRow .cVal{font-size:13px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;color:var(--ink);margin-top:2px;cursor:pointer;border-radius:6px;transition:background .1s ease}
+  .copyRow .cVal:empty::before{content:"— empty —";color:var(--ink-soft);font-style:italic;cursor:default}
+  .copyRow .cVal:not(:empty):hover,.copyRow .cVal:not(:empty):active{background:var(--card-2)}
   .copyRow button{flex:none;width:auto;margin:0;padding:8px 12px;font-size:13px}
   details.fieldRow{margin-top:8px}
   details.fieldRow summary{display:flex;align-items:center;gap:8px}
@@ -159,7 +160,7 @@
   <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build &amp; copy prompt</button>
   <div class="msg" id="pMsg"></div>
   <div id="filePickWrap" style="display:none">
-    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v8.md</code> in the folder above this one:</label>
+    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v11.md</code> in the folder above this one:</label>
     <input type="file" id="masterPromptFile" accept=".md,.txt">
   </div>
   <textarea id="promptOut" style="display:none"></textarea>
@@ -168,6 +169,13 @@
   <details id="partsWrap"><summary>📱 On phone and the paste comes out cut off? Copy in parts instead</summary><div>
     <p class="hint" style="margin-top:8px">The full prompt is ~20,000+ characters. Some phone keyboards (Gboard/Samsung/SwiftKey clipboard) and mobile browsers silently truncate a single copy that long. Tap "Build &amp; copy prompt" above first, then use these buttons <b>in order</b> — paste each one as its own message in the SAME chat before sending the next. Tell the AI to wait until you say "generation config: go" if it starts replying early.</p>
     <div id="partsButtons"></div>
+  </div></details>
+
+  <details style="margin-top:16px"><summary>🔍 Audit already-published notes (retroactive scorecard)</summary><div>
+    <p class="hint" style="margin-top:8px">Runs every file already in <code>published-notes/</code> + <code>pending-notes/</code> through the same validator used in Step 3 — no generation involved, read-only, never modifies anything.</p>
+    <button class="btn ghost small" onclick="tryRun(runBacklogAudit,this)">▶ Run backlog scorecard</button>
+    <div class="msg" id="backlogMsg"></div>
+    <div id="backlogResults" style="margin-top:10px"></div>
   </div></details>
 </section>
 
@@ -213,6 +221,14 @@
 
   <label>Preview (how the notes body will render)</label>
   <iframe class="previewFrame" id="previewFrame" sandbox=""></iframe>
+
+  <fieldset style="margin-top:16px">
+    <legend>🛡️ Rank Math validation gate</legend>
+    <p class="hint" style="margin-top:0">Re-parses the actual HTML and re-derives every number — word count, density, images, links, structure — independent of anything the AI claimed. Auto-save stays locked until this passes.</p>
+    <button class="btn" onclick="tryRun(runValidationUI,this)">🔎 Run validation</button>
+    <div class="msg" id="validateMsg"></div>
+    <div id="validateResults"></div>
+  </fieldset>
 </section>
 
 <!-- STEP 4 -->
@@ -228,7 +244,7 @@
     <div class="msg" id="unlockMsg"></div>
   </fieldset>
 
-  <button class="btn green" id="autoSaveBtn" onclick="tryRun(autoSaveToGithub,this)">☁️ Auto-save to GitHub</button>
+  <button class="btn green" id="autoSaveBtn" onclick="tryRun(autoSaveToGithub,this)" disabled title="Run validation in Step 3 first.">☁️ Auto-save to GitHub</button>
   <div class="msg" id="sendMsg"></div>
 
   <div class="pipeline" id="pipelineWrap" style="display:none">
@@ -331,7 +347,7 @@ function render(){
   document.getElementById('nextBtn').textContent = cur===3 ? 'Done' : 'Next →';
   document.getElementById('nextBtn').disabled = cur===3;
   if(cur===2){ fillReviewForm(); updatePreview(); }
-  if(cur===3){ loadSettings(); document.getElementById('dlSlug').textContent = (state.seo && state.seo.slug) || 'note'; renderCopyFields(); }
+  if(cur===3){ loadSettings(); document.getElementById('dlSlug').textContent = (state.seo && state.seo.slug) || 'note'; renderCopyFields(); updatePublishGate(); }
   document.querySelector('main').scrollTop=0;
 }
 function msg(id){ return document.getElementById(id); }
@@ -354,7 +370,7 @@ function fallbackCopy(text,done,msgEl){
 
 /* ================= STEP 1 — build prompt ================= */
 var masterPromptText = null;
-var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70 };
+var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
 
 function updateLangMixLabel(){
   const hindi = document.getElementById('hindiPercent').value;
@@ -363,7 +379,7 @@ function updateLangMixLabel(){
 
 async function loadMasterPrompt(){
   if(masterPromptText) return masterPromptText;
-  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v8.md'];
+  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v11.md'];
   let lastErr;
   for(const url of candidates){
     try{
@@ -377,7 +393,7 @@ async function loadMasterPrompt(){
   const hint = location.protocol === 'file:'
     ? 'This page was opened straight from the folder (file://), where browsers block reading other files automatically.'
     : 'Could not load the master prompt file from the repo root ('+(lastErr?lastErr.message:'')+').';
-  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v8.md manually — then tap "Build & copy prompt" again.');
+  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v11.md manually — then tap "Build & copy prompt" again.');
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -700,6 +716,7 @@ function restoreDraftIfAny(){
   document.getElementById('subject').value = state.subject || 'Auto-detect';
   document.getElementById('hindiPercent').value = state.hindiPercent || 70;
   updateLangMixLabel();
+  if(state.validation && state.validation.result) renderValidationResults(state.validation.result);
 }
 function copyReviewField(e, id, label){
   /* the copy button lives inside a <summary> — stop the click from also
@@ -817,6 +834,13 @@ async function githubPutFile(owner, repo, token, path, content, message){
 async function autoSaveToGithub(btn){
   syncFormToState();
   const m = msg('sendMsg');
+  const v = state.validation;
+  const validCurrent = !!(v && v.forBodyHtml===state.bodyHtml && v.forSeo===JSON.stringify(state.seo));
+  if(!validCurrent || !v.result.hardPass){
+    show(m,'bad','Run validation in Step 3 first and fix any hard-check failures — Auto-save stays locked until it passes.');
+    updatePublishGate();
+    return;
+  }
   if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
   const token = sessionStorage.getItem('ghUnlockedToken');
   if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
@@ -962,12 +986,13 @@ function renderCopyFields(){
   wrap.innerHTML = COPY_FIELDS.map(([key,label])=>{
     const val = state.seo[key] || '';
     const esc = val.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const escLabel = label.replace(/'/g,"\\'");
     return `<div class="copyRow">
       <div style="flex:1;min-width:0">
         <div class="cLabel">${label}</div>
-        <div class="cVal">${esc}</div>
+        <div class="cVal" onclick="tryRun(()=>copyField('${key}','${escLabel}'),this)" title="Tap to copy">${esc}</div>
       </div>
-      <button class="btn small ghost" onclick="tryRun(()=>copyField('${key}','${label.replace(/'/g,"\\'")}'),this)">📋</button>
+      <button class="btn small ghost" onclick="tryRun(()=>copyField('${key}','${escLabel}'),this)">📋</button>
     </div>`;
   }).join('');
 }
@@ -993,7 +1018,7 @@ Image Gen Prompt:    ${state.seo.imagePrompt || ''}`;
 }
 function resetAll(){
   if(!confirm('Clear this note and start over?')) return;
-  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70 };
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
   accumulatedRaw = '';
   clearDraft();
   document.getElementById('promptOut').value='';
@@ -1003,6 +1028,298 @@ function resetAll(){
   document.getElementById('hindiPercent').value = 70;
   updateLangMixLabel();
   cur=0; render();
+}
+
+/* ================= STEP 2.5 — VALIDATE (deterministic Rank Math gate) =================
+   Re-derives every fact from the actual generated HTML in a real DOM — never trusts the
+   AI's own checklist. Built after an audit found 14/17 published notes silently missing
+   the mandatory image, and one (number-system-ctet-notes-2026) shipped with 1,523 words
+   and 0.07% keyphrase density despite the AI's self-report claiming compliance. */
+
+const TARGET_SITE_HOST = 'examnotespdf.in'; // where notes get published — used to tell internal vs external links apart
+const APPROVED_POWER_WORDS = ['Complete','Ultimate','Essential','Proven','Definitive','Powerful','Master','Instant'];
+const APPROVED_SENTIMENT_WORDS = ['Best','Easy','Top','Smart','Perfect','Amazing'];
+
+function vParseBody(html){ return new DOMParser().parseFromString(html || '', 'text/html'); }
+
+function vProseText(doc){
+  const clone = doc.body.cloneNode(true);
+  clone.querySelectorAll('script,style,svg').forEach(n=>n.remove());
+  return (clone.textContent || '').replace(/https?:\/\/\S+/g,' ').replace(/\s+/g,' ').trim();
+}
+function vWordCount(text){ return text ? text.split(/\s+/).filter(Boolean).length : 0; }
+function vNormalize(s){ return String(s||'').toLowerCase().trim().replace(/\s+/g,' '); }
+
+function vCountKeyphrase(text, keyphrase){
+  const t = ' ' + vNormalize(text) + ' ';
+  const k = vNormalize(keyphrase);
+  if(!k) return { exact:0, variant:0, total:0 };
+  const esc = k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const exact = (t.match(new RegExp('\\b'+esc+'\\b','g')) || []).length;
+  const variantPattern = esc.replace(/[\s-]+/g,'[\\s-]+');
+  const total = (t.match(new RegExp('\\b'+variantPattern+'\\b','g')) || []).length;
+  return { exact, variant: Math.max(0,total-exact), total };
+}
+
+/* ---- individual checks: each returns {id,label,tier:'hard'|'soft',pass,detail} with a REAL number in detail ---- */
+function vCheckWordCount(words){
+  return { id:'word-count', label:'Word count ≥ 4,500', tier:'hard', pass: words>=4500, detail: words.toLocaleString()+' words' };
+}
+function vCheckDensity(words, kw){
+  const pct = words ? (kw.total/words*100) : 0;
+  return { id:'density', label:'Keyphrase density 1.0–1.4%', tier:'hard', pass: pct>=1.0 && pct<=1.4,
+    detail: `${kw.exact} exact + ${kw.variant} variant = ${kw.total} / ${words} words = ${pct.toFixed(2)}%` };
+}
+function vCheckHeadings(doc, keyphrase){
+  const k = vNormalize(keyphrase);
+  const h2s = k ? [...doc.querySelectorAll('h2')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
+  const h3s = k ? [...doc.querySelectorAll('h3')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
+  return { id:'headings', label:'Keyphrase in ≥2 H2s and ≥1 H3', tier:'hard', pass: h2s.length>=2 && h3s.length>=1,
+    detail: `${h2s.length} H2(s), ${h3s.length} H3(s) contain it` };
+}
+function vCheckImageAlt(doc, keyphrase){
+  const imgs = [...doc.querySelectorAll('img')];
+  const k = vNormalize(keyphrase);
+  const alts = imgs.map(i=>i.getAttribute('alt')||'');
+  const pass = imgs.length>=1 && alts.some(a=>vNormalize(a).startsWith(k)) && k.length>0;
+  return { id:'image-alt', label:'≥1 <img> with ALT starting with keyphrase', tier:'hard', pass,
+    detail: imgs.length===0 ? 'NO <img> TAGS FOUND IN BODY' : `${imgs.length} image(s), alt="${alts.join('" / "')}"` };
+}
+function vCheckSvg(doc, keyphrase){
+  const svgs = [...doc.querySelectorAll('svg')];
+  const k = vNormalize(keyphrase);
+  const withLabel = svgs.filter(s=>vNormalize(s.getAttribute('aria-label')||'').includes(k)).length;
+  return { id:'svg-count', label:'4–6 SVG visuals (informational — NOT counted as Rank Math "media", see media check)', tier:'soft',
+    pass: svgs.length>=4 && svgs.length<=6, detail: `${svgs.length} SVG(s), ${withLabel} with keyphrase in aria-label` };
+}
+function vCheckMedia(doc){
+  const count = doc.querySelectorAll('img, video').length; // Rank Math's real "Media in Posts" test: img/video only, not svg
+  return { id:'media', label:'Rank Math media test — 4+ real <img>/<video> for 100%', tier:'soft',
+    pass: count>=4, detail: `${count} real <img>/<video> element(s) found — SVGs don't count toward this` };
+}
+function vCheckParagraphs(doc){
+  let longest=0, sample='';
+  doc.querySelectorAll('p').forEach(p=>{ const w=vWordCount(p.textContent); if(w>longest){longest=w; sample=p.textContent.trim().slice(0,60);} });
+  return { id:'paragraphs', label:'No <p> over 120 words', tier:'hard', pass: longest<=120,
+    detail: `longest = ${longest} words${sample?` ("${sample}…")`:''}` };
+}
+function vCheckLinks(doc){
+  let internal=0, external=0, externalNofollow=0, hashLinks=0;
+  doc.querySelectorAll('a[href]').forEach(a=>{
+    const href = (a.getAttribute('href')||'').trim();
+    if(href==='#'){ hashLinks++; return; }
+    if(/^https?:\/\//i.test(href)){
+      let host=''; try{ host = new URL(href).hostname.replace(/^www\./,''); }catch(e){}
+      if(host===TARGET_SITE_HOST) internal++;
+      else { external++; if(/nofollow/i.test(a.getAttribute('rel')||'')) externalNofollow++; }
+    } else if(href.startsWith('/')) internal++;
+  });
+  return { id:'links', label:'≥5 internal + ≥1 external link, zero href="#"', tier:'hard',
+    pass: internal>=5 && external>=1 && hashLinks===0,
+    detail: `${internal} internal, ${external} external (${externalNofollow} nofollow), ${hashLinks} href="#"` };
+}
+function vCheckDuplicateIds(doc){
+  const ids = [...doc.querySelectorAll('[id]')].map(el=>el.id);
+  const seen=new Set(), dupes=new Set();
+  ids.forEach(id=>{ if(seen.has(id)) dupes.add(id); seen.add(id); });
+  return { id:'dup-ids', label:'No duplicate id attributes', tier:'hard', pass: dupes.size===0,
+    detail: dupes.size ? 'duplicated: '+[...dupes].join(', ') : `${ids.length} unique id(s)` };
+}
+function vCheckBareH3(doc){
+  const h3s = [...doc.querySelectorAll('h3')];
+  const bare = h3s.filter(h=>!(h.getAttribute('style')||'').trim());
+  return { id:'bare-h3', label:'Every <h3> has an inline style (no bare h3)', tier:'hard', pass: bare.length===0,
+    detail: `${h3s.length} total, ${bare.length} bare` };
+}
+function vCheckScriptTags(doc){
+  const n = doc.querySelectorAll('script').length;
+  return { id:'no-script', label:'Zero <script> tags in body', tier:'hard', pass: n===0, detail: `${n} found` };
+}
+function vCheckCitations(doc){
+  const sups = [...doc.querySelectorAll('sup[id^="cite-"]')];
+  const refs = [...doc.querySelectorAll('li[id^="ref-"]')];
+  const supTargets = new Set(sups.map(s=>{ const a=s.querySelector('a[href^="#ref-"]'); return a ? a.getAttribute('href').slice(1) : null; }).filter(Boolean));
+  const refIds = new Set(refs.map(r=>r.id));
+  const orphanCitations = [...supTargets].filter(t=>!refIds.has(t));
+  const orphanRefs = [...refIds].filter(id=>!supTargets.has(id));
+  return { id:'citations', label:'≥4 inline citations, zero orphans either direction', tier:'hard',
+    pass: sups.length>=4 && orphanCitations.length===0 && orphanRefs.length===0,
+    detail: `${sups.length} citation(s), ${refs.length} reference(s), ${orphanCitations.length} orphan citation(s), ${orphanRefs.length} orphan reference(s)` };
+}
+function vCheckToc(doc){
+  const h2Ids = new Set([...doc.querySelectorAll('h2[id]')].map(h=>h.id));
+  const matching = [...doc.querySelectorAll('a[href^="#"]')].filter(a=>h2Ids.has(a.getAttribute('href').slice(1)));
+  return { id:'toc', label:'Linked TOC present (proxy — Rank Math’s real TOC-plugin detection is unconfirmed, see audit)', tier:'soft',
+    pass: matching.length>=2, detail: `${matching.length} anchor link(s) resolve to a real H2 id` };
+}
+function vCheckAdSlots(doc){
+  const ads = [...doc.querySelectorAll('ins.adsbygoogle')];
+  if(ads.length!==3) return { id:'ad-slots', label:'Exactly 3 ad slots, spread early/mid/late', tier:'soft', pass:false, detail:`${ads.length} found (need exactly 3)` };
+  const allNodes = [...doc.body.querySelectorAll('*')];
+  const total = allNodes.length || 1;
+  const thirds = ads.map(ad=>{
+    const idx = allNodes.indexOf(ad.parentElement || ad);
+    const frac = idx/total;
+    return frac<1/3 ? 'early' : frac<2/3 ? 'middle' : 'late';
+  });
+  const pass = new Set(thirds).size>=2 && !(thirds[0]==='late' && thirds[1]==='late' && thirds[2]==='late');
+  return { id:'ad-slots', label:'3 ad slots spread across zones, not bunched at the end', tier:'soft', pass, detail: `positions: ${thirds.join(', ')}` };
+}
+function vCheckTitle(seo){
+  const k = vNormalize(seo.focusKeyword), t = seo.seoTitle||'';
+  return { id:'title', label:'SEO Title starts with keyphrase, ≤60 chars', tier:'hard',
+    pass: k.length>0 && vNormalize(t).startsWith(k) && t.length<=60, detail: `"${t}" (${t.length} chars)` };
+}
+function vCheckTitleWords(seo){
+  const t = seo.seoTitle||'';
+  const hasNumber = /\d/.test(t), hasPower = APPROVED_POWER_WORDS.some(w=>t.includes(w)), hasSentiment = APPROVED_SENTIMENT_WORDS.some(w=>t.includes(w));
+  return { id:'title-words', label:'Title has a number + power word + sentiment word', tier:'hard',
+    pass: hasNumber && hasPower && hasSentiment, detail: `number:${hasNumber} power:${hasPower} sentiment:${hasSentiment}` };
+}
+function vCheckMeta(seo){
+  const m = seo.metaDescription||'';
+  const count = vCountKeyphrase(m, seo.focusKeyword).total;
+  return { id:'meta', label:'Meta description 150–155 chars, keyphrase exactly once', tier:'hard',
+    pass: m.length>=150 && m.length<=155 && count===1, detail: `${m.length} chars, keyphrase found ${count}x` };
+}
+function vCheckSlug(seo){
+  const slug = seo.slug||'';
+  const kwWords = vNormalize(seo.focusKeyword).split(' ').filter(Boolean);
+  const slugWords = slug.split('-');
+  const pass = slug.length>0 && slug.length<75 && /^[a-z0-9-]+$/.test(slug) && kwWords.every(w=>slugWords.includes(w));
+  return { id:'slug', label:'Slug has every keyphrase word, <75 chars', tier:'hard', pass, detail: `"${slug}" (${slug.length} chars)` };
+}
+function vCheckH1(seo){
+  const k = vNormalize(seo.focusKeyword), h1 = seo.h1||'';
+  return { id:'h1', label:'H1 starts with keyphrase', tier:'hard', pass: k.length>0 && vNormalize(h1).startsWith(k), detail: `"${h1}"` };
+}
+function vCheckFirst100Words(doc, seo){
+  const words = vProseText(doc).split(/\s+/).filter(Boolean).slice(0,100).join(' ');
+  const pass = vCountKeyphrase(words, seo.focusKeyword).total>=1;
+  return { id:'first-100', label:'Keyphrase in first 100 words of BODY text (not just the WP title)', tier:'hard',
+    pass, detail: pass ? 'found' : 'not found in: "'+words.slice(0,120)+'…"' };
+}
+
+function vRunChecks(seo, bodyHtml){
+  seo = seo || {};
+  const doc = vParseBody(bodyHtml);
+  const proseText = vProseText(doc);
+  const words = vWordCount(proseText);
+  const kw = vCountKeyphrase(proseText, seo.focusKeyword);
+  const checks = [
+    vCheckWordCount(words), vCheckDensity(words, kw), vCheckHeadings(doc, seo.focusKeyword),
+    vCheckImageAlt(doc, seo.focusKeyword), vCheckSvg(doc, seo.focusKeyword), vCheckMedia(doc),
+    vCheckParagraphs(doc), vCheckLinks(doc), vCheckDuplicateIds(doc), vCheckBareH3(doc),
+    vCheckScriptTags(doc), vCheckCitations(doc), vCheckToc(doc), vCheckAdSlots(doc),
+    vCheckTitle(seo), vCheckTitleWords(seo), vCheckMeta(seo), vCheckSlug(seo), vCheckH1(seo),
+    vCheckFirst100Words(doc, seo)
+  ];
+  const hardChecks = checks.filter(c=>c.tier==='hard');
+  return { checks, hardFails: hardChecks.filter(c=>!c.pass), hardPass: hardChecks.every(c=>c.pass),
+    softWarnings: checks.filter(c=>c.tier==='soft' && !c.pass), words, density: kw.total/(words||1)*100 };
+}
+
+/* ---- the one network call: read every already-saved note's focus keyword for the uniqueness test ---- */
+async function vFetchAllNoteFiles(){
+  const dirs = ['published-notes','pending-notes'];
+  const listings = [];
+  for(const dir of dirs){
+    try{
+      const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${dir}`, { headers:{'Accept':'application/vnd.github+json'} });
+      if(res.ok) listings.push(...(await res.json()).filter(f=>f.name.endsWith('.json')));
+    }catch(e){ /* best-effort: a fetch failure just means fewer files to compare against, never a crash */ }
+  }
+  const files = await Promise.all(listings.map(async f=>{
+    try{ const r = await fetch(f.download_url); if(!r.ok) return null; return { name:f.name, data: JSON.parse(await r.text()) }; }
+    catch(e){ return null; }
+  }));
+  return files.filter(Boolean);
+}
+async function vCheckUniqueness(seo){
+  let files;
+  try{ files = await vFetchAllNoteFiles(); }
+  catch(e){ return { id:'uniqueness', label:'Focus keyword not reused on another note', tier:'soft', pass:true, detail:'could not fetch existing notes to compare — check manually' }; }
+  const k = vNormalize(seo.focusKeyword);
+  const collision = k ? files.find(f=>f.data.seo && vNormalize(f.data.seo.focusKeyword)===k && f.data.seo.slug!==seo.slug) : null;
+  return { id:'uniqueness', label:'Focus keyword not reused on another note', tier:'hard', pass: !collision,
+    detail: collision ? `already used by ${collision.name}` : `checked against ${files.length} existing note(s)` };
+}
+async function vValidate(seo, bodyHtml){
+  const result = vRunChecks(seo, bodyHtml);
+  const u = await vCheckUniqueness(seo);
+  result.checks.push(u);
+  if(!u.pass){ if(u.tier==='hard') result.hardFails.push(u); else result.softWarnings.push(u); }
+  if(u.tier==='hard') result.hardPass = result.hardPass && u.pass;
+  return result;
+}
+
+/* ---- Step 3 UI: run + render ---- */
+async function runValidationUI(btn){
+  syncFormToState();
+  const m = msg('validateMsg');
+  show(m,'warn','Running validation…');
+  const result = await vValidate(state.seo, state.bodyHtml);
+  state.validation = { result, forBodyHtml: state.bodyHtml, forSeo: JSON.stringify(state.seo) };
+  saveDraft();
+  renderValidationResults(result);
+  show(m, result.hardPass?'ok':'bad', result.hardPass ? 'All hard checks passed — Auto-save unlocked.' : `${result.hardFails.length} hard check(s) failed — fix before publishing.`);
+  updatePublishGate();
+}
+function renderValidationResults(result){
+  const wrap = document.getElementById('validateResults');
+  if(!wrap) return;
+  const row = c => `<div class="copyRow" style="align-items:flex-start">
+    <div style="flex:none;width:22px;padding-top:2px;">${c.pass?'✅':(c.tier==='hard'?'❌':'⚠️')}</div>
+    <div style="flex:1;min-width:0">
+      <div class="cLabel" style="text-transform:none;font-weight:600;color:var(--ink)">${c.label}</div>
+      <div class="cVal" style="white-space:normal">${c.detail}</div>
+    </div>
+  </div>`;
+  wrap.innerHTML = result.checks.map(row).join('');
+}
+function updatePublishGate(){
+  const btn = document.getElementById('autoSaveBtn');
+  if(!btn) return;
+  const v = state.validation;
+  const current = !!(v && v.forBodyHtml===state.bodyHtml && v.forSeo===JSON.stringify(state.seo));
+  const ok = current && v.result.hardPass;
+  btn.disabled = !ok;
+  btn.title = ok ? '' : (current ? 'Fix the failed hard checks in Step 3 first.' : 'Run validation in Step 3 first — the note changed since the last check.');
+}
+
+/* ---- retroactive backlog scorecard: same validator, run against files already on disk, no generation ---- */
+async function runBacklogAudit(btn){
+  const m = msg('backlogMsg');
+  show(m,'warn','Fetching existing notes…');
+  const files = await vFetchAllNoteFiles();
+  if(!files.length){ show(m,'bad','Could not fetch any notes — check your connection.'); return; }
+  show(m,'warn',`Validating ${files.length} note(s)…`);
+  const rows = files.map(f=>{
+    const seo = (f.data && f.data.seo) || {};
+    const r = vRunChecks(seo, (f.data && f.data.bodyHtml) || '');
+    return { name:f.name, slug: seo.slug||f.name, words:r.words, density:r.density, hardPass:r.hardPass, failLabels:r.hardFails.map(c=>c.id) };
+  });
+  const kwMap = {};
+  files.forEach(f=>{ const k=vNormalize(f.data.seo && f.data.seo.focusKeyword); if(k) (kwMap[k]=kwMap[k]||[]).push(f.name); });
+  Object.values(kwMap).filter(list=>list.length>1).forEach(list=>list.forEach(name=>{
+    const row = rows.find(r=>r.name===name); if(row){ row.hardPass=false; row.failLabels.push('uniqueness'); }
+  }));
+  renderBacklogResults(rows);
+  const passCount = rows.filter(r=>r.hardPass).length;
+  show(m, passCount===rows.length?'ok':'warn', `${passCount} / ${rows.length} pass all hard checks.`);
+}
+function renderBacklogResults(rows){
+  const wrap = document.getElementById('backlogResults');
+  if(!wrap) return;
+  wrap.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+  <tr style="text-align:left;border-bottom:2px solid var(--line)"><th style="padding:6px 4px">Note</th><th style="padding:6px 4px">Words</th><th style="padding:6px 4px">Density</th><th style="padding:6px 4px">Result</th></tr>
+  ${rows.map(r=>`<tr style="border-bottom:1px solid var(--line-soft)">
+    <td style="padding:6px 4px">${r.slug}</td>
+    <td style="padding:6px 4px">${r.words.toLocaleString()}</td>
+    <td style="padding:6px 4px">${r.density.toFixed(2)}%</td>
+    <td style="padding:6px 4px;color:${r.hardPass?'var(--ok)':'var(--bad)'}">${r.hardPass?'✅ pass':'❌ '+r.failLabels.join(', ')}</td>
+  </tr>`).join('')}
+  </table></div>`;
 }
 
 restoreDraftIfAny();
