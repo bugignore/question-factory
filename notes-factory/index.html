@@ -55,7 +55,7 @@
   .btn.green:hover{filter:brightness(.95)}
   .btn.small{width:auto;display:inline-flex;padding:9px 14px;font-size:13px;margin-top:8px}
   .btn:disabled{opacity:.4;cursor:default;transform:none}
-  .msg{border-radius:var(--radius-sm);padding:11px 13px;font-size:13px;margin-top:10px;display:none;line-height:1.5}
+  .msg{border-radius:var(--radius-sm);padding:11px 13px;font-size:13px;margin-top:10px;display:none;line-height:1.5;white-space:pre-wrap}
   .msg.show{display:block;animation:f .2s ease}
   .msg.ok{background:var(--ok-bg);color:var(--ok)}
   .msg.bad{background:var(--bad-bg);color:var(--bad)}
@@ -244,9 +244,9 @@
     <div class="msg" id="unlockMsg"></div>
   </fieldset>
 
-  <button class="btn green" id="autoSaveBtn" onclick="tryRun(autoSaveToGithub,this)" disabled title="Run validation in Step 3 first.">☁️ Auto-save to GitHub</button>
-  <div class="msg show warn" id="publishGateMsg" style="display:none"></div>
+  <button class="btn green" id="autoSaveBtn" onclick="tryRun(autoSaveToGithub,this)">☁️ Auto-save to GitHub</button>
   <div class="msg" id="sendMsg"></div>
+  <button class="btn small ghost" id="autoHealBtn" onclick="tryRun(healAndRetrySave,this)" style="display:none;margin-top:6px">🩹 Auto-fix HTML & retry save</button>
 
   <div class="pipeline" id="pipelineWrap" style="display:none">
     <div class="pipeline-top"><b>Pipeline status</b><span class="pipeline-pct" id="pipelinePct">0%</span></div>
@@ -836,6 +836,18 @@ async function githubPutFile(owner, repo, token, path, content, message){
 async function autoSaveToGithub(btn){
   syncFormToState();
   const m = msg('sendMsg');
+  const healBtn = document.getElementById('autoHealBtn');
+  const integrity = vCheckMarkupIntegrity(state.bodyHtml);
+  if(!integrity.ok){
+    const list = integrity.issues.map(i=>'• '+i).join('\n');
+    show(m,'bad',`Auto-save blocked — the notes body has broken HTML that would break the published page:\n${list}\n\nTap "Auto-fix HTML" below to try an automatic repair, or go to Step 3 and edit the Notes Body HTML field by hand.`);
+    if(healBtn) healBtn.style.display = '';
+    cur = 2; render();
+    const field = document.getElementById('fBodyHtml');
+    if(field){ field.scrollIntoView({behavior:'smooth', block:'center'}); field.focus(); }
+    return;
+  }
+  if(healBtn) healBtn.style.display = 'none';
   if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
   const token = sessionStorage.getItem('ghUnlockedToken');
   if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
@@ -856,6 +868,25 @@ async function autoSaveToGithub(btn){
   }finally{
     saveBtn.disabled = false;
   }
+}
+
+async function healAndRetrySave(btn){
+  syncFormToState();
+  const m = msg('sendMsg');
+  const healed = vHealMarkup(state.bodyHtml);
+  const recheck = vCheckMarkupIntegrity(healed);
+  state.bodyHtml = healed;
+  const field = document.getElementById('fBodyHtml');
+  if(field) field.value = healed;
+  saveDraft();
+  if(!recheck.ok){
+    const list = recheck.issues.map(i=>'• '+i).join('\n');
+    show(m,'bad',`Auto-fix couldn't fully repair the markup — it still has:\n${list}\n\nEdit the Notes Body HTML field by hand to fix the rest.`);
+    return;
+  }
+  show(m,'ok','Auto-fix repaired the HTML. Retrying Auto-save…');
+  const saveBtn = document.getElementById('autoSaveBtn');
+  await autoSaveToGithub(saveBtn);
 }
 
 /* ---------- pipeline tracker: GitHub save -> Actions run -> WordPress publish ---------- */
@@ -1036,6 +1067,61 @@ const APPROVED_POWER_WORDS = ['Complete','Ultimate','Essential','Proven','Defini
 const APPROVED_SENTIMENT_WORDS = ['Best','Easy','Top','Smart','Perfect','Amazing'];
 
 function vParseBody(html){ return new DOMParser().parseFromString(html || '', 'text/html'); }
+
+/* ---------- markup integrity: the ONE real blocker — broken HTML/JS, not SEO quality ----------
+   Browsers auto-repair malformed HTML when parsed via DOMParser, which hides the breakage from
+   every other check. This walks the raw markup as a tag stream (stack-based, like a real parser
+   would before auto-correcting) so mismatched/unclosed tags and stray <script> are caught before
+   they ever reach WordPress. This is the only check Auto-save cannot be forced past. */
+const VOID_TAGS = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+function vCheckMarkupIntegrity(html){
+  const issues = [];
+  const raw = html || '';
+  if(/<script\b/i.test(raw)){
+    issues.push('Contains a <script> tag — WordPress strips in-content scripts, leaving broken visible text. Remove it.');
+  }
+  const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(\/?)>/g;
+  const stack = [];
+  let m;
+  while((m = tagRe.exec(raw))){
+    const full = m[0], name = m[1].toLowerCase(), selfClosed = m[2]==='/' || VOID_TAGS.has(name);
+    if(selfClosed) continue;
+    if(full.startsWith('</')){
+      if(stack.length && stack[stack.length-1]===name){
+        stack.pop();
+      } else {
+        const idx = stack.lastIndexOf(name);
+        if(idx===-1){
+          issues.push(`Stray closing tag </${name}> with no matching open <${name}>.`);
+        } else {
+          const unclosed = stack.splice(idx).slice(1);
+          issues.push(`</${name}> closes out of order — <${unclosed[unclosed.length-1]||name}> was opened after it and never closed before this point.`);
+        }
+      }
+    } else {
+      stack.push(name);
+    }
+  }
+  if(stack.length){
+    const counts = {};
+    stack.forEach(t=>counts[t]=(counts[t]||0)+1);
+    const list = Object.entries(counts).map(([t,n])=>`<${t}>×${n}`).join(', ');
+    issues.push(`${stack.length} tag(s) opened but never closed: ${list}.`);
+  }
+  return { ok: issues.length===0, issues };
+}
+
+/* ---------- healing: best-effort auto-repair, not a substitute for the check above ----------
+   Strips banned <script> blocks, then round-trips the remainder through the browser's own
+   forgiving HTML parser — the same auto-repair a real browser applies when it renders slightly
+   broken markup (auto-closing unclosed tags, dropping stray closers, fixing nesting). Re-run
+   vCheckMarkupIntegrity on the result before trusting it; healing can still fail on markup that's
+   broken in a way no HTML parser can guess the intent of. */
+function vHealMarkup(html){
+  const stripped = (html || '').replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '');
+  const doc = new DOMParser().parseFromString(stripped, 'text/html');
+  return doc.body.innerHTML;
+}
 
 function vProseText(doc){
   const clone = doc.body.cloneNode(true);
@@ -1273,24 +1359,7 @@ function renderValidationResults(result){
   wrap.innerHTML = result.checks.map(row).join('');
 }
 function updatePublishGate(){
-  const btn = document.getElementById('autoSaveBtn');
-  if(!btn) return;
-  const gateMsg = document.getElementById('publishGateMsg');
-  const v = state.validation;
-  const current = !!(v && v.forBodyHtml===state.bodyHtml && v.forSeo===JSON.stringify(state.seo));
-  btn.disabled = !current;
-  btn.title = current ? (v.result.hardPass ? '' : 'Hard checks failed — you will be asked to confirm before publishing.') : 'Run validation in Step 3 first — the note changed since the last check.';
-  if(gateMsg){
-    if(current){
-      gateMsg.style.display = 'none';
-    } else {
-      gateMsg.style.display = '';
-      const reason = !v ? 'No validation on record for this note yet.'
-        : v.forBodyHtml!==state.bodyHtml ? 'The notes body changed since your last validation run.'
-        : 'An SEO field (title/slug/meta/H1/etc.) changed since your last validation run.';
-      gateMsg.textContent = '🔒 Auto-save locked — '+reason+' Go back to Step 3 and tap "Run validation" again.';
-    }
-  }
+  /* validation is informational only now — Auto-save is never blocked by it */
 }
 
 /* ---- retroactive backlog scorecard: same validator, run against files already on disk, no generation ---- */
