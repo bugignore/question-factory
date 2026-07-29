@@ -836,18 +836,6 @@ async function githubPutFile(owner, repo, token, path, content, message){
 async function autoSaveToGithub(btn){
   syncFormToState();
   const m = msg('sendMsg');
-  const v = state.validation;
-  const validCurrent = !!(v && v.forBodyHtml===state.bodyHtml && v.forSeo===JSON.stringify(state.seo));
-  if(!validCurrent){
-    show(m,'bad','Run validation in Step 3 first — the note changed since the last check.');
-    updatePublishGate();
-    return;
-  }
-  if(!v.result.hardPass){
-    const list = v.result.hardFails.map(c=>`• ${c.label} (${c.detail})`).join('\n');
-    const proceed = confirm(`${v.result.hardFails.length} hard check(s) failed:\n\n${list}\n\nPublish anyway?`);
-    if(!proceed){ show(m,'bad','Auto-save cancelled — fix the failed hard checks, or confirm the dialog to publish anyway.'); return; }
-  }
   if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
   const token = sessionStorage.getItem('ghUnlockedToken');
   if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
