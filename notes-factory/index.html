@@ -160,7 +160,7 @@
   <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build &amp; copy prompt</button>
   <div class="msg" id="pMsg"></div>
   <div id="filePickWrap" style="display:none">
-    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v11.md</code> in the folder above this one:</label>
+    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v12.md</code> in the folder above this one:</label>
     <input type="file" id="masterPromptFile" accept=".md,.txt">
   </div>
   <textarea id="promptOut" style="display:none"></textarea>
@@ -224,7 +224,7 @@
 
   <fieldset style="margin-top:16px">
     <legend>🛡️ Rank Math validation gate</legend>
-    <p class="hint" style="margin-top:0">Re-parses the actual HTML and re-derives every number — word count, density, images, links, structure — independent of anything the AI claimed. Auto-save stays locked until this passes.</p>
+    <p class="hint" style="margin-top:0">Re-parses the actual HTML and re-derives every number — word count, density, images, links, structure — independent of anything the AI claimed. Auto-save requires this to run at least once; if hard checks fail, you'll be asked to confirm before publishing anyway.</p>
     <button class="btn" onclick="tryRun(runValidationUI,this)">🔎 Run validation</button>
     <div class="msg" id="validateMsg"></div>
     <div id="validateResults"></div>
@@ -245,6 +245,7 @@
   </fieldset>
 
   <button class="btn green" id="autoSaveBtn" onclick="tryRun(autoSaveToGithub,this)" disabled title="Run validation in Step 3 first.">☁️ Auto-save to GitHub</button>
+  <div class="msg show warn" id="publishGateMsg" style="display:none"></div>
   <div class="msg" id="sendMsg"></div>
 
   <div class="pipeline" id="pipelineWrap" style="display:none">
@@ -379,7 +380,7 @@ function updateLangMixLabel(){
 
 async function loadMasterPrompt(){
   if(masterPromptText) return masterPromptText;
-  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v11.md'];
+  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v12.md'];
   let lastErr;
   for(const url of candidates){
     try{
@@ -393,7 +394,7 @@ async function loadMasterPrompt(){
   const hint = location.protocol === 'file:'
     ? 'This page was opened straight from the folder (file://), where browsers block reading other files automatically.'
     : 'Could not load the master prompt file from the repo root ('+(lastErr?lastErr.message:'')+').';
-  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v11.md manually — then tap "Build & copy prompt" again.');
+  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v12.md manually — then tap "Build & copy prompt" again.');
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -717,6 +718,7 @@ function restoreDraftIfAny(){
   document.getElementById('hindiPercent').value = state.hindiPercent || 70;
   updateLangMixLabel();
   if(state.validation && state.validation.result) renderValidationResults(state.validation.result);
+  updatePublishGate();
 }
 function copyReviewField(e, id, label){
   /* the copy button lives inside a <summary> — stop the click from also
@@ -836,10 +838,15 @@ async function autoSaveToGithub(btn){
   const m = msg('sendMsg');
   const v = state.validation;
   const validCurrent = !!(v && v.forBodyHtml===state.bodyHtml && v.forSeo===JSON.stringify(state.seo));
-  if(!validCurrent || !v.result.hardPass){
-    show(m,'bad','Run validation in Step 3 first and fix any hard-check failures — Auto-save stays locked until it passes.');
+  if(!validCurrent){
+    show(m,'bad','Run validation in Step 3 first — the note changed since the last check.');
     updatePublishGate();
     return;
+  }
+  if(!v.result.hardPass){
+    const list = v.result.hardFails.map(c=>`• ${c.label} (${c.detail})`).join('\n');
+    const proceed = confirm(`${v.result.hardFails.length} hard check(s) failed:\n\n${list}\n\nPublish anyway?`);
+    if(!proceed){ show(m,'bad','Auto-save cancelled — fix the failed hard checks, or confirm the dialog to publish anyway.'); return; }
   }
   if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
   const token = sessionStorage.getItem('ghUnlockedToken');
@@ -1063,7 +1070,7 @@ function vCountKeyphrase(text, keyphrase){
 
 /* ---- individual checks: each returns {id,label,tier:'hard'|'soft',pass,detail} with a REAL number in detail ---- */
 function vCheckWordCount(words){
-  return { id:'word-count', label:'Word count ≥ 4,500', tier:'hard', pass: words>=4500, detail: words.toLocaleString()+' words' };
+  return { id:'word-count', label:'Word count ≥ 4,500', tier:'soft', pass: words>=4500, detail: words.toLocaleString()+' words' };
 }
 function vCheckDensity(words, kw){
   const pct = words ? (kw.total/words*100) : 0;
@@ -1280,11 +1287,22 @@ function renderValidationResults(result){
 function updatePublishGate(){
   const btn = document.getElementById('autoSaveBtn');
   if(!btn) return;
+  const gateMsg = document.getElementById('publishGateMsg');
   const v = state.validation;
   const current = !!(v && v.forBodyHtml===state.bodyHtml && v.forSeo===JSON.stringify(state.seo));
-  const ok = current && v.result.hardPass;
-  btn.disabled = !ok;
-  btn.title = ok ? '' : (current ? 'Fix the failed hard checks in Step 3 first.' : 'Run validation in Step 3 first — the note changed since the last check.');
+  btn.disabled = !current;
+  btn.title = current ? (v.result.hardPass ? '' : 'Hard checks failed — you will be asked to confirm before publishing.') : 'Run validation in Step 3 first — the note changed since the last check.';
+  if(gateMsg){
+    if(current){
+      gateMsg.style.display = 'none';
+    } else {
+      gateMsg.style.display = '';
+      const reason = !v ? 'No validation on record for this note yet.'
+        : v.forBodyHtml!==state.bodyHtml ? 'The notes body changed since your last validation run.'
+        : 'An SEO field (title/slug/meta/H1/etc.) changed since your last validation run.';
+      gateMsg.textContent = '🔒 Auto-save locked — '+reason+' Go back to Step 3 and tap "Run validation" again.';
+    }
+  }
 }
 
 /* ---- retroactive backlog scorecard: same validator, run against files already on disk, no generation ---- */
