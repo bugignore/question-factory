@@ -157,7 +157,8 @@
   <input type="range" id="hindiPercent" min="0" max="100" step="5" value="70" oninput="updateLangMixLabel()">
   <p class="hint" style="margin-top:2px">Key terms, definitions, and technical labels always stay in English regardless of this split — this only controls the explanations/tricks/teacher-talk prose.</p>
 
-  <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build prompt (copy in parts)</button>
+  <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build prompt</button>
+  <button class="btn ghost" onclick="tryRun(copyWholePrompt,this)">🖥️ Copy whole prompt (PC only)</button>
   <div class="msg" id="pMsg"></div>
   <div id="filePickWrap" style="display:none">
     <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v12.md</code> in the folder above this one:</label>
@@ -166,8 +167,8 @@
   <textarea id="promptOut" style="display:none"></textarea>
   <div class="stats" id="pStats"></div>
 
-  <details id="partsWrap"><summary>📋 Copy the prompt in parts (opens automatically after building)</summary><div>
-    <p class="hint" style="margin-top:8px">The full prompt is ~20,000+ characters — too long for a single copy to survive some phone keyboards (Gboard/Samsung/SwiftKey clipboard) and mobile browsers, which silently truncate it. It's split into up to 3 parts below. Tap "Build prompt" above first, then use these buttons <b>in order</b> — paste each one as its own message in the SAME chat before sending the next. Tell the AI to wait until you say "generation config: go" if it starts replying early.</p>
+  <details id="partsWrap"><summary>📱 Copy the prompt in parts (opens automatically after building — use this on mobile)</summary><div>
+    <p class="hint" style="margin-top:8px">Mobile keyboards (Gboard/Samsung/SwiftKey clipboard) and mobile browsers silently truncate a single copy past roughly 8,000–10,000 characters, so the prompt is split into only as many parts as it actually needs to stay under that per-part. Tap "Build prompt" above first, then use these buttons <b>in order</b> — paste each one as its own message in the SAME chat before sending the next. Tell the AI to wait until you say "generation config: go" if it starts replying early. On a PC, skip this and use "Copy whole prompt" instead.</p>
     <div id="partsButtons"></div>
   </div></details>
 
@@ -383,12 +384,23 @@ function fallbackCopy(text,done,msgEl){
   document.body.removeChild(ta);
 }
 
-/* splits text into at most maxParts roughly-equal chunks on paragraph/line
-   boundaries where possible, so a copy that's too long for mobile clipboards
-   can be pasted as a few separate messages instead of one */
-function splitForCopy(text, maxParts){
-  maxParts = maxParts || 3;
+/* mobile clipboards (Gboard/Samsung/SwiftKey) start silently truncating
+   copies somewhere around 8,000-10,000 characters — ~1,500 words at typical
+   English/Hinglish prose density — so that's the per-part budget: only as
+   many parts as actually needed to keep each one under it, never a fixed count */
+const WORDS_PER_COPY_PART = 1500;
+function partsNeededFor(text){
+  if(!text) return 1;
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / WORDS_PER_COPY_PART));
+}
+/* splits text into only as many roughly-equal chunks as needed to stay under
+   the per-part budget, cut on paragraph/line boundaries where possible —
+   each part starts exactly where the previous one logically left off */
+function splitForCopy(text){
   if(!text) return [];
+  const maxParts = partsNeededFor(text);
+  if(maxParts <= 1) return [text];
   const targetSize = Math.ceil(text.length / maxParts);
   const parts = [];
   let rest = text;
@@ -407,6 +419,11 @@ function renderCopyParts(wrapId, text, msgElId){
   if(!wrap) return;
   const parts = splitForCopy(text);
   const msgEl = msg(msgElId);
+  if(parts.length <= 1){
+    wrap.innerHTML = `<button class="btn ghost small" style="margin:4px 6px 0 0">📋 Copy prompt (1 part — short enough)</button>`;
+    wrap.querySelector('button').addEventListener('click', ()=> doCopy(text, wrap.querySelector('button'), msgEl, 'Prompt copied.'));
+    return;
+  }
   wrap.innerHTML = parts.map((p,i)=>
     `<button class="btn ghost small" style="margin:4px 6px 0 0" data-idx="${i}">📋 Copy part ${i+1} of ${parts.length}</button>`
   ).join('');
@@ -451,6 +468,7 @@ function clearShareBlock(containerId){
 
 /* ================= STEP 1 — build prompt ================= */
 var masterPromptText = null;
+var builtPromptText = null;
 var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
 
 function updateLangMixLabel(){
@@ -571,11 +589,25 @@ async function copyPrompt(btn){
   show(msg('pMsg'),'warn','Loading master prompt…');
   const full = await buildPrompt();
   out.value = full;
+  builtPromptText = full;
   const words = full.trim().split(/\s+/).length;
   document.getElementById('pStats').innerHTML = `<div class="stat"><b>${words.toLocaleString()}</b>words in prompt</div><div class="stat"><b>${state.examType}</b>exam type</div><div class="stat"><b>${state.hindiPercent}% / ${100-state.hindiPercent}%</b>Hindi / English</div>`;
+  const parts = splitForCopy(full);
   renderCopyParts('partsButtons', full, 'pMsg');
-  document.getElementById('partsWrap').open = true;
-  show(msg('pMsg'),'ok','Prompt built — it\'s too long for a single mobile copy to be reliable, so use the "Copy part" buttons below in order (1, 2, 3) instead of copying it all at once.');
+  if(parts.length > 1){
+    document.getElementById('partsWrap').open = true;
+    show(msg('pMsg'),'ok',`Prompt built (${words.toLocaleString()} words) — on mobile, use the ${parts.length} "Copy part" buttons below in order instead of copying it all at once. On a PC, "Copy whole prompt" is fine.`);
+  } else {
+    show(msg('pMsg'),'ok',`Prompt built (${words.toLocaleString()} words) — short enough for a single copy. Use "Copy whole prompt" above, or the part button below if your device still truncates it.`);
+  }
+}
+async function copyWholePrompt(btn){
+  if(!builtPromptText){
+    show(msg('pMsg'),'warn','Building prompt first…');
+    await copyPrompt(btn);
+    if(!builtPromptText) return;
+  }
+  doCopy(builtPromptText, btn, msg('pMsg'), 'Whole prompt copied — fine on a PC clipboard; if it comes out cut off, use the "Copy part" buttons below instead.');
 }
 
 /* ================= STEP 2 — parse ================= */
