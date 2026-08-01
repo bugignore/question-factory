@@ -244,9 +244,22 @@
     <div class="msg" id="unlockMsg"></div>
   </fieldset>
 
+  <div class="msg warn" id="gateMsg" style="display:none;margin-bottom:8px"></div>
+  <label id="overrideWrap" style="display:none;font-weight:500;margin-bottom:8px">
+    <input type="checkbox" id="overrideCheck" style="width:auto;margin-right:6px" onchange="updatePublishGate()">
+    I've seen the validation warnings above and want to post anyway
+  </label>
   <button class="btn green" id="autoSaveBtn" onclick="tryRun(autoSaveToGithub,this)">☁️ Auto-save to GitHub</button>
   <div class="msg" id="sendMsg"></div>
   <button class="btn small ghost" id="autoHealBtn" onclick="tryRun(healAndRetrySave,this)" style="display:none;margin-top:6px">🩹 Auto-fix HTML & retry save</button>
+
+  <div id="queueWrap" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)">
+    <p class="hint" style="margin-top:0">Two people posting together, or several notes ready at once? Queue this note instead of saving it right away, then push the whole batch to GitHub in one go.</p>
+    <button class="btn ghost" id="queueAddBtn" onclick="tryRun(addToQueue,this)">➕ Add this note to the batch queue</button>
+    <button class="btn green" id="queuePostBtn" onclick="tryRun(postQueue,this)" style="display:none;margin-left:8px">🚀 Post all queued notes (<span id="queueCount">0</span>)</button>
+    <div class="msg" id="queueMsg"></div>
+    <div id="queueList" style="margin-top:8px"></div>
+  </div>
 
   <div class="pipeline" id="pipelineWrap" style="display:none">
     <div class="pipeline-top"><b>Pipeline status</b><span class="pipeline-pct" id="pipelinePct">0%</span></div>
@@ -348,7 +361,7 @@ function render(){
   document.getElementById('nextBtn').textContent = cur===3 ? 'Done' : 'Next →';
   document.getElementById('nextBtn').disabled = cur===3;
   if(cur===2){ fillReviewForm(); updatePreview(); }
-  if(cur===3){ loadSettings(); document.getElementById('dlSlug').textContent = (state.seo && state.seo.slug) || 'note'; renderCopyFields(); updatePublishGate(); }
+  if(cur===3){ loadSettings(); document.getElementById('dlSlug').textContent = (state.seo && state.seo.slug) || 'note'; renderCopyFields(); updatePublishGate(); renderQueue(); }
   document.querySelector('main').scrollTop=0;
 }
 function msg(id){ return document.getElementById(id); }
@@ -367,6 +380,35 @@ function fallbackCopy(text,done,msgEl){
   try{ document.execCommand('copy'); done(); }
   catch(e){ show(msgEl,'warn','Auto-copy blocked — open "View" above, long-press → Select All → Copy.'); }
   document.body.removeChild(ta);
+}
+
+/* splits text into N roughly-equal chunks on paragraph/line boundaries where possible,
+   so a single copy that's too long for mobile clipboards can be pasted as several messages */
+function splitForCopy(text, chunkSize){
+  chunkSize = chunkSize || 6000;
+  const parts = [];
+  let rest = text;
+  while(rest.length > chunkSize){
+    let cut = rest.lastIndexOf('\n\n', chunkSize);
+    if(cut < chunkSize*0.5) cut = rest.lastIndexOf('\n', chunkSize);
+    if(cut < chunkSize*0.5) cut = chunkSize;
+    parts.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  if(rest) parts.push(rest);
+  return parts;
+}
+function renderCopyParts(wrapId, text, msgElId){
+  const wrap = document.getElementById(wrapId);
+  if(!wrap) return;
+  const parts = splitForCopy(text);
+  const msgEl = msg(msgElId);
+  wrap.innerHTML = parts.map((p,i)=>
+    `<button class="btn ghost small" style="margin:4px 6px 0 0" data-idx="${i}">📋 Copy part ${i+1} of ${parts.length}</button>`
+  ).join('');
+  [...wrap.querySelectorAll('button')].forEach((btn,i)=>{
+    btn.addEventListener('click', ()=> doCopy(parts[i], btn, msgEl, `Part ${i+1} of ${parts.length} copied — paste it now, then come back for the next part.`));
+  });
 }
 
 /* ================= STEP 1 — build prompt ================= */
@@ -494,6 +536,7 @@ async function copyPrompt(btn){
   const words = full.trim().split(/\s+/).length;
   document.getElementById('pStats').innerHTML = `<div class="stat"><b>${words.toLocaleString()}</b>words in prompt</div><div class="stat"><b>${state.examType}</b>exam type</div><div class="stat"><b>${state.hindiPercent}% / ${100-state.hindiPercent}%</b>Hindi / English</div>`;
   doCopy(full, btn, msg('pMsg'), 'Prompt copied — paste it into a new DeepSeek / ChatGPT / Claude chat, then come back with the reply.');
+  renderCopyParts('partsButtons', full, 'pMsg');
 }
 
 /* ================= STEP 2 — parse ================= */
@@ -849,6 +892,13 @@ async function autoSaveToGithub(btn){
   }
   if(healBtn) healBtn.style.display = 'none';
   if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
+  const hardPass = !!(state.validation && state.validation.result && state.validation.result.hardPass);
+  const overrideCheck = document.getElementById('overrideCheck');
+  if(!hardPass && !(overrideCheck && overrideCheck.checked)){
+    show(m,'bad','Validation has not passed — run "Run validation" above and check the override box if you want to post anyway.');
+    updatePublishGate();
+    return;
+  }
   const token = sessionStorage.getItem('ghUnlockedToken');
   if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
   const saveBtn = document.getElementById('autoSaveBtn');
@@ -887,6 +937,71 @@ async function healAndRetrySave(btn){
   show(m,'ok','Auto-fix repaired the HTML. Retrying Auto-save…');
   const saveBtn = document.getElementById('autoSaveBtn');
   await autoSaveToGithub(saveBtn);
+}
+
+/* ---------- batch queue: stage several notes locally, push them all in one action ---------- */
+const QUEUE_KEY = 'nf_batchQueue';
+function loadQueue(){ try{ return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]'); }catch(e){ return []; } }
+function saveQueueList(q){ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); renderQueue(); }
+function renderQueue(){
+  const q = loadQueue();
+  const listEl = document.getElementById('queueList');
+  const postBtn = document.getElementById('queuePostBtn');
+  const countEl = document.getElementById('queueCount');
+  if(countEl) countEl.textContent = q.length;
+  if(postBtn) postBtn.style.display = q.length ? '' : 'none';
+  if(!listEl) return;
+  listEl.innerHTML = q.map((item,i)=>`<div class="copyRow"><div style="flex:1;min-width:0">${item.slug}</div><button class="btn small ghost" onclick="removeFromQueue(${i})">✕ remove</button></div>`).join('');
+}
+function removeFromQueue(i){
+  const q = loadQueue();
+  q.splice(i,1);
+  saveQueueList(q);
+}
+async function addToQueue(btn){
+  syncFormToState();
+  const m = msg('queueMsg');
+  const integrity = vCheckMarkupIntegrity(state.bodyHtml);
+  if(!integrity.ok){ show(m,'bad','Fix the broken HTML in Step 3 before queueing (see Auto-save for details).'); return; }
+  if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
+  const hardPass = !!(state.validation && state.validation.result && state.validation.result.hardPass);
+  const overrideCheck = document.getElementById('overrideCheck');
+  if(!hardPass && !(overrideCheck && overrideCheck.checked)){
+    show(m,'bad','Validation has not passed — run "Run validation" above and check the override box if you want to queue anyway.');
+    updatePublishGate();
+    return;
+  }
+  const q = loadQueue();
+  if(q.some(item=>item.slug===state.seo.slug)){ show(m,'bad',`"${state.seo.slug}" is already in the queue.`); return; }
+  q.push({ slug: state.seo.slug, bundle: buildBundle() });
+  saveQueueList(q);
+  show(m,'ok',`Added "${state.seo.slug}" to the batch queue (${q.length} queued). Start the next note at Step 1, or post the queue when everyone's done.`);
+  clearDraft();
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+  cur = 0; render();
+}
+async function postQueue(btn){
+  const m = msg('queueMsg');
+  const token = sessionStorage.getItem('ghUnlockedToken');
+  if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
+  const q = loadQueue();
+  if(!q.length){ show(m,'bad','The queue is empty.'); return; }
+  if(btn) btn.disabled = true;
+  const failed = [];
+  let ok = 0;
+  for(const item of q){
+    show(m,'warn',`Posting ${item.slug} (${ok+failed.length+1}/${q.length})…`);
+    try{
+      await githubPutFile(GH_OWNER, GH_REPO, token, `pending-notes/${item.slug}.json`, JSON.stringify(item.bundle,null,2), `Add note: ${item.slug}`);
+      ok++;
+    }catch(e){ failed.push(item); }
+  }
+  saveQueueList(failed);
+  show(m, failed.length ? 'warn' : 'ok',
+    failed.length
+      ? `Posted ${ok}/${q.length}. Failed: ${failed.map(f=>f.slug).join(', ')} — still in the queue, retry when ready.`
+      : `Posted ${ok} note(s) to GitHub — Actions will publish each one to WordPress as a draft.`);
+  if(btn) btn.disabled = false;
 }
 
 /* ---------- pipeline tracker: GitHub save -> Actions run -> WordPress publish ---------- */
@@ -1359,7 +1474,31 @@ function renderValidationResults(result){
   wrap.innerHTML = result.checks.map(row).join('');
 }
 function updatePublishGate(){
-  /* validation is informational only now — Auto-save is never blocked by it */
+  const gateMsg = document.getElementById('gateMsg');
+  const wrap = document.getElementById('overrideWrap');
+  const check = document.getElementById('overrideCheck');
+  const saveBtn = document.getElementById('autoSaveBtn');
+  const queueBtn = document.getElementById('queueAddBtn');
+  if(!gateMsg || !wrap || !check) return;
+  const v = state.validation;
+  const hardPass = !!(v && v.result && v.result.hardPass);
+  if(hardPass){
+    gateMsg.style.display = 'none';
+    wrap.style.display = 'none';
+    check.checked = false;
+    if(saveBtn) saveBtn.disabled = false;
+    if(queueBtn) queueBtn.disabled = false;
+    return;
+  }
+  gateMsg.style.display = '';
+  gateMsg.className = 'msg show warn';
+  gateMsg.textContent = v
+    ? `${v.result.hardFails.length} hard validation check(s) failed — check the box below to post anyway, or fix them and re-run validation.`
+    : 'Validation has not been run yet — run it above, or check the box below to skip and post anyway.';
+  wrap.style.display = '';
+  const allowed = check.checked;
+  if(saveBtn) saveBtn.disabled = !allowed;
+  if(queueBtn) queueBtn.disabled = !allowed;
 }
 
 /* ---- retroactive backlog scorecard: same validator, run against files already on disk, no generation ---- */

@@ -92,6 +92,10 @@
   <input type="text" id="subtopic" placeholder="e.g. Heredity and Environment">
   <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Copy generation prompt</button>
   <div class="msg" id="pMsg"></div>
+  <details id="partsWrap"><summary>📱 On phone and the paste comes out cut off? Copy in parts instead</summary><div>
+    <p class="hint" style="margin-top:8px">Some phone keyboards (Gboard/Samsung/SwiftKey clipboard) and mobile browsers silently truncate a single copy that's long. Tap "Copy generation prompt" above first, then use these buttons <b>in order</b> — paste each one as its own message in the SAME chat before sending the next.</p>
+    <div id="partsButtons"></div>
+  </div></details>
   <details><summary>View / edit prompt (optional)</summary><div>
     <textarea id="promptOut" style="min-height:220px" placeholder="Tap the copy button above — the prompt appears here too."></textarea>
   </div></details>
@@ -303,6 +307,7 @@ function copyPrompt(btn){
   const t = document.getElementById('promptOut');
   if(!t.value.trim()) t.value = buildPrompt();
   doCopy(t.value, btn, msg('pMsg'), 'Prompt copied — paste it in DeepSeek, then come back with the CSV.');
+  renderCopyParts('partsButtons', t.value, 'pMsg');
 }
 
 /* ---------- copy helper ---------- */
@@ -318,6 +323,34 @@ function fallbackCopy(text,done,msgEl){
   try{ document.execCommand('copy'); done(); }
   catch(e){ show(msgEl,'warn','Auto-copy blocked — open "View" above, long-press → Select All → Copy.'); }
   document.body.removeChild(ta);
+}
+/* splits text into N roughly-equal chunks on paragraph/line boundaries where possible,
+   so a single copy that's too long for mobile clipboards can be pasted as several messages */
+function splitForCopy(text, chunkSize){
+  chunkSize = chunkSize || 6000;
+  const parts = [];
+  let rest = text;
+  while(rest.length > chunkSize){
+    let cut = rest.lastIndexOf('\n\n', chunkSize);
+    if(cut < chunkSize*0.5) cut = rest.lastIndexOf('\n', chunkSize);
+    if(cut < chunkSize*0.5) cut = chunkSize;
+    parts.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  if(rest) parts.push(rest);
+  return parts;
+}
+function renderCopyParts(wrapId, text, msgElId){
+  const wrap = document.getElementById(wrapId);
+  if(!wrap) return;
+  const parts = splitForCopy(text);
+  const msgEl = msg(msgElId);
+  wrap.innerHTML = parts.map((p,i)=>
+    `<button class="btn ghost small" style="margin:4px 6px 0 0" data-idx="${i}">📋 Copy part ${i+1} of ${parts.length}</button>`
+  ).join('');
+  [...wrap.querySelectorAll('button')].forEach((btn,i)=>{
+    btn.addEventListener('click', ()=> doCopy(parts[i], btn, msgEl, `Part ${i+1} of ${parts.length} copied — paste it now, then come back for the next part.`));
+  });
 }
 
 /* ---------- CSV parse / build ---------- */
