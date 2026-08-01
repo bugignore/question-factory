@@ -251,6 +251,7 @@
   </label>
   <button class="btn green" id="autoSaveBtn" onclick="tryRun(autoSaveToGithub,this)">☁️ Auto-save to GitHub</button>
   <div class="msg" id="sendMsg"></div>
+  <div id="integrityShare" style="margin-top:6px"></div>
   <button class="btn small ghost" id="autoHealBtn" onclick="tryRun(healAndRetrySave,this)" style="display:none;margin-top:6px">🩹 Auto-fix HTML & retry save</button>
 
   <div id="queueWrap" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)">
@@ -409,6 +410,40 @@ function renderCopyParts(wrapId, text, msgElId){
   [...wrap.querySelectorAll('button')].forEach((btn,i)=>{
     btn.addEventListener('click', ()=> doCopy(parts[i], btn, msgEl, `Part ${i+1} of ${parts.length} copied — paste it now, then come back for the next part.`));
   });
+}
+
+/* renders a readonly textarea (mobile "select all" fallback) + Copy + Share
+   buttons into containerId for any block of text that's hard to copy on
+   mobile (validation fix-lists, HTML-integrity error lists, etc) */
+function renderShareBlock(containerId, text, autoSelect){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML = `
+    <textarea id="${containerId}Ta" readonly style="min-height:110px;font-size:12px;font-family:monospace"></textarea>
+    <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+      <button type="button" class="btn small ghost" id="${containerId}CopyBtn">📋 Copy</button>
+      <button type="button" class="btn small ghost" id="${containerId}ShareBtn" style="display:none">📤 Share</button>
+    </div>
+    <div class="msg" id="${containerId}Msg"></div>`;
+  const ta = document.getElementById(containerId+'Ta');
+  ta.value = text;
+  ta.addEventListener('click', ()=>{ ta.focus(); ta.select(); });
+  const m = msg(containerId+'Msg');
+  const copyBtn = document.getElementById(containerId+'CopyBtn');
+  copyBtn.addEventListener('click', ()=>{ ta.focus(); ta.select(); doCopy(text, copyBtn, m, 'Copied.'); });
+  if(navigator.share){
+    const shareBtn = document.getElementById(containerId+'ShareBtn');
+    shareBtn.style.display = '';
+    shareBtn.addEventListener('click', async ()=>{
+      try{ await navigator.share({ text }); }
+      catch(e){ if(e.name !== 'AbortError') show(m,'warn','Share failed — use Copy instead.'); }
+    });
+  }
+  if(autoSelect){ ta.focus(); ta.select(); }
+}
+function clearShareBlock(containerId){
+  const el = document.getElementById(containerId);
+  if(el) el.innerHTML = '';
 }
 
 /* ================= STEP 1 — build prompt ================= */
@@ -882,14 +917,15 @@ async function autoSaveToGithub(btn){
   const healBtn = document.getElementById('autoHealBtn');
   const integrity = vCheckMarkupIntegrity(state.bodyHtml);
   if(!integrity.ok){
-    const list = integrity.issues.map(i=>'• '+i).join('\n');
-    show(m,'bad',`Auto-save blocked — the notes body has broken HTML that would break the published page:\n${list}\n\nTap "Auto-fix HTML" below to try an automatic repair, or go to Step 3 and edit the Notes Body HTML field by hand.`);
+    show(m,'bad','Auto-save blocked — the notes body has broken HTML that would break the published page. Tap "Auto-fix HTML" below to try an automatic repair, or edit the Notes Body HTML field by hand using the list below.');
+    renderShareBlock('integrityShare', integrity.issues.map(i=>'• '+i).join('\n'), true);
     if(healBtn) healBtn.style.display = '';
     cur = 2; render();
     const field = document.getElementById('fBodyHtml');
     if(field){ field.scrollIntoView({behavior:'smooth', block:'center'}); field.focus(); }
     return;
   }
+  clearShareBlock('integrityShare');
   if(healBtn) healBtn.style.display = 'none';
   if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
   const hardPass = !!(state.validation && state.validation.result && state.validation.result.hardPass);
@@ -930,10 +966,11 @@ async function healAndRetrySave(btn){
   if(field) field.value = healed;
   saveDraft();
   if(!recheck.ok){
-    const list = recheck.issues.map(i=>'• '+i).join('\n');
-    show(m,'bad',`Auto-fix couldn't fully repair the markup — it still has:\n${list}\n\nEdit the Notes Body HTML field by hand to fix the rest.`);
+    show(m,'bad',"Auto-fix couldn't fully repair the markup — edit the Notes Body HTML field by hand to fix what's left below.");
+    renderShareBlock('integrityShare', recheck.issues.map(i=>'• '+i).join('\n'), true);
     return;
   }
+  clearShareBlock('integrityShare');
   show(m,'ok','Auto-fix repaired the HTML. Retrying Auto-save…');
   const saveBtn = document.getElementById('autoSaveBtn');
   await autoSaveToGithub(saveBtn);
@@ -1457,11 +1494,11 @@ async function runValidationUI(btn){
   const result = await vValidate(state.seo, state.bodyHtml);
   state.validation = { result, forBodyHtml: state.bodyHtml, forSeo: JSON.stringify(state.seo) };
   saveDraft();
-  renderValidationResults(result);
+  renderValidationResults(result, true);
   show(m, result.hardPass?'ok':'bad', result.hardPass ? 'All hard checks passed — Auto-save unlocked.' : `${result.hardFails.length} hard check(s) failed — fix before publishing.`);
   updatePublishGate();
 }
-function renderValidationResults(result){
+function renderValidationResults(result, autoSelect){
   const wrap = document.getElementById('validateResults');
   if(!wrap) return;
   const row = c => `<div class="copyRow" style="align-items:flex-start">
@@ -1471,7 +1508,18 @@ function renderValidationResults(result){
       <div class="cVal" style="white-space:normal">${c.detail}</div>
     </div>
   </div>`;
-  wrap.innerHTML = result.checks.map(row).join('');
+  const fails = [...result.hardFails, ...result.softWarnings];
+  let html = `<div style="font-weight:600;margin-bottom:8px">${result.hardPass ? '✅ All hard checks passed' : `❌ ${result.hardFails.length} hard check(s) failed`}${result.softWarnings.length ? ` · ⚠️ ${result.softWarnings.length} warning(s)` : ''}</div>`;
+  if(fails.length){
+    html += fails.map(row).join('');
+    html += `<div id="validateFixShare" style="margin-top:8px"></div>`;
+  }
+  html += `<details style="margin-top:10px"><summary>Full report (${result.checks.length} checks, incl. passing)</summary><div style="margin-top:6px">${result.checks.map(row).join('')}</div></details>`;
+  wrap.innerHTML = html;
+  if(fails.length){
+    const text = fails.map(c=>`${c.tier==='hard'?'❌':'⚠️'} ${c.label}: ${c.detail}`).join('\n');
+    renderShareBlock('validateFixShare', text, autoSelect);
+  }
 }
 function updatePublishGate(){
   const gateMsg = document.getElementById('gateMsg');
