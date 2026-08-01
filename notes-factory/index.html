@@ -102,6 +102,17 @@
   .pipeline{margin-top:16px;border:1px solid var(--line);border-radius:var(--radius);padding:16px;background:var(--card);box-shadow:var(--shadow)}
   .pipeline-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
   .pipeline-top b{font-size:13px;font-weight:650}
+  /* floating mini widget: stays visible across steps so the user can start another
+     note while a save is still being tracked, instead of it hogging Step 4 */
+  .pipelineMini{position:fixed;right:14px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:40;width:min(300px,calc(100% - 28px));border:1px solid var(--line);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow);padding:10px 12px 12px}
+  .pipelineMini .pmHead{display:flex;align-items:center;gap:8px;cursor:pointer}
+  .pipelineMini .pmHead b{font-size:12px;font-weight:650;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pipelineMini .pmChevron{transition:transform .2s ease;color:var(--ink-soft);font-size:11px}
+  .pipelineMini.open .pmChevron{transform:rotate(180deg)}
+  .pipelineMini .pmClose{flex:none;border:none;background:none;font-size:15px;line-height:1;color:var(--ink-soft);cursor:pointer;padding:2px 4px;margin-left:2px}
+  .pipelineMini .pipeline-track{margin-top:8px}
+  .pipelineMini .pipeline-steps{margin-top:10px;display:none}
+  .pipelineMini.open .pipeline-steps{display:flex}
   .pipeline-pct{font-size:16px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
   .pipeline-track{height:6px;border-radius:99px;background:var(--line-soft);overflow:hidden}
   .pipeline-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-ink));border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1)}
@@ -263,15 +274,7 @@
     <div id="queueList" style="margin-top:8px"></div>
   </div>
 
-  <div class="pipeline" id="pipelineWrap" style="display:none">
-    <div class="pipeline-top"><b>Pipeline status</b><span class="pipeline-pct" id="pipelinePct">0%</span></div>
-    <div class="pipeline-track"><div class="pipeline-fill" id="pipelineFill"></div></div>
-    <div class="pipeline-steps">
-      <div class="pstep" id="pStepGit"><span class="dot">1</span><span id="pStepGitTxt">Added to GitHub</span></div>
-      <div class="pstep" id="pStepActions"><span class="dot">2</span><span id="pStepActionsTxt">GitHub Actions running</span></div>
-      <div class="pstep" id="pStepWp"><span class="dot">3</span><span id="pStepWpTxt">Published to WordPress (draft)</span></div>
-    </div>
-  </div>
+  <p class="hint" id="pipelineHint" style="display:none">Tracking this save in the small "Pipeline status" panel — you can go back to Step 1 and start another note while it finishes.</p>
 
   <fieldset>
     <legend>All fields — tap 📋 to copy any single one</legend>
@@ -289,6 +292,21 @@
   <button class="btn ghost" onclick="tryRun(resetAll,this)" style="border-color:var(--bad);color:var(--bad)">Start a new note (clear everything)</button>
 </section>
 </main>
+
+<div class="pipelineMini" id="pipelineWrap" style="display:none">
+  <div class="pmHead" onclick="togglePipelineMini()">
+    <b id="pipelineMiniLabel">Pipeline status</b>
+    <span class="pipeline-pct" id="pipelinePct">0%</span>
+    <span class="pmChevron">▲</span>
+    <button type="button" class="pmClose" onclick="event.stopPropagation(); closePipelineMini()" title="Hide">✕</button>
+  </div>
+  <div class="pipeline-track"><div class="pipeline-fill" id="pipelineFill"></div></div>
+  <div class="pipeline-steps">
+    <div class="pstep" id="pStepGit"><span class="dot">1</span><span id="pStepGitTxt">Added to GitHub</span></div>
+    <div class="pstep" id="pStepActions"><span class="dot">2</span><span id="pStepActionsTxt">GitHub Actions running</span></div>
+    <div class="pstep" id="pStepWp"><span class="dot">3</span><span id="pStepWpTxt">Published to WordPress (draft)</span></div>
+  </div>
+</div>
 
 <nav class="bot">
   <button id="backBtn" onclick="nav(-1)">← Back</button>
@@ -1098,9 +1116,26 @@ async function ghApi(token, path){
 }
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
+function togglePipelineMini(){
+  document.getElementById('pipelineWrap').classList.toggle('open');
+}
+function closePipelineMini(){
+  document.getElementById('pipelineWrap').style.display = 'none';
+}
+
+/* runs standalone from a small floating widget (outside the step sections) so
+   it keeps tracking in the background while the user goes back to Step 1 and
+   works on another note — takes its own slug snapshot rather than reading
+   live state, since state.seo.slug may belong to a different note by the
+   time this finishes */
 async function trackPipeline(token, sha){
+  const slug = state.seo.slug;
   const wrap = document.getElementById('pipelineWrap');
   wrap.style.display = '';
+  wrap.classList.remove('open');
+  document.getElementById('pipelineMiniLabel').textContent = 'Publishing: ' + slug;
+  const hint = document.getElementById('pipelineHint');
+  if(hint) hint.style.display = '';
   setPipelinePct(33);
   setStepState('pStepGit','done','Added to GitHub');
   setStepState('pStepActions','wait','GitHub Actions running…');
@@ -1155,7 +1190,7 @@ async function trackPipeline(token, sha){
   // best-effort: fetch published-notes/<slug>.json for the direct draft link
   let link = '';
   try{
-    const meta = await ghApi(token, `/contents/published-notes/${state.seo.slug}.json?ref=main`);
+    const meta = await ghApi(token, `/contents/published-notes/${slug}.json?ref=main`);
     const parsed = JSON.parse(atob(meta.content.replace(/\n/g,'')));
     link = parsed.wordpress && parsed.wordpress.link;
   }catch(e){ /* the link is a nice-to-have, not worth failing the step over */ }
