@@ -324,16 +324,19 @@ function fallbackCopy(text,done,msgEl){
   catch(e){ show(msgEl,'warn','Auto-copy blocked — open "View" above, long-press → Select All → Copy.'); }
   document.body.removeChild(ta);
 }
-/* splits text into N roughly-equal chunks on paragraph/line boundaries where possible,
-   so a single copy that's too long for mobile clipboards can be pasted as several messages */
-function splitForCopy(text, chunkSize){
-  chunkSize = chunkSize || 6000;
+/* splits text into at most maxParts roughly-equal chunks on paragraph/line
+   boundaries where possible, so a copy that's too long for mobile clipboards
+   can be pasted as a few separate messages instead of one */
+function splitForCopy(text, maxParts){
+  maxParts = maxParts || 3;
+  if(!text) return [];
+  const targetSize = Math.ceil(text.length / maxParts);
   const parts = [];
   let rest = text;
-  while(rest.length > chunkSize){
-    let cut = rest.lastIndexOf('\n\n', chunkSize);
-    if(cut < chunkSize*0.5) cut = rest.lastIndexOf('\n', chunkSize);
-    if(cut < chunkSize*0.5) cut = chunkSize;
+  while(parts.length < maxParts - 1 && rest.length > targetSize){
+    let cut = rest.lastIndexOf('\n\n', targetSize);
+    if(cut < targetSize*0.5) cut = rest.lastIndexOf('\n', targetSize);
+    if(cut < targetSize*0.5) cut = targetSize;
     parts.push(rest.slice(0, cut));
     rest = rest.slice(cut);
   }
