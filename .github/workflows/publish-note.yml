@@ -73,23 +73,31 @@ jobs:
 
           # Look up a term by exact name in a taxonomy; create it if missing.
           # Prints the term ID on success, prints nothing (just a ::warning::) on failure.
+          # Never propagates a hard failure (network hiccup, non-2xx, unparseable
+          # response) up via set -e/pipefail — a term-assignment miss must degrade
+          # to a warning for this one term, not abort the whole publish run.
           resolve_term_id(){
             local tax="$1" name="$2" enc id http
             enc="$(jq -rn --arg n "$name" '$n|@uri')"
-            id="$(curl -sS "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}?search=${enc}&per_page=100" \
-                    -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-                  | jq -r --arg n "$name" '[.[] | select(.name==$n)] | .[0].id // empty')"
-            if [ -n "$id" ]; then echo "$id"; return; fi
+            http="$(curl -sS -o /tmp/term-search.json -w "%{http_code}" \
+                      "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}?search=${enc}&per_page=100" \
+                      -u "$WP_USERNAME:$WP_APP_PASSWORD" || echo "000")"
+            id=""
+            if [ "$http" = "200" ]; then
+              id="$(jq -r --arg n "$name" '[.[] | select(.name==$n)] | .[0].id // empty' /tmp/term-search.json 2>/dev/null || true)"
+            fi
+            if [ -n "$id" ]; then echo "$id"; return 0; fi
             http="$(curl -sS -o /tmp/term-resp.json -w "%{http_code}" \
                       -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}" \
                       -H "Content-Type: application/json" \
                       -u "$WP_USERNAME:$WP_APP_PASSWORD" \
                       --data-binary "$(jq -n --arg n "$name" '{name:$n}')" || echo "000")"
             if [ "$http" = "201" ]; then
-              jq -r '.id' /tmp/term-resp.json
+              jq -r '.id' /tmp/term-resp.json 2>/dev/null || true
             else
               echo "::warning::Could not find or create $tax term \"$name\" (HTTP $http) — skipping this term assignment." >&2
             fi
+            return 0
           }
 
           shopt -s nullglob
@@ -184,11 +192,20 @@ jobs:
               | if ($exam|length) > 0 then .exam = $exam else . end
               | if ($subj|length) > 0 then .subject = $subj else . end' "$f")"
 
-            http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
-              -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/free_notes" \
-              -H "Content-Type: application/json" \
-              -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-              --data-binary "$payload" || echo "000")"
+            # HTTP 000 means curl couldn't connect at all (transient network/hosting
+            # blip, not a WordPress-side rejection) — worth a couple of retries
+            # before giving up, since these have recurred and cost a whole draft.
+            http_code="000"
+            for attempt in 1 2 3; do
+              http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+                -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/free_notes" \
+                -H "Content-Type: application/json" \
+                -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                --data-binary "$payload" || echo "000")"
+              [ "$http_code" != "000" ] && break
+              echo "::warning::$slug — connection attempt $attempt to WordPress failed, retrying…"
+              sleep 5
+            done
 
             # If WP rejects the meta keys (Rank Math REST snippet not installed yet),
             # retry once without meta so the draft is never lost — with a loud warning.
