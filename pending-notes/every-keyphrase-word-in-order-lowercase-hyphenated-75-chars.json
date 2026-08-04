@@ -1,0 +1,19 @@
+{
+  "topic": "Natural Resources & Environment (प्राकृतिक संसाधन एवं पर्यावरण)",
+  "examType": "CTET Paper I / CTET Paper II",
+  "subject": "EVS",
+  "targetYear": 2026,
+  "hindiPercent": 95,
+  "seo": {
+    "focusKeyword": "[exact keyphrase]",
+    "seoTitle": "[per formula above; keyphrase FIRST; ≤60 chars]",
+    "slug": "every-keyphrase-word-in-order-lowercase-hyphenated-75-chars",
+    "metaDescription": "[150–155 chars, keyphrase once, honest]",
+    "h1": "[keyphrase FIRST] — [Hindi sub-line after]",
+    "imageAltText": "| mandatory <img> alt STARTS with exact keyphrase; ≥2 SVG aria-labels contain it |",
+    "imagePrompt": ""
+  },
+  "bodyHtml": "[entire notes body HTML]",
+  "publisherNotes": "=== PUBLISHER NOTES ===\n- Seed: [N] — lede [_], headline formula [# + why honest], ad positions [section names], FAQ position [_], deep-blocks [_,_]\n- Sources consulted: [list]\n- Claims softened/omitted: [list — empty is suspicious, re-check]\n- Question labels: [N] verified PYQ + [N] practice-pattern\n- Visuals generated: [list]\n- URLs needing manual verification: [list]\n- Body word count (prose only): [N — from COUNT-BEFORE-PRINT]\n- Keyphrase count / density: [M occurrences / N words = X.X%]",
+  "createdAt": "2026-08-04T09:33:41.217Z"
+}
