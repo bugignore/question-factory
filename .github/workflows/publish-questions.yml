@@ -97,10 +97,11 @@ jobs:
                 continue
               fi
 
+              errors_json="$(jq -c '.errors // []' /tmp/wp-response.json)"
               jq -n --argjson imported "$imported" --argjson skipped "$skipped" \
-                    --slurpfile errors <(jq -c '.errors // []' /tmp/wp-response.json) \
+                    --argjson errors "$errors_json" \
                     --arg at "$(date -u +%FT%TZ)" \
-                    '{imported: $imported, skipped: $skipped, errors: $errors[0], importedAt: $at, status: "draft"}' \
+                    '{imported: $imported, skipped: $skipped, errors: $errors, importedAt: $at, status: "draft"}' \
                     > "published-questions/$slug.result.json"
               mv "$f" "published-questions/$slug.csv"
               git add "published-questions/$slug.csv" "published-questions/$slug.result.json"
