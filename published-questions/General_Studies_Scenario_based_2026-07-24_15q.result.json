@@ -1,0 +1,13 @@
+{
+  "imported": 10,
+  "skipped": 5,
+  "errors": [
+    "Row 2: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 8: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 10: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 11: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 15: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout."
+  ],
+  "importedAt": "2026-08-16T12:11:43Z",
+  "status": "draft"
+}

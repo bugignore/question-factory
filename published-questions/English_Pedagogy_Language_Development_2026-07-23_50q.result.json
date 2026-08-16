@@ -1,0 +1,21 @@
+{
+  "imported": 37,
+  "skipped": 13,
+  "errors": [
+    "Row 2: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 5: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 10: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 17: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 20: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 27: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 28: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 31: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 34: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 36: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 37: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 43: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout.",
+    "Row 48: 'correct' value 0 is out of range (must be 1, 2, 3, or 4) — check whether this CSV is 0-indexed throughout."
+  ],
+  "importedAt": "2026-08-16T12:11:41Z",
+  "status": "draft"
+}
