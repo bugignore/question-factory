@@ -36,8 +36,11 @@ jobs:
           # (Administrator), while the notes workflow only needs publish_posts
           # (Author, the "Automated Publisher" account). Reusing the Author
           # credentials here always fails with quiz_import_unauthorized (401)
-          # since that account lacks manage_options — each workflow gets
-          # exactly the privilege level its endpoint actually requires.
+          # since that account lacks manage_options. Keeping them separate also
+          # avoids a second side effect: the notes endpoint attributes each
+          # post to whichever account authenticates the request (no explicit
+          # author param is sent), so sharing one admin credential here would
+          # silently change the "Automated Publisher" byline on every future note.
           WP_USERNAME: ${{ secrets.QUIZ_WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.QUIZ_WP_APP_PASSWORD }}
           QUIZ_IMPORT_SECRET: ${{ secrets.QUIZ_IMPORT_SECRET }}
