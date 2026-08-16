@@ -79,7 +79,7 @@ jobs:
               -H "Content-Type: application/json" \
               -H "X-Quiz-Import-Secret: $QUIZ_IMPORT_SECRET" \
               -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-              --data-binary "{\"csv\": $csv_json}" || echo "000")
+              --data-binary "{\"csv\": $csv_json}" || echo "000")"
 
             imported="$(jq -r '.imported // 0' /tmp/wp-response.json 2>/dev/null || echo 0)"
             skipped="$(jq -r '.skipped // 0' /tmp/wp-response.json 2>/dev/null || echo 0)"
