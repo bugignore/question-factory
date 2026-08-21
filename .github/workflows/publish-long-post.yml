@@ -71,6 +71,33 @@ jobs:
           # "Auto-detect" is intentionally unmapped — the app never resolves what
           # subject it auto-detected to, so there's nothing reliable to assign.
 
+          # Long Post Factory's exam field is free text (e.g. "BPSC TRE 4.0",
+          # "Bihar TRE 3.0", "UP TGT") rather than the fixed checkbox list Notes
+          # Factory uses, so an exact-match lookup in EXAM_TERM_MAP silently
+          # drops any exam not typed exactly as one of the keys above — this
+          # normalizes by substring family match instead, falling back to the
+          # raw label itself (resolve_term_id auto-creates a WP term if it
+          # doesn't exist yet, so an unrecognized exam name still gets a real
+          # taxonomy term rather than being left unassigned).
+          map_exam_label(){
+            local label="$1" lc
+            lc="$(echo "$label" | tr '[:upper:]' '[:lower:]')"
+            case "$lc" in
+              *ctet*) echo "CTET" ;;
+              *bpsc*tre*|*bihar*tre*) echo "BPSC TRE" ;;
+              *dsssb*tgt*) echo "DSSSB TGT" ;;
+              *dsssb*prt*|*dsssb*) echo "DSSSB PRT" ;;
+              *uptet*) echo "UPTET" ;;
+              *up*tgt*) echo "UP TGT" ;;
+              *kvs*) echo "KVS" ;;
+              *nvs*) echo "NVS" ;;
+              *pgt*) echo "PGT" ;;
+              *tgt*) echo "TGT" ;;
+              *prt*) echo "PRT" ;;
+              *) echo "$label" ;;
+            esac
+          }
+
           # Look up a term by exact name in a taxonomy; create it if missing.
           # Prints the term ID on success, prints nothing (just a ::warning::) on failure.
           # Never propagates a hard failure (network hiccup, non-2xx, unparseable
@@ -142,11 +169,7 @@ jobs:
               for raw_label in "${exam_labels[@]}"; do
                 label="$(echo "$raw_label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
                 [ -z "$label" ] && continue
-                mapped="${EXAM_TERM_MAP[$label]:-}"
-                if [ -z "$mapped" ]; then
-                  echo "::warning::$slug — no exam-taxonomy mapping for \"$label\", leaving unassigned."
-                  continue
-                fi
+                mapped="${EXAM_TERM_MAP[$label]:-$(map_exam_label "$label")}"
                 tid="$(resolve_term_id exam "$mapped")"
                 [ -n "$tid" ] && exam_ids+=("$tid")
               done
