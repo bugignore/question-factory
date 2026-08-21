@@ -1,0 +1,1949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Long Post Factory</title>
+<style>
+  :root{
+    --paper:#F7F7F9; --card:#FFFFFF; --card-2:#FBFBFD; --ink:#15161A; --ink-soft:#6B6E76;
+    --line:#E7E7EC; --line-soft:#F0F0F3;
+    --accent:#4B4CE8; --accent-ink:#3937C4; --accent-bg:#EEEEFD;
+    --ok:#0E9F6E; --ok-bg:#E7F9F1;
+    --bad:#E1483B; --bad-bg:#FDECEA;
+    --warn:#B5790A; --warn-bg:#FFF4DF;
+    --shadow:0 1px 2px rgba(15,15,20,.04), 0 8px 24px -12px rgba(15,15,20,.10);
+    --radius:16px; --radius-sm:11px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#0B0C0F; --card:#16171C; --card-2:#1B1C22; --ink:#F2F2F5; --ink-soft:#93959E;
+      --line:#26272E; --line-soft:#1E1F25;
+      --accent:#7677F4; --accent-ink:#9A9BFF; --accent-bg:#1E1E3A;
+      --ok:#33C288; --ok-bg:#0F2A20;
+      --bad:#FF6B5E; --bad-bg:#2E1613;
+      --warn:#E3A733; --warn-bg:#2C2107;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.5;display:flex;flex-direction:column;letter-spacing:-0.01em}
+  .top{padding:16px 18px 14px;background:color-mix(in srgb, var(--paper) 88%, transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--line-soft)}
+  .top h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  .rail{display:flex;gap:5px;margin-top:12px}
+  .rail span{flex:1;height:4px;border-radius:99px;background:var(--line);transition:background .3s ease}
+  .rail span.on{background:var(--accent)}
+  .rail span.done{background:var(--ok)}
+  main{flex:1;overflow-y:auto;padding:18px;padding-bottom:96px;max-width:640px;width:100%;margin:0 auto}
+  .step{display:none}
+  .step.show{display:block;animation:f .25s ease}
+  @keyframes f{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  h2{font-size:19px;margin:0 0 4px;font-weight:700;letter-spacing:-0.02em}
+  .hint{color:var(--ink-soft);font-size:13px;margin:0 0 18px;line-height:1.55}
+  label{display:block;font-weight:600;font-size:12.5px;margin:16px 0 6px;color:var(--ink-soft);letter-spacing:.01em}
+  input[type=text],input[type=number],input[type=password],textarea,select{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);font:inherit;color:var(--ink);background:var(--card);font-size:15px;transition:border-color .15s ease, box-shadow .15s ease}
+  textarea{min-height:110px;resize:vertical;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn{display:flex;width:100%;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:var(--radius-sm);border:1px solid transparent;background:var(--accent);color:#fff;font:inherit;font-weight:650;font-size:14.5px;cursor:pointer;margin-top:12px;transition:transform .1s ease, opacity .15s ease, background .15s ease}
+  .btn:active{transform:scale(.98)}
+  .btn:hover{background:var(--accent-ink)}
+  .btn.ghost{background:var(--card);color:var(--accent);border-color:var(--line)}
+  .btn.ghost:hover{background:var(--accent-bg)}
+  .btn.green{background:var(--ok)}
+  .btn.green:hover{filter:brightness(.95)}
+  .btn.small{width:auto;display:inline-flex;padding:9px 14px;font-size:13px;margin-top:8px}
+  .btn:disabled{opacity:.4;cursor:default;transform:none}
+  .msg{border-radius:var(--radius-sm);padding:11px 13px;font-size:13px;margin-top:10px;display:none;line-height:1.5;white-space:pre-wrap}
+  .msg.show{display:block;animation:f .2s ease}
+  .msg.ok{background:var(--ok-bg);color:var(--ok)}
+  .msg.bad{background:var(--bad-bg);color:var(--bad)}
+  .msg.warn{background:var(--warn-bg);color:var(--warn)}
+  .stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .stat{background:var(--card-2);border:1px solid var(--line-soft);border-radius:var(--radius-sm);padding:8px 12px;font-size:11px;color:var(--ink-soft)}
+  .stat b{font-size:16px;display:block;color:var(--ink);font-weight:700}
+  details{margin-top:10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--card)}
+  summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--accent);padding:11px 13px;list-style-position:inside}
+  details>div{padding:0 13px 13px}
+  .issues{font-size:12px;color:var(--warn);margin-top:8px;max-height:160px;overflow-y:auto;background:var(--warn-bg);border-radius:var(--radius-sm);padding:9px 11px;display:none}
+  .issues.show{display:block}
+  .issues div{margin:3px 0}
+  nav.bot{position:fixed;bottom:0;left:0;right:0;background:color-mix(in srgb, var(--paper) 90%, transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line-soft);display:flex;gap:10px;padding:12px 18px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+  nav.bot button{flex:1;padding:13px;border-radius:var(--radius-sm);font:inherit;font-weight:650;font-size:14.5px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);transition:transform .1s ease}
+  nav.bot button:active{transform:scale(.98)}
+  nav.bot button#nextBtn{background:var(--ink);color:var(--paper);border-color:var(--ink);flex:2}
+  nav.bot button:disabled{opacity:.35}
+  .chip{display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:11.5px;margin:2px 2px 0 0}
+  .previewFrame{width:100%;height:360px;border:1px solid var(--line);border-radius:var(--radius-sm);background:#fff}
+  .noteRow{display:flex;gap:8px;align-items:center;margin:4px 0}
+  .noteRow input[type=checkbox]{width:auto}
+  .copyRow{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line-soft)}
+  .copyRow:last-child{border-bottom:none}
+  .copyRow .cLabel{font-weight:600;font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em}
+  .copyRow .cVal{font-size:13px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;color:var(--ink);margin-top:2px;cursor:pointer;border-radius:6px;transition:background .1s ease}
+  .copyRow .cVal:empty::before{content:"— empty —";color:var(--ink-soft);font-style:italic;cursor:default}
+  .copyRow .cVal:not(:empty):hover,.copyRow .cVal:not(:empty):active{background:var(--card-2)}
+  .copyRow button{flex:none;width:auto;margin:0;padding:8px 12px;font-size:13px}
+  details.fieldRow{margin-top:8px}
+  details.fieldRow summary{display:flex;align-items:center;gap:8px}
+  details.fieldRow summary .fLabel{flex:1;min-width:0}
+  details.fieldRow>input,details.fieldRow>textarea{margin:0 13px 13px;width:calc(100% - 26px)}
+  .miniCopy{flex:none;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 10px;font-size:14px;cursor:pointer;line-height:1}
+  fieldset{border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 13px;margin-top:10px}
+  fieldset legend{font-size:12px;font-weight:600;color:var(--ink-soft);padding:0 5px}
+  .privacyNote{background:var(--card-2);border-radius:var(--radius-sm);padding:11px 13px;font-size:12px;color:var(--ink-soft);margin-top:10px}
+  .fieldErr{border-color:var(--bad) !important;box-shadow:0 0 0 3px var(--bad-bg) !important}
+  /* mobile is the primary target: collapse side-by-side fields on narrow phones */
+  @media (max-width:420px){
+    .row2{grid-template-columns:1fr}
+    .previewFrame{height:300px}
+  }
+  .pipeline{margin-top:16px;border:1px solid var(--line);border-radius:var(--radius);padding:16px;background:var(--card);box-shadow:var(--shadow)}
+  .pipeline-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .pipeline-top b{font-size:13px;font-weight:650}
+  /* floating mini widget: stays visible across steps so the user can start another
+     note while a save is still being tracked, instead of it hogging Step 4 */
+  .pipelineMini{position:fixed;right:14px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:40;width:min(300px,calc(100% - 28px));border:1px solid var(--line);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow);padding:10px 12px 12px}
+  .pipelineMini .pmHead{display:flex;align-items:center;gap:8px;cursor:pointer}
+  .pipelineMini .pmHead b{font-size:12px;font-weight:650;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pipelineMini .pmChevron{transition:transform .2s ease;color:var(--ink-soft);font-size:11px}
+  .pipelineMini.open .pmChevron{transform:rotate(180deg)}
+  .pipelineMini .pmClose{flex:none;border:none;background:none;font-size:15px;line-height:1;color:var(--ink-soft);cursor:pointer;padding:2px 4px;margin-left:2px}
+  .pipelineMini .pipeline-track{margin-top:8px}
+  .pipelineMini .pipeline-steps{margin-top:10px;display:none}
+  .pipelineMini.open .pipeline-steps{display:flex}
+  .pipeline-pct{font-size:16px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+  .pipeline-track{height:6px;border-radius:99px;background:var(--line-soft);overflow:hidden}
+  .pipeline-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-ink));border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+  .pipeline-fill.done{background:var(--ok)}
+  .pipeline-fill.bad{background:var(--bad)}
+  .pipeline-steps{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+  .pstep{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-soft)}
+  .pstep .dot{width:20px;height:20px;flex:none;border-radius:99px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;background:var(--card);transition:all .2s ease}
+  .pstep.wait .dot{animation:pulse 1.2s infinite ease-in-out;border-color:var(--accent);color:var(--accent)}
+  .pstep.done{color:var(--ink);font-weight:500}
+  .pstep.done .dot{background:var(--ok);border-color:var(--ok);color:#fff}
+  .pstep.bad .dot{background:var(--bad);border-color:var(--bad);color:#fff}
+  .pstep a{color:var(--accent);font-weight:600;text-decoration:none}
+  .pstep a:hover{text-decoration:underline}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2A4D9B">
+</head>
+<body>
+<div class="top">
+  <h1>📖 Long Post Factory</h1>
+  <div class="rail"><span id="r0" class="on"></span><span id="r1"></span><span id="r2"></span><span id="r3"></span></div>
+</div>
+
+<main>
+<!-- STEP 1 -->
+<section class="step show" id="step0">
+  <h2>1 · Build &amp; copy the prompt</h2>
+  <p class="hint">Builds a prompt entirely on this page — no master-prompt file is loaded, which keeps the prompt short. It casts the AI as a veteran exam-faculty teacher for whichever exam you type (built-in personas for CTET / BPSC TRE / DSSSB TGT &amp; PRT / UPTET / UP TGT / KVS / NVS / PGT / PRT — any other exam name still works, using a generic-but-real persona built from the name), and demands a full 6,000–8,000 words every run — a hard gate in the prompt, not a suggestion. The AI writes plain content inside <code>{* type: title *} ... {* END *}</code> blocks instead of hand-written styled HTML — far fewer output tokens, so it's less likely to run out mid-article. On mobile, expect the AI's reply to land in several messages given the length — that's normal, see Step 2.</p>
+
+  <label>Topic (type any topic — suggestions shown from the CDP list, but any subject's topic is fine)</label>
+  <input type="text" id="topic" list="topicSuggestions" placeholder="e.g. Photosynthesis, Mughal Empire, Growth & Development..." oninput="this.classList.remove('fieldErr')">
+  <datalist id="topicSuggestions"></datalist>
+
+  <label>Exam (type any exam — suggestions shown, but any exam name works)</label>
+  <input type="text" id="examType" list="examSuggestions" placeholder="e.g. CTET Paper I, BPSC TRE 4.0, DSSSB TGT, UP TGT, KVS PGT..." oninput="this.classList.remove('fieldErr')">
+  <datalist id="examSuggestions"></datalist>
+
+  <label>Subject</label>
+  <select id="subject">
+    <option>Auto-detect</option>
+    <option>CDP</option>
+    <option>Geography</option>
+    <option>History</option>
+    <option>Science</option>
+    <option>Maths</option>
+    <option>Hindi</option>
+    <option>English</option>
+    <option>EVS</option>
+  </select>
+
+  <label>Hindi / English mix — <span id="langMixLabel">Hindi 70% + English 30%</span></label>
+  <input type="range" id="hindiPercent" min="0" max="100" step="5" value="70" oninput="updateLangMixLabel()">
+  <p class="hint" style="margin-top:2px">Key terms, definitions, and technical labels always stay in English regardless of this split — this only controls the explanations/tricks/teacher-talk prose.</p>
+
+  <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build prompt</button>
+  <button class="btn ghost" onclick="tryRun(copyWholePrompt,this)">🖥️ Copy whole prompt (PC only)</button>
+  <div class="msg" id="pMsg"></div>
+  <textarea id="promptOut" style="display:none"></textarea>
+  <div class="stats" id="pStats"></div>
+
+  <details id="partsWrap"><summary>📱 Copy the prompt in parts (opens automatically after building — use this on mobile)</summary><div>
+    <p class="hint" style="margin-top:8px">Mobile keyboards (Gboard/Samsung/SwiftKey clipboard) and mobile browsers silently truncate a single copy past roughly 8,000–10,000 characters, so the prompt is split into only as many parts as it actually needs to stay under that per-part. Tap "Build prompt" above first, then use these buttons <b>in order</b> — paste each one as its own message in the SAME chat before sending the next. Tell the AI to wait until you say "generation config: go" if it starts replying early. On a PC, skip this and use "Copy whole prompt" instead.</p>
+    <div id="partsButtons"></div>
+  </div></details>
+
+  <details style="margin-top:16px"><summary>🔍 Audit already-published notes (retroactive scorecard)</summary><div>
+    <p class="hint" style="margin-top:8px">Runs every file already in <code>published-long-posts/</code> + <code>pending-long-posts/</code> through the same validator used in Step 3 — no generation involved, read-only, never modifies anything.</p>
+    <button class="btn ghost small" onclick="tryRun(runBacklogAudit,this)">▶ Run backlog scorecard</button>
+    <div class="msg" id="backlogMsg"></div>
+    <div id="backlogResults" style="margin-top:10px"></div>
+  </div></details>
+</section>
+
+<!-- STEP 2 -->
+<section class="step" id="step1">
+  <h2>2 · Paste the AI's reply</h2>
+  <p class="hint">Paste the whole reply from DeepSeek/ChatGPT/Claude. The parser reads the machine-readable markers first, and falls back to reading the visible SEO panel + HTML if a model ignored them — nothing is ever a dead end. This prompt asks for 6,000–8,000 words every time, so on a phone the AI app itself will very likely split its answer across several messages — that's expected, not an error. Paste each chunk here as it arrives, tick "This is a continuation," and tap Parse again after every chunk; the last chunk should end with the <code>&lt;&lt;&lt;END_PUBLISHER_NOTES&gt;&gt;&gt;</code> marker.</p>
+  <textarea id="rawIn" style="min-height:220px" placeholder="Paste the full AI reply here…"></textarea>
+  <label style="font-weight:500"><input type="checkbox" id="appendMode" style="width:auto;margin-right:6px">This is a continuation — add it to what I already pasted (AI stopped midway)</label>
+  <button class="btn" onclick="tryRun(parseAndGo,this)">🔎 Parse</button>
+  <button class="btn ghost" onclick="tryRun(copyContinue,this)">📋 Copy "continue" prompt (AI stopped midway)</button>
+  <div class="msg" id="parseMsg"></div>
+  <div class="issues" id="parseIssues"></div>
+</section>
+
+<!-- STEP 3 -->
+<section class="step" id="step2">
+  <h2>3 · Review &amp; edit</h2>
+  <p class="hint">Fix anything the parser missed before handing it off. This is what actually gets published.</p>
+
+  <div class="msg" id="reviewMsg"></div>
+
+  <details class="fieldRow"><summary><span class="fLabel">Focus Keyword</span><button class="miniCopy" onclick="copyReviewField(event,'fFocusKeyword','Focus Keyword')">📋</button></summary>
+    <input type="text" id="fFocusKeyword"></details>
+  <details class="fieldRow"><summary><span class="fLabel">SEO Title</span><button class="miniCopy" onclick="copyReviewField(event,'fSeoTitle','SEO Title')">📋</button></summary>
+    <input type="text" id="fSeoTitle"></details>
+  <details class="fieldRow"><summary><span class="fLabel">URL Slug</span><button class="miniCopy" onclick="copyReviewField(event,'fSlug','URL Slug')">📋</button></summary>
+    <input type="text" id="fSlug"></details>
+  <details class="fieldRow"><summary><span class="fLabel">Meta Description</span><button class="miniCopy" onclick="copyReviewField(event,'fMetaDescription','Meta Description')">📋</button></summary>
+    <textarea id="fMetaDescription" style="min-height:70px;font-family:inherit;font-size:14px"></textarea></details>
+  <details class="fieldRow"><summary><span class="fLabel">H1</span><button class="miniCopy" onclick="copyReviewField(event,'fH1','H1')">📋</button></summary>
+    <input type="text" id="fH1"></details>
+  <details class="fieldRow"><summary><span class="fLabel">Featured Image — ALT Text</span><button class="miniCopy" onclick="copyReviewField(event,'fImageAltText','Image ALT Text')">📋</button></summary>
+    <input type="text" id="fImageAltText"></details>
+  <details class="fieldRow"><summary><span class="fLabel">Featured Image — Generation Prompt</span><button class="miniCopy" onclick="copyReviewField(event,'fImagePrompt','Image Generation Prompt')">📋</button></summary>
+    <textarea id="fImagePrompt" style="min-height:70px;font-family:inherit;font-size:14px"></textarea></details>
+
+  <details class="fieldRow"><summary><span class="fLabel">Notes body HTML — <span id="bodyWords">0</span> words</span><button class="miniCopy" onclick="copyReviewField(event,'fBodyHtml','Notes body HTML')">📋</button></summary>
+    <textarea id="fBodyHtml" style="min-height:220px" oninput="updatePreview()"></textarea></details>
+
+  <details class="fieldRow"><summary><span class="fLabel">Publisher-only notes (SEO linking recs + mnemonics archive)</span><button class="miniCopy" onclick="copyReviewField(event,'fPublisherNotes','Publisher notes')">📋</button></summary>
+    <textarea id="fPublisherNotes" style="min-height:160px"></textarea></details>
+
+  <label>Preview (how the notes body will render)</label>
+  <iframe class="previewFrame" id="previewFrame" sandbox=""></iframe>
+
+  <fieldset style="margin-top:16px">
+    <legend>🛡️ Rank Math validation gate</legend>
+    <p class="hint" style="margin-top:0">Re-parses the actual HTML and re-derives every number — word count, density, images, links, structure — independent of anything the AI claimed. Auto-save requires this to run at least once; if hard checks fail, you'll be asked to confirm before publishing anyway.</p>
+    <button class="btn" onclick="tryRun(runValidationUI,this)">🔎 Run validation</button>
+    <div class="msg" id="validateMsg"></div>
+    <div id="validateResults"></div>
+  </fieldset>
+</section>
+
+<!-- STEP 4 -->
+<section class="step" id="step3">
+  <h2>4 · Save to GitHub</h2>
+  <p class="hint">Auto-save pushes the post straight into <code>pending-long-posts/</code> — GitHub Actions takes it from there and publishes it to WordPress as a draft.</p>
+
+  <fieldset id="ghLockBox">
+    <legend>Unlock saving (once per browser)</legend>
+    <label>App Password</label>
+    <input type="password" id="ghAppPassword" placeholder="Ask for the app password" autocomplete="off">
+    <button class="btn small" onclick="tryRun(unlockGithub,this)">🔓 Unlock</button>
+    <div class="msg" id="unlockMsg"></div>
+  </fieldset>
+
+  <div class="msg warn" id="gateMsg" style="display:none;margin-bottom:8px"></div>
+  <label id="overrideWrap" style="display:none;font-weight:500;margin-bottom:8px">
+    <input type="checkbox" id="overrideCheck" style="width:auto;margin-right:6px" onchange="updatePublishGate()">
+    I've seen the validation warnings above and want to post anyway
+  </label>
+  <button class="btn green" id="autoSaveBtn" onclick="tryRun(autoSaveToGithub,this)">☁️ Auto-save to GitHub</button>
+  <div class="msg" id="sendMsg"></div>
+  <div id="integrityShare" style="margin-top:6px"></div>
+  <button class="btn small ghost" id="autoHealBtn" onclick="tryRun(healAndRetrySave,this)" style="display:none;margin-top:6px">🩹 Auto-fix HTML & retry save</button>
+
+  <div id="queueWrap" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)">
+    <p class="hint" style="margin-top:0">Two people posting together, or several notes ready at once? Queue this note instead of saving it right away, then push the whole batch to GitHub in one go.</p>
+    <button class="btn ghost" id="queueAddBtn" onclick="tryRun(addToQueue,this)">➕ Add this note to the batch queue</button>
+    <button class="btn green" id="queuePostBtn" onclick="tryRun(postQueue,this)" style="display:none;margin-left:8px">🚀 Post all queued notes (<span id="queueCount">0</span>)</button>
+    <div class="msg" id="queueMsg"></div>
+    <div id="queueList" style="margin-top:8px"></div>
+  </div>
+
+  <p class="hint" id="pipelineHint" style="display:none">Tracking this save in the small "Pipeline status" panel — you can go back to Step 1 and start another note while it finishes.</p>
+
+  <fieldset>
+    <legend>All fields — tap 📋 to copy any single one</legend>
+    <div id="copyFieldRows"></div>
+    <button class="btn small ghost" onclick="tryRun(copyBodyHtml,this)">📋 Copy notes body HTML</button>
+    <button class="btn small ghost" onclick="tryRun(copySeoFields,this)">📋 Copy all SEO fields (bulk, for pasting into Rank Math)</button>
+  </fieldset>
+
+  <details><summary>Fallback: manual download + GitHub upload page</summary><div>
+    <button class="btn small ghost" onclick="tryRun(downloadBundle,this)">⬇ Download note file (<span id="dlSlug">note</span>.json)</button>
+    <button class="btn small ghost" onclick="tryRun(openGithubUpload,this)">🚀 Open GitHub upload page</button>
+    <div class="privacyNote">Drop the downloaded file into <code>pending-long-posts/</code> on that page and commit.</div>
+  </div></details>
+
+  <button class="btn ghost" onclick="tryRun(resetAll,this)" style="border-color:var(--bad);color:var(--bad)">Start a new note (clear everything)</button>
+</section>
+</main>
+
+<div class="pipelineMini" id="pipelineWrap" style="display:none">
+  <div class="pmHead" onclick="togglePipelineMini()">
+    <b id="pipelineMiniLabel">Pipeline status</b>
+    <span class="pipeline-pct" id="pipelinePct">0%</span>
+    <span class="pmChevron">▲</span>
+    <button type="button" class="pmClose" onclick="event.stopPropagation(); closePipelineMini()" title="Hide">✕</button>
+  </div>
+  <div class="pipeline-track"><div class="pipeline-fill" id="pipelineFill"></div></div>
+  <div class="pipeline-steps">
+    <div class="pstep" id="pStepGit"><span class="dot">1</span><span id="pStepGitTxt">Added to GitHub</span></div>
+    <div class="pstep" id="pStepActions"><span class="dot">2</span><span id="pStepActionsTxt">GitHub Actions running</span></div>
+    <div class="pstep" id="pStepWp"><span class="dot">3</span><span id="pStepWpTxt">Published to WordPress (draft)</span></div>
+  </div>
+</div>
+
+<nav class="bot">
+  <button id="backBtn" onclick="nav(-1)">← Back</button>
+  <button id="nextBtn" onclick="nav(1)">Next →</button>
+</nav>
+
+<script>
+"use strict";
+
+/* ---------- resilience wrapper (same pattern as Question Factory) ---------- */
+function tryRun(fn, btn){
+  const report = e => alert("Something went wrong: "+(e && e.message ? e.message : e)+"\nYour data is safe — try again.");
+  try{
+    const r = fn(btn);
+    if(r && typeof r.catch === 'function') r.catch(report);
+  }
+  catch(e){ report(e); }
+}
+window.addEventListener('error', ()=>{ /* never let a script error kill the page silently */ });
+
+/* ---------- CDP master topic list (English text — must match the master prompt file exactly) ---------- */
+const CDP_TOPICS = [
+"Growth & Development",
+"Principles & Stages of Development",
+"Factors Affecting Development & Individual Differences",
+"Intelligence, Creativity & Personality",
+"Learning Process & Principles",
+"Behavioural Learning Theories (Pavlov, Skinner, Thorndike)",
+"Cognitive Learning Theories (Piaget, Bruner, Vygotsky)",
+"Constructivism & Child-Centred Learning",
+"Motivation, Attention & Interest",
+"Memory, Forgetting & Thinking",
+"Language Development",
+"Inclusive Education",
+"Children with Special Needs",
+"Learning Disabilities (Dyslexia, ADHD, Autism etc.)",
+"Assessment & Evaluation",
+"Teaching Methods & Classroom Management",
+"Bloom's Taxonomy & Learning Outcomes",
+"Educational Psychology",
+"Major Psychologists & Their Theories",
+"Important CTET Pedagogy Concepts"
+];
+const EXAM_SUGGESTIONS = ["CTET Paper I","CTET Paper II","BPSC TRE 4.0","Bihar TRE","DSSSB TGT","DSSSB PRT","UPTET","UP TGT","KVS TGT","KVS PGT","NVS TGT","NVS PGT","PGT","TGT","PRT"];
+
+/* ================= EXAM PERSONA SYSTEM =================
+   No master-prompt file is loaded for this pipeline (keeps the built prompt
+   short) — instead the prompt is assembled entirely in this script, cast as
+   a veteran faculty persona for whichever exam is typed. Built-in profiles
+   below are informed by the site's SEO audit (CTET's Hindi-medium PYQ demand
+   is its single biggest clean keyword opportunity; BPSC TRE / DSSSB TGT are
+   the next-priority exams, structurally planned but not yet content-heavy).
+   Any exam name NOT in this list still works — genericExamProfile() below
+   synthesizes a real-sounding persona from the name itself rather than
+   refusing or guessing wrong details. */
+const EXAM_PROFILES = {
+  'ctet': {
+    label: 'CTET',
+    persona: 'a veteran CDP & Pedagogy faculty member who has personally coached 10,000+ CTET Hindi-medium aspirants across both papers and has memorized exactly which NCERT lines the exam twists into distractors',
+    subjects: 'Child Development & Pedagogy (CDP), EVS, Mathematics, Mathematics Pedagogy, Hindi, English, Language Development',
+    angle: 'CTET Hindi-medium PYQ trends are this exam\'s single biggest untapped keyword opportunity — always surface authentic PYQ patterns, and treat Devanagari keyword variants (सीटीईटी) as worth targeting separately from the Romanized ones, not interchangeable with them. Strict NCERT/NCF 2005+2023 alignment language throughout.'
+  },
+  'bpsc tre': {
+    label: 'BPSC TRE (Bihar Teacher Recruitment Examination)',
+    persona: 'a Bihar state-cadre TGT/PGT subject expert who has cleared and now coaches BPSC TRE aspirants, fluent in exactly how BPSC phrases its subject-wise questions and the state syllabus quirks that differ from CBSE/NCERT-only prep',
+    subjects: 'subject-wise TGT (Class 9–10) and PGT (Class 11–12) content per the SUBJECT given below, plus Bihar-specific pedagogy/CDP for the teaching-eligibility portion',
+    angle: 'Treat this as the "BPSC TRE" program (also referred to as Bihar TRE) — subject-wise practice framing works best (e.g. "BPSC TRE TGT [Subject] practice questions"), and Hindi-medium PYQ-style questions matter as much as English ones.'
+  },
+  'dsssb tgt': {
+    label: 'DSSSB TGT',
+    persona: 'a Delhi-cadre TGT subject expert who has taught DSSSB TGT batches for years and knows the exact Delhi-government question style, distinct from CTET or state-TET patterns',
+    subjects: 'subject-wise TGT content (Class 9–10) per the SUBJECT given below, plus general awareness/Delhi-specific pedagogy where relevant',
+    angle: 'Mirror the CTET-style hub structure in tone but keep DSSSB\'s own question phrasing conventions — this exam has real search demand but almost no populated content yet, so authoritative, exam-pattern-accurate content is a genuine gap to fill.'
+  },
+  'dsssb prt': {
+    label: 'DSSSB PRT',
+    persona: 'a Delhi-cadre Primary Teacher (PRT) exam expert who has coached DSSSB PRT batches and knows the primary-level pedagogy and subject-integration style DSSSB actually tests',
+    subjects: 'Primary-level pedagogy, CDP, EVS, Hindi, English, Mathematics per the SUBJECT given below',
+    angle: 'Primary-teacher framing throughout — simpler classroom scenarios, foundational-literacy and numeracy angle, not secondary-level depth.'
+  },
+  'uptet': {
+    label: 'UPTET',
+    persona: 'a UP state-cadre TET faculty member who has coached thousands of UPTET aspirants and knows exactly how UP\'s question style differs from CTET despite the overlapping syllabus',
+    subjects: 'Child Development & Pedagogy, EVS, Mathematics, Hindi, English, Sanskrit (where relevant), UP-specific policy references',
+    angle: 'Heavy Hindi-medium framing — UPTET aspirants overwhelmingly prep in Hindi — and reference UP Basic Shiksha Parishad conventions where the exam actually differs from CTET.'
+  },
+  'up tgt': {
+    label: 'UP TGT',
+    persona: 'a UP-cadre TGT subject expert coaching aspirants for the UP Secondary Education Selection Board\'s TGT exam, fluent in its subject-wise weightage and question style',
+    subjects: 'subject-wise TGT content (Class 9–10) per the SUBJECT given below',
+    angle: 'UP-specific exam pattern and selection-board conventions; Hindi-medium framing dominant.'
+  },
+  'kvs': {
+    label: 'KVS (Kendriya Vidyalaya Sangathan)',
+    persona: 'a KVS-cadre subject expert and former KVPS/PGT interview panelist who knows exactly what KVS tests beyond the generic CTET syllabus — general awareness of KVS policy, computer literacy, and current affairs weightage',
+    subjects: 'subject-wise TGT/PGT content per the SUBJECT given below, plus General Awareness, Current Affairs, and Computer Literacy sections specific to KVS',
+    angle: 'KVS papers add a General Awareness + Computer Literacy layer most state TET exams skip — call that out explicitly rather than treating this as a copy of CTET.'
+  },
+  'nvs': {
+    label: 'NVS (Navodaya Vidyalaya Samiti)',
+    persona: 'an NVS-cadre subject expert familiar with Jawahar Navodaya Vidyalaya\'s residential-school context and NVS\'s own exam pattern (heavier reasoning/GK component than most TET exams)',
+    subjects: 'subject-wise TGT/PGT content per the SUBJECT given below, plus Reasoning and General Knowledge sections specific to NVS',
+    angle: 'NVS leans harder on reasoning/GK than CTET-style pedagogy exams — reflect that balance rather than defaulting to a pure-pedagogy framing.'
+  },
+  'pgt': {
+    label: 'PGT (Post Graduate Teacher, generic)',
+    persona: 'a senior subject-matter expert who has taught at the +2/senior-secondary level for years and coaches PGT aspirants across multiple state and central recruitment boards',
+    subjects: 'senior-secondary (Class 11–12) subject-wise content per the SUBJECT given below',
+    angle: 'Senior-secondary depth — this audience already cleared TGT-level basics, so go deeper into subject nuance rather than re-explaining fundamentals.'
+  },
+  'tgt': {
+    label: 'TGT (Trained Graduate Teacher, generic)',
+    persona: 'a senior TGT subject expert who has coached aspirants across multiple state and central TGT recruitment boards',
+    subjects: 'secondary-level (Class 9–10) subject-wise content per the SUBJECT given below',
+    angle: 'Secondary-level framing, exam-agnostic where the specific board isn\'t named.'
+  },
+  'prt': {
+    label: 'PRT (Primary Teacher, generic)',
+    persona: 'a primary-level teaching expert who has coached PRT aspirants across multiple recruitment boards',
+    subjects: 'primary-level pedagogy, CDP, EVS, Hindi, English, Mathematics per the SUBJECT given below',
+    angle: 'Primary-teacher framing — simple classroom scenarios, foundational literacy/numeracy.'
+  }
+};
+/* longest keys first so "dsssb tgt" matches before the generic "tgt" substring does */
+const EXAM_PROFILE_KEYS = Object.keys(EXAM_PROFILES).sort((a,b)=>b.length-a.length);
+
+function genericExamProfile(name){
+  const n = (name||'this exam').trim();
+  return {
+    label: n,
+    persona: `a veteran ${n} exam faculty member and subject-matter expert who has coached aspirants for this exact exam for years and knows its real syllabus, weightage, and question style in detail`,
+    subjects: 'the subject given below, scoped to what is actually tested in this exam',
+    angle: `Apply real, verifiable knowledge of the ${n} exam pattern, marking scheme, and subject weightage wherever you have it; where you are not certain of a specific number (weightage %, marks, cutoff), state it as an honest estimate rather than inventing a precise-sounding figure.`
+  };
+}
+function getExamProfile(examTypeRaw){
+  const norm = String(examTypeRaw||'').toLowerCase().trim();
+  if(!norm) return { key:'ctet', ...EXAM_PROFILES.ctet };
+  for(const key of EXAM_PROFILE_KEYS){
+    if(norm.includes(key)) return { key, ...EXAM_PROFILES[key] };
+  }
+  // "bihar tre" without the BPSC prefix should still resolve to the BPSC TRE profile
+  if(norm.includes('bihar') && norm.includes('tre')) return { key:'bpsc tre', ...EXAM_PROFILES['bpsc tre'] };
+  return { key:null, ...genericExamProfile(examTypeRaw) };
+}
+
+function initSelectors(){
+  const topicList = document.getElementById('topicSuggestions');
+  topicList.innerHTML = CDP_TOPICS.map(t=>`<option value="${t}"></option>`).join('');
+  const examList = document.getElementById('examSuggestions');
+  examList.innerHTML = EXAM_SUGGESTIONS.map(e=>`<option value="${e}"></option>`).join('');
+}
+initSelectors();
+
+/* ---------- navigation ---------- */
+var cur = 0;
+function nav(d){
+  let n = cur + d;
+  if(n<0||n>3) return;
+  if(d>0){
+    if(cur===0 && !document.getElementById('promptOut').value.trim()){ show(msg('pMsg'),'bad','Build & copy the prompt first.'); return; }
+    if(cur===1 && !state.parsed){ show(msg('parseMsg'),'bad','Parse the AI reply first.'); return; }
+  }
+  cur=n; render();
+}
+function render(){
+  for(let i=0;i<4;i++){
+    document.getElementById('step'+i).classList.toggle('show', i===cur);
+    const r=document.getElementById('r'+i);
+    r.className = i<cur ? 'done' : i===cur ? 'on' : '';
+  }
+  document.getElementById('backBtn').disabled = cur===0;
+  document.getElementById('nextBtn').textContent = cur===3 ? 'Done' : 'Next →';
+  document.getElementById('nextBtn').disabled = cur===3;
+  if(cur===2){ fillReviewForm(); updatePreview(); }
+  if(cur===3){ loadSettings(); document.getElementById('dlSlug').textContent = (state.seo && state.seo.slug) || 'note'; renderCopyFields(); updatePublishGate(); renderQueue(); }
+  document.querySelector('main').scrollTop=0;
+}
+function msg(id){ return document.getElementById(id); }
+function show(el,type,text){ el.className='msg show '+type; el.textContent=text; }
+
+/* ---------- copy helper (same pattern as Question Factory) ---------- */
+function doCopy(text, btn, msgEl, okText){
+  const done = ()=>{ show(msgEl,'ok',okText); if(btn){const o=btn.textContent;btn.textContent='Copied ✓';setTimeout(()=>btn.textContent=o,1500);} };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done,msgEl));
+  } else fallbackCopy(text,done,msgEl);
+}
+function fallbackCopy(text,done,msgEl){
+  const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try{ document.execCommand('copy'); done(); }
+  catch(e){ show(msgEl,'warn','Auto-copy blocked — open "View" above, long-press → Select All → Copy.'); }
+  document.body.removeChild(ta);
+}
+
+/* mobile clipboards (Gboard/Samsung/SwiftKey) start silently truncating
+   copies somewhere around 8,000-10,000 characters — ~1,500 words at typical
+   English/Hinglish prose density — so that's the per-part budget: only as
+   many parts as actually needed to keep each one under it, never a fixed count */
+const WORDS_PER_COPY_PART = 1500;
+function partsNeededFor(text){
+  if(!text) return 1;
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / WORDS_PER_COPY_PART));
+}
+/* splits text into only as many roughly-equal chunks as needed to stay under
+   the per-part budget, cut on paragraph/line boundaries where possible —
+   each part starts exactly where the previous one logically left off */
+function splitForCopy(text){
+  if(!text) return [];
+  const maxParts = partsNeededFor(text);
+  if(maxParts <= 1) return [text];
+  const targetSize = Math.ceil(text.length / maxParts);
+  const parts = [];
+  let rest = text;
+  while(parts.length < maxParts - 1 && rest.length > targetSize){
+    let cut = rest.lastIndexOf('\n\n', targetSize);
+    if(cut < targetSize*0.5) cut = rest.lastIndexOf('\n', targetSize);
+    if(cut < targetSize*0.5) cut = targetSize;
+    parts.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  if(rest) parts.push(rest);
+  return parts;
+}
+function renderCopyParts(wrapId, text, msgElId){
+  const wrap = document.getElementById(wrapId);
+  if(!wrap) return;
+  const parts = splitForCopy(text);
+  const msgEl = msg(msgElId);
+  if(parts.length <= 1){
+    wrap.innerHTML = `<button class="btn ghost small" style="margin:4px 6px 0 0">📋 Copy prompt (1 part — short enough)</button>`;
+    wrap.querySelector('button').addEventListener('click', ()=> doCopy(text, wrap.querySelector('button'), msgEl, 'Prompt copied.'));
+    return;
+  }
+  wrap.innerHTML = parts.map((p,i)=>
+    `<button class="btn ghost small" style="margin:4px 6px 0 0" data-idx="${i}">📋 Copy part ${i+1} of ${parts.length}</button>`
+  ).join('');
+  [...wrap.querySelectorAll('button')].forEach((btn,i)=>{
+    btn.addEventListener('click', ()=> doCopy(parts[i], btn, msgEl, `Part ${i+1} of ${parts.length} copied — paste it now, then come back for the next part.`));
+  });
+}
+
+/* renders a readonly textarea (mobile "select all" fallback) + Copy + Share
+   buttons into containerId for any block of text that's hard to copy on
+   mobile (validation fix-lists, HTML-integrity error lists, etc) */
+function renderShareBlock(containerId, text, autoSelect){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML = `
+    <textarea id="${containerId}Ta" readonly style="min-height:110px;font-size:12px;font-family:monospace"></textarea>
+    <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+      <button type="button" class="btn small ghost" id="${containerId}CopyBtn">📋 Copy</button>
+      <button type="button" class="btn small ghost" id="${containerId}ShareBtn" style="display:none">📤 Share</button>
+    </div>
+    <div class="msg" id="${containerId}Msg"></div>`;
+  const ta = document.getElementById(containerId+'Ta');
+  ta.value = text;
+  ta.addEventListener('click', ()=>{ ta.focus(); ta.select(); });
+  const m = msg(containerId+'Msg');
+  const copyBtn = document.getElementById(containerId+'CopyBtn');
+  copyBtn.addEventListener('click', ()=>{ ta.focus(); ta.select(); doCopy(text, copyBtn, m, 'Copied.'); });
+  if(navigator.share){
+    const shareBtn = document.getElementById(containerId+'ShareBtn');
+    shareBtn.style.display = '';
+    shareBtn.addEventListener('click', async ()=>{
+      try{ await navigator.share({ text }); }
+      catch(e){ if(e.name !== 'AbortError') show(m,'warn','Share failed — use Copy instead.'); }
+    });
+  }
+  if(autoSelect){ ta.focus(); ta.select(); }
+}
+function clearShareBlock(containerId){
+  const el = document.getElementById(containerId);
+  if(el) el.innerHTML = '';
+}
+
+/* ================= STEP 1 — build prompt ================= */
+var builtPromptText = null;
+var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+
+function updateLangMixLabel(){
+  const hindi = document.getElementById('hindiPercent').value;
+  document.getElementById('langMixLabel').textContent = `Hindi ${hindi}% + English ${100-hindi}%`;
+}
+
+/* Builds the entire prompt in-page — no master-prompt file is fetched for
+   this pipeline. A short exam-persona intro (see EXAM_PROFILES above)
+   replaces the Notes Factory prompt's generic "senior SUBJECT expert" role
+   line, and the visual-styling rules are replaced by the BLOCK-TAG SYSTEM
+   since this pipeline's own parser (expandLongPostBlocks, below) does the
+   HTML styling instead of the AI — that's most of what keeps this prompt
+   shorter than the sibling notes-factory master prompt. */
+function buildLongPostPrompt(topic, examType, subject, hindiPercent, year){
+  const profile = getExamProfile(examType);
+  const seed = Array.from(topic+examType).reduce((a,c)=>a+c.charCodeAt(0),0) % 999 + 1;
+
+  return `# LONG POST — ${profile.label} — ${topic} (${year})
+
+## WHO YOU ARE
+You are ${profile.persona} — also grounded in NCERT, NCF 2005/2023, and NEP 2020 where relevant, and in the specific exam body's own syllabus/policy documents for ${profile.label}. You write as this person, in a teacher-to-student voice ("आपसे यह पूछा जाएगा"), never salesy — and as a careful editor who would rather write a true, verifiable sentence than an impressive-sounding invented one. You are NOT a visual designer here — a script turns your block tags into styled HTML, so spend your effort on real content, not markup.
+
+## INPUTS
+TOPIC: ${topic}
+EXAM: ${examType}
+SUBJECT: ${subject}
+TARGET_YEAR: ${year} — the only year allowed in keyphrase/title/slug/meta/H1.
+SUBJECT SCOPE FOR THIS EXAM: ${profile.subjects}
+EXAM-SPECIFIC ANGLE: ${profile.angle}
+
+## HARD BANS (never do these)
+1. No \`<script>\` tag anywhere. 2. No locked/blurred/paywalled content — everything visible. 3. No invented PYQs — verified "PYQ [Exam] [Year]" or honest "Practice Question — [Exam] pattern". 4. No unsourced numbers — cite, soften, or delete. 5. No keyword stuffing, but near-zero density fails just as hard (see T9). 6. No fabricated URLs — only the exam body's official domain, ncert.nic.in, cbseacademic.nic.in, indiacode.nic.in, education.gov.in, pib.gov.in, other .gov.in/.nic.in, or en.wikipedia.org. No \`href="#"\`. 7. **No hand-written styled HTML.** Every chunk of content is wrapped in a \`{* type: title *} ... {* END *}\` block per the BLOCK-TAG SYSTEM below — plain semantic tags (\`<p>\`, \`<strong>\`, \`<table>\`, \`<svg>\`, \`<ol>\`/\`<li>\`, \`<sup>\`/\`<a>\`) are fine *inside* a block, just never a styled \`<div>\` wrapper. 8. **No scaffolding from memory.** The SEO panel / Publisher Notes / FINAL CHECKS templates below are pipeline-parsed — copy field-for-field, line-for-line, never paraphrase or drop a field. 9. **No "YES" without a number.** Every FINAL CHECKS line asking for a count must show the actual count — "YES" alone is an automatic failure on that line. 10. **No bare \`<h3>\`** anywhere you write one directly (e.g. the References heading) — always carry an inline style, exactly like every other raw tag you're allowed to write outside a block.
+
+## LANGUAGE (Hinglish, Hindi ${hindiPercent}% + English ${100-hindiPercent}%)
+Apply this ratio to explanations/tricks/teacher-talk/connecting prose only — key terms, definitions, and technical labels stay in English regardless. Never force tatsam Hindi or awkward transliteration. Banned words: delve, tapestry, crucial/pivotal role, holistic, seamless, robust, comprehensive guide, game-changer, unlock, "it is important to note", moreover, furthermore, अत्यंत महत्वपूर्ण, यह ध्यान देने योग्य है, निष्कर्षतः, "इस लेख में हम", "आइए जानते हैं". Vary sentence length/openers, never repeat a section-opener pattern back-to-back.
+
+## LENGTH — NON-NEGOTIABLE: 6,000–8,000 prose words (excl. tags/URLs), every single run, no exceptions
+This is the most important rule in this prompt — a run that ships under 6,000 words has failed regardless of how good everything else is. Reach it via genuine depth (more worked examples, more sub-topics, fuller theory, more solved questions, richer comparisons) — never via repetition, filler sentences, or restating the same point in different words. The WORD BUDGET table in CONTENT ARCHITECTURE below shows how the 6,000–8,000 splits across sections; if a topic feels "too narrow" to reach it, that is never a valid reason to fall short — widen genuinely: historical/policy background, worked numerical/scenario examples, exam-body-specific angle, comparative analysis against adjacent concepts, common-misconception deep-dives, a richer PYQ/practice-question set, and a fuller FAQ. Do this for EVERY topic and EVERY exam, including ones you have thin real knowledge of — go deeper into what IS known (definitions, classifications, examples, pedagogy angle, comparison) rather than inventing specifics you're not sure of.
+If you are genuinely running low on room mid-article, stop cleanly at the end of a complete block's \`{* END *}\` — no scaffolding yet — the user says "continue" and you resume with the next block, still driving toward the same 6,000–8,000 total. Never cite token limits, "conciseness," or topic narrowness as an excuse for shorter output — see the HARD GATE in COUNT-BEFORE-PRINT below, which blocks you from printing anything under 6,000 words.
+
+## SILENT SEED (derived: ${seed} — state once in Publisher Notes, do not print this number's meaning to the reader)
+Lede type (seed%4): update-hook / question / exam-hall scenario / surprising-fact. Headline formula (seed%6, see below). Misconception style (seed%3): ❌/✅ pairs / woven prose / Q&A. FAQ position (seed%3): end / after Section 6 / split in two. Pick 2 of 4 deep-blocks fitting TOPIC for \`insight\` blocks: Examiner's Logic / Cross-Topic Bridge / real Timeline / Compare-&-Contrast Matrix. Uneven structure: 1–2 sections short, 1–2 long, matching real importance.
+
+## HEADLINE FORMULA (seed%6 picks ONE)
+Keyphrase = literal first characters of the title, ≤60 chars, with a number + power word + sentiment word.
+1. \`[Keyphrase]: [Sentiment] [Power] Guide for [Exam]\` 2. \`[Keyphrase]: Score [Sentiment] Marks — [Power] Notes\` 3. \`[Keyphrase]: [N]+ [Sentiment] Solved Qs and Tricks\` (N must be true/countable) 4. \`[Keyphrase]: [Power] Update-Ready [Sentiment] Guide\` 5. \`[Keyphrase]: [Sentiment] [Power] Crash Course in 1 Read\` 6. \`[Keyphrase]: [Power] [Sentiment] Notes, No Topic Missed\`
+Power words: Complete, Ultimate, Essential, Proven, Definitive, Powerful, Master, Instant. Sentiment words: Best, Easy, Top, Smart, Perfect, Amazing (sparingly).
+
+## SEO — RANK MATH 90+ GATE (SEO panel FIRST, before any content)
+Focus Keyphrase: \`[Topic] ${profile.label} Notes ${year}\` (or the closest natural equivalent) — plain English/Roman, "and" never "&", 2–4 word core.
+Print this panel:
+\`\`\`
+Focus Keyword:    [exact keyphrase]
+SEO Title:        [per formula above; keyphrase FIRST; ≤60 chars]
+Permalink/Slug:   [every keyphrase word in order, lowercase-hyphenated; <75 chars]
+Meta Description: [150–155 chars, keyphrase once, honest]
+H1 (Post Title):  [keyphrase FIRST] — [Hindi sub-line after]
+\`\`\`
+Every test MUST pass: T1 keyphrase starts SEO Title · T2 keyphrase once in meta description · T3 every keyphrase word in slug · T4 keyphrase (bold) in first 100 words of body · T6 **6,000–8,000 prose words (hard gate, see LENGTH above)** · T7 keyphrase exact in ≥3 \`h2\` block titles + ≥1 \`faq\` block title · T8 the \`img\` block's alt STARTS with keyphrase, ≥3 \`svg\` block aria-labels contain it · T9 keyphrase+variant density **1.0–1.4%** of prose words (60–84 occurrences at 6,000 words, 80–112 at 8,000; every section ≥4, no paragraph >2, zero = instant fail) · T10 slug <75 chars · T11 ≥3 external links to whitelisted domains · T12 external links always dofollow, never add \`rel="nofollow"\` · T13 ≥7 internal links · T14-16 title has number+power+sentiment word · T17 one \`toc\` block with real anchors · T18 no \`<p>\` >120 words · T19 the \`img\` block + 5–7 \`svg\` blocks present. Inline citations: every sourced claim carries \`<sup id="cite-N"><a href="#ref-N">[N]</a></sup>\`, min 6 across ≥4 sections, written directly in prose.
+
+## BLOCK-TAG SYSTEM
+Wrap every chunk of content like this:
+\`\`\`
+{* type: Title text *}
+...plain content (prose, <p>, <table>, <svg>, <ol>, whatever the type needs)...
+{* END *}
+\`\`\`
+Lowercase \`type\`. Title after the colon is optional for most types (see below), required for \`h2\`/\`insight\`/\`faq\`. Omit the colon entirely for a bare \`{* type *}\` when no title is needed. **Always close with a literal \`{* END *}\`** — if you run out of room mid-block it's safe to stop (the next \`{*\` auto-closes it), but always try to close explicitly first. Blocks never nest. Never invent a type outside this list — unknown types render as unstyled plain text and fail the visual checks.
+
+| type | when to use | title |
+|---|---|---|
+| \`h2\` | section heading (one per numbered section below) | required, keyphrase in ≥3 of them |
+| \`def\` | a definition | optional (default "Definition") |
+| \`tip\` | a study tip | optional (default "Tip") |
+| \`exam\` | exam-relevance callout | optional (default "Exam Point") |
+| \`question\` | PYQ or practice question + answer | optional (default "Question") |
+| \`trick\` | memory trick/mnemonic, fully open | optional (default "Memory Trick") |
+| \`mistake\` | common-mistake correction | optional (default "Mistake") |
+| \`summary\` | end-of-section summary | optional (default "Section Summary") |
+| \`revision\` | rapid-revision bullets (Section 8 only) | optional |
+| \`insight\` | deep-theory insight (one of the 2 seed-picked deep-blocks) | required — name which one |
+| \`update\` | dated sourced news brief | optional |
+| \`toc\` | the single Table of Contents block | optional |
+| \`faq\` | one FAQ Q&A pair (one block per question, 7–9 total) | required — the question text, exact keyphrase in ≥3 |
+| \`table\` | data/comparison table — content is raw \`<table>\` markup; 2 columns is always fine, 3 is fine too, but for 4+ columns use several small 2-column \`table\`/\`def\` blocks instead — a wide table breaks on the phone screens most readers use | optional |
+| \`svg\` | one SVG visual — content is raw \`<svg viewBox="0 0 360 H" role="img" aria-label="...">\` markup; 5–7 total, ≥3 aria-labels contain the keyphrase | not used |
+| \`img\` | the one mandatory image — content is \`<img src="https://via.placeholder.com/700x350?text=Diagram" alt="[Focus Keyphrase] — concept overview" />\`, alt MUST start with exact keyphrase | not used |
+| \`plain\` | ordinary prose that doesn't fit a card type — intro, connective paragraphs, References list | optional |
+
+Ad slots: do not wrap in a block — leave a bare line \`[[AD]]\` at exactly 3 points, spread early (after Section 2) / middle (after Section 3 or 5) / late (after Section 6, 7, or FAQ), never the same trio of positions twice across different articles; the publisher inserts the ad markup automatically.
+
+**Vary block titles across sub-topics and across different articles** — don't let every \`def\` block default to the literal word "Definition" and every \`mistake\` block to "Mistake" throughout the whole piece; that reads templated. Pick a title style for this run (seed%2 — style A: "इसे ऐसे समझो" / "Exam Point" / "यहाँ गलती होती है", style B: "आसान भाषा में समझें" / "Scoring Zone" / "⚠️ ध्यान दें") and use those as the \`title\` after the colon on \`def\`/\`exam\`/\`mistake\` blocks instead of the bare defaults, rotating naturally rather than using the exact same label every time.
+
+## QUESTION TYPE DIVERSITY
+Use 6–8 genuinely different \`question\` blocks across the article, rotating type — direct-recall / scenario / comparison / assertion-reason / data-interpretation / error-spotting (or subject-appropriate equivalents: calculation/word-problem/diagram/error-spotting/data-table for Maths; fact-recall/match-the-following/assertion-reason/scenario/picture-ID for EVS; pattern/coding-decoding/analogy/blood-relation/statement-conclusion for Reasoning; classroom-scenario/definition/assertion-reason/case-study/comparison for CDP/Pedagogy). Never repeat the same type twice in a row. State the mix in Publisher Notes.
+
+## CONTENT ARCHITECTURE — WORD BUDGET (9 sections, each opened by an \`h2\` block; \`toc\` block right after Section 1's opening prose)
+The word counts below are per-section MINIMUMS that sum to 6,000–8,000 — treat every number as a floor, not a ceiling; a run that hits every floor lands near 6,000, going deeper on 3–4 sections (per the seed's "uneven structure" pick) reaches 7,000–8,000. If Section 3 or 4 is shrunk/omitted per its own rule below, redistribute that section's budget into Section 2 (more sub-topics) and Section 6 (more comparisons) rather than just dropping the total.
+
+1. **[Topic] कितना Important है? — Exam Weightage for ${profile.label}.** *(~250–350 words)* \`plain\` lede (150–200 words): keyphrase **bolded**, sourced fact, one line noting these are complete free premium notes (vary wording, no repeats), what the reader will know, read time. Then a 60–90 word \`def\` snippet definition. Then the mandatory \`img\` block. Then the \`toc\` block. Weightage figures only if verified or labeled "estimated".
+2. **Core Concept Notes.** *(~2,400–3,200 words — the longest section, always)* Cover **6–8 distinct sub-topics** (not fewer — this is where most of the depth requirement is met), each in 3 layers: Foundation (simple + real-life example + NCERT/syllabus link) → Intermediate (classifications, comparison) → Advanced (nuance, policy link, feeds an \`insight\` block). Per sub-topic: \`def\` → key points (\`plain\`, 3–5 sentences) → \`mistake\` → \`trick\` (fully open) → sourced \`<sup>\` in prose → one \`question\` block, type rotating. This or Section 5's \`h2\` title must carry the exact keyphrase.
+3. **Pedagogy & Exam-Body Policy Angle.** *(~400–600 words; shrink to ~200 or skip entirely — redistributing its budget per the rule above — only if ${profile.label} genuinely isn't a teaching-eligibility exam)* Constructivist activity idea, common error+fix (\`mistake\`), specific policy provision cited with \`<sup>\`, at least one classroom-scenario \`question\`.
+4. **हाल के Updates.** *(~250–450 words; omit entirely — redistributing its budget — only if nothing verifiable exists)* \`update\` blocks, only sourced items.
+5. **Deep Theory + Flowchart(s).** *(~800–1,100 words)* Extended theory (\`plain\`, going beyond Section 2's basics into real depth) + ≥2 \`svg\` real flowcharts/diagrams of the concept chain, not just 1.
+6. **Comparison & Differentiation.** *(~800–1,100 words)* Confusing pairs (\`table\`), real timeline if applicable (\`insight\`). ≥3 solved walkthroughs (\`question\`) with elimination reasoning + ≥3 misconception repairs (\`mistake\`) with WHY, across the doc.
+7. **Mnemonics & Memory Architecture.** *(~450–650 words)* \`trick\` blocks, fully open, no lock/blur — cover every major sub-topic from Section 2, not just one or two.
+8. **Conclusion + Related Topics Roadmap.** *(~400–600 words)* Summary (\`plain\`, keyphrase once) → \`summary\` block → \`revision\` block → roadmap (\`plain\`, 3× \`<a href="/[topic-slug]-[exam-slug]-notes-${year}/">\` distinct slugs + reasons) + ≥2 more internal links woven inline earlier — ≥7 total. **References** (\`plain\`) right after Roadmap: \`<h3 style="font-size:16px;font-weight:700;color:#1e293b;margin:16px 0 8px;">📚 References</h3>\` (never a bare \`<h3>\` — see HARD BAN 10) + \`<ol>\`, 6–10 entries, \`<li id="ref-N">\` with ↑ back-link, every entry needing ≥1 in-body \`<sup>\`.
+9. **FAQ.** *(~700–1,000 words; position per seed)* one \`faq\` block per question, **7–9 questions** (not fewer), ≥3 containing exact keyphrase, every answer opens with the answer and runs 70–120 words (a one-line answer is too thin — always give a real, useful answer). Closing section, its own \`h2\` block titled with the exact keyphrase.
+
+## HANDLING EVERY SITUATION — read before you start
+- **Topic feels narrow?** Never use that as a reason to fall short of 6,000 words. Widen genuinely: add historical/policy background, more worked examples, a richer comparison against 2–3 adjacent concepts, more PYQ-style questions, a fuller FAQ. Depth from real angles, never repetition.
+- **Exam you have thin knowledge of (a generic-profile exam)?** Go deeper on what IS reliably known — definitions, classifications, general exam-pattern conventions, pedagogy — and be honest/qualify ("in most [exam] cycles…", "typically weighted around…") rather than inventing a precise-sounding fact you're not sure of. HARD BAN 4 (no unsourced numbers) still applies in full.
+- **Running out of room mid-block or mid-section?** Stop at a clean \`{* END *}\`, nothing else — wait for "continue," then resume the SAME block/section exactly where you left off, still driving toward the full 6,000–8,000 total. Never ship a shortened article just because a session felt long.
+- **Subject is "Auto-detect" or ambiguous?** Infer the most likely subject from TOPIC + EXAM and state your inference once in Publisher Notes — never leave content generic because the subject wasn't pinned down.
+- **Bilingual/Hinglish edge cases** (a technical term with no natural Hindi equivalent, a topic that's almost entirely English-medium by convention): keep the term in English per the LANGUAGE rule, but never let that become an excuse to write entire sections in English — the ${hindiPercent}%/${100-hindiPercent}% split still applies to the connecting prose around it.
+
+## COUNT-BEFORE-PRINT (literal counting, not memory, before printing anything below)
+1. Prose word count — **HARD GATE: if this is below 6,000 or above 8,500, STOP. Do not print the SEO panel or any output.** Go back to the WORD BUDGET table above, find every section under its stated minimum, add genuine depth there (more sub-topics, more worked questions, richer comparisons — never filler), then recount. Repeat until you land inside 6,000–8,000. This gate cannot be skipped for any reason — not topic narrowness, not running low on room (use the continuation protocol instead), not exam unfamiliarity.
+2. Keyphrase+variant occurrences → % = count÷words×100; if outside 1.0–1.4% or zero, add natural carriers and recount.
+3. Which \`h2\`/\`faq\` titles carry the exact keyphrase (need ≥3 / ≥1).
+4. Inline \`<sup>\` count (≥6) and that every \`#ref-N\` target exists.
+5. Internal (≥7) and external (≥3) link counts.
+6. \`svg\` block count (5–7) and how many aria-labels carry the keyphrase (≥3).
+7. Longest \`<p>\` word count.
+8. \`question\` block count (6–8, types not repeated back-to-back) and \`faq\` block count (7–9).
+9. Scan your own output for any block missing its \`{* END *}\`.
+Only after all nine pass — word count included, non-negotiably — assemble the output below.
+
+## OUTPUT FORMAT — exact order, nothing outside these three blocks, code-fenced (chat UIs render raw HTML visually, so the fence is what keeps it copyable as source — never skip it)
+Two extra SEO fields beyond the panel above: "imageAltText" (starts with the keyphrase, describes the featured image) and "imagePrompt" (a ready-to-paste AI image-gen prompt: loud, high-CTR YouTube-thumbnail style — exaggerated expression on a student/teacher character, bold saturated colors, thick outlines, 16:9, explicitly NO baked-in text).
+
+<<<SEO_JSON>>>
+\`\`\`json
+{"focusKeyword":"...","seoTitle":"...","slug":"...","metaDescription":"...","h1":"...","imageAltText":"...","imagePrompt":"..."}
+\`\`\`
+<<<END_SEO_JSON>>>
+
+<<<NOTES_BODY_HTML>>>
+\`\`\`
+(the entire block-tagged body — every chunk wrapped in {* type: title *} ... {* END *}, [[AD]] placeholders where specified, nothing removed, nothing summarized)
+\`\`\`
+<<<END_NOTES_BODY_HTML>>>
+
+<<<PUBLISHER_NOTES>>>
+\`\`\`
+- Seed: ${seed} — lede [_], headline formula [# + why honest], FAQ position [_], deep-blocks [_,_]
+- Sources consulted: [list]
+- Claims softened/omitted: [list — empty is suspicious, re-check]
+- Question labels: [N] verified PYQ + [N] practice-pattern
+- Visuals generated: [list]
+- URLs needing manual verification: [list]
+- Body word count (prose only): [N]
+- Keyphrase count / density: [M occurrences / N words = X.X%]
+\`\`\`
+<<<END_PUBLISHER_NOTES>>>
+
+If you run out of space, stop cleanly at the end of a complete block's \`{* END *}\` — the user will send "continue" and you resume exactly where you stopped, inside a new code fence, no repetition, no fresh introduction.
+
+## FINAL CHECKS (verify by COUNT-BEFORE-PRINT numbers, not memory; fix any NO before ending)
+\`\`\`
+Word count 6,000–8,000 prose (state exact count) — THE GATE, fix this first if NO?                YES/NO + count
+Year ${year} + all 5 SEO fields byte-identical; Title ≤60 chars?                                 YES/NO + chars
+Headline formula per seed, keyphrase-first, number+power+sentiment present?                     YES/NO + formula #
+Keyphrase density 1.0–1.4% — state M/W/%?                                                        YES/NO + M/W/%
+Exact keyphrase in ≥3 h2 titles and ≥1 faq title (name them)?                                    YES/NO + list
+Keyphrase bolded in first 100 words of body?                                                     YES/NO
+img block alt STARTS with keyphrase; ≥3 svg aria-labels contain it (state count)?                YES/NO + count
+≥6 inline <sup> citations across ≥4 sections; zero orphan references?                            YES/NO + count
+Every block closed with a literal {* END *}?                                                     YES/NO
+No <p> over ~120 words (state longest)?                                                          YES/NO + longest
+Hinglish rules followed; no banned phrases; varied openers?                                      YES/NO
+Zero <script> tags; 3 [[AD]] placeholders at seed positions?                                     YES/NO + positions
+Zero locked/blurred/upsell content; premium-hint line appears once?                              YES/NO
+All questions honestly labeled; zero unsourced numbers; URLs whitelisted?                        YES/NO
+5–7 svg blocks with correct aria-labels (state count)?                                           YES/NO + count
+6–8 question blocks (types not repeated back-to-back) + 7–9 faq blocks (state counts)?           YES/NO + counts
+toc block + References + FAQ (keyphrase in h2 + ≥3 Qs) present?                                  YES/NO
+≥7 internal + ≥3 external links (state counts)?                                                  YES/NO + counts
+Publisher Notes copied field-for-field incl. density line?                                       YES/NO
+\`\`\`
+
+**>>> NOW GENERATE THE LONG POST <<<**`;
+}
+
+function buildPrompt(){
+  const topic = document.getElementById('topic').value;
+  const examType = document.getElementById('examType').value.trim() || 'CTET Paper I';
+  const subject = document.getElementById('subject').value;
+  const hindiPercent = parseInt(document.getElementById('hindiPercent').value, 10);
+  state.topic = topic; state.examType = examType; state.subject = subject; state.hindiPercent = hindiPercent;
+  saveDraft();
+  return buildLongPostPrompt(topic, examType, subject, hindiPercent, 2026);
+}
+
+async function copyPrompt(btn){
+  const topicEl = document.getElementById('topic');
+  topicEl.classList.remove('fieldErr');
+  if(!topicEl.value.trim()){
+    topicEl.classList.add('fieldErr');
+    topicEl.focus();
+    show(msg('pMsg'),'bad','Enter a topic first.');
+    return;
+  }
+  const out = document.getElementById('promptOut');
+  const full = buildPrompt();
+  out.value = full;
+  builtPromptText = full;
+  const words = full.trim().split(/\s+/).length;
+  document.getElementById('pStats').innerHTML = `<div class="stat"><b>${words.toLocaleString()}</b>words in prompt</div><div class="stat"><b>${state.examType}</b>exam type</div><div class="stat"><b>${state.hindiPercent}% / ${100-state.hindiPercent}%</b>Hindi / English</div>`;
+  const parts = splitForCopy(full);
+  renderCopyParts('partsButtons', full, 'pMsg');
+  if(parts.length > 1){
+    document.getElementById('partsWrap').open = true;
+    show(msg('pMsg'),'ok',`Prompt built (${words.toLocaleString()} words) — on mobile, use the ${parts.length} "Copy part" buttons below in order instead of copying it all at once. On a PC, "Copy whole prompt" is fine.`);
+  } else {
+    show(msg('pMsg'),'ok',`Prompt built (${words.toLocaleString()} words) — short enough for a single copy. Use "Copy whole prompt" above, or the part button below if your device still truncates it.`);
+  }
+}
+async function copyWholePrompt(btn){
+  if(!builtPromptText){
+    show(msg('pMsg'),'warn','Building prompt first…');
+    await copyPrompt(btn);
+    if(!builtPromptText) return;
+  }
+  doCopy(builtPromptText, btn, msg('pMsg'), 'Whole prompt copied — fine on a PC clipboard; if it comes out cut off, use the "Copy part" buttons below instead.');
+}
+
+/* ================= STEP 2 — parse ================= */
+/* strip surrounding markdown code fences (```html ... ```), including several
+   stacked ones left behind when multiple "continue" chunks were concatenated */
+function stripFences(s){
+  s = String(s||'').trim();
+  // remove every fence line anywhere in the block: safe because our own content
+  // never legitimately contains a line that is only ``` or ```lang
+  s = s.replace(/^```[a-zA-Z]*\s*$/gm,'');
+  return s.trim();
+}
+function slugify(s){
+  return String(s||'').toLowerCase().trim()
+    .replace(/^\/+|\/+$/g,'').replace(/\/+$/,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+}
+
+/* ================= RESILIENT PARSING =================
+   Different AIs (and the same AI on different days) wrap the three pieces —
+   SEO fields, notes body, publisher notes — in different envelopes: the
+   pipeline's own <<<SEO_JSON>>> sentinels, the master prompt's native
+   ```json fence + <!-- NOTES BODY START/END --> comments, or a plain
+   labeled text panel (older/looser replies). Rather than requiring one
+   strategy to match ALL THREE pieces at once (which breaks the moment any
+   one piece uses a different envelope than the others — exactly what
+   happened with Gemini vs DeepSeek), each piece is extracted independently
+   by trying its own list of known envelopes in order. Mixed-format replies
+   (e.g. JSON SEO block + label-text body) still parse correctly this way. */
+
+function extractSEO(raw){
+  // 1) pipeline sentinel wrapper
+  let m = raw.match(/<<<SEO_JSON>>>([\s\S]*?)<<<END_SEO_JSON>>>/);
+  if(m){
+    try{ return { seo: JSON.parse(stripFences(m[1])), method:'sentinel-json' }; }catch(e){ /* fall through */ }
+  }
+  // 2) any ```json fence whose parsed object looks like our SEO shape
+  const jsonFenceRe = /```json([\s\S]*?)```/gi;
+  while((m = jsonFenceRe.exec(raw))){
+    try{
+      const obj = JSON.parse(m[1].trim());
+      if(obj && typeof obj==='object' && (obj.focusKeyword || obj.seoTitle || obj.slug)){
+        return { seo: obj, method:'json-fence' };
+      }
+    }catch(e){ /* not the SEO block, keep scanning */ }
+  }
+  // 3) plain labeled text panel (oldest/loosest format, also the final fallback)
+  const get = (label) => {
+    const re = new RegExp(label + '\\s*:?\\s*(.+)', 'i');
+    const mm = raw.match(re);
+    return mm ? mm[1].trim().replace(/[`*]/g,'').split(/\r?\n/)[0].trim() : '';
+  };
+  const focusKeyword = get('Focus Keyword');
+  const seoTitle = get('SEO Title');
+  const slugRaw = get('Permalink/Slug') || get('Slug');
+  const metaDescription = get('Meta Description');
+  const imageAltText = get('Image ALT Text') || get('Image Alt Text') || get('Image ALT');
+  const imagePrompt = get('Image (?:Generation )?Prompt') || get('Image Prompt');
+  let h1 = '';
+  const h1Match = raw.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if(h1Match) h1 = h1Match[1].replace(/<[^>]+>/g,'').trim();
+  else h1 = get('H1 \\(Post Title\\)') || get('H1');
+  return { seo: {focusKeyword, seoTitle, slug: slugify(slugRaw), metaDescription, h1, imageAltText, imagePrompt}, method:'label-text' };
+}
+
+function extractBody(raw){
+  // 1) pipeline sentinel wrapper
+  let m = raw.match(/<<<NOTES_BODY_HTML>>>([\s\S]*?)(?:<<<END_NOTES_BODY_HTML>>>|$)/);
+  if(m){
+    const html = stripFences(m[1]).trim();
+    if(html) return { bodyHtml: html, method:'sentinel-html', cutOff: raw.indexOf('<<<END_NOTES_BODY_HTML>>>')===-1, endIdx: m.index + m[0].length };
+  }
+  // 2) master prompt's native <!-- NOTES BODY START/END --> comments
+  m = raw.match(/<!--\s*NOTES BODY START\s*-->([\s\S]*?)<!--\s*NOTES BODY END\s*-->/i);
+  if(m){
+    const html = stripFences(m[1]).trim();
+    if(html) return { bodyHtml: html, method:'body-comments', cutOff: false, endIdx: m.index + m[0].length };
+  }
+  // 3) heuristic: first <h2> through the first recognizable end-of-notes marker
+  const h2Start = raw.search(/<h2[\s>]/i);
+  if(h2Start === -1) return { bodyHtml:'', method:'none', cutOff:true, endIdx: raw.length };
+  let endIdx = raw.length;
+  const endMarkers = [/END OF NOTES/i, /SEO Linking Recommendations/i, /MNEMONICS ARCHIVE/i, /CONSOLIDATED FINAL CHECKS/i, /===\s*PUBLISHER NOTES\s*===/i];
+  for(const em of endMarkers){
+    const idx = raw.search(em);
+    if(idx !== -1 && idx < endIdx && idx > h2Start) endIdx = idx;
+  }
+  return { bodyHtml: raw.slice(h2Start, endIdx).trim(), method:'h2-scan', cutOff: endIdx===raw.length, endIdx };
+}
+
+function extractPublisherNotes(raw, bodyEndIdx){
+  // 1) pipeline sentinel wrapper
+  let m = raw.match(/<<<PUBLISHER_NOTES>>>([\s\S]*?)(?:<<<END_PUBLISHER_NOTES>>>|$)/);
+  if(m) return { publisherNotes: stripFences(m[1]).trim(), found: true };
+  // 2) "=== PUBLISHER NOTES ===" block, up to the next fence close or end
+  m = raw.match(/===\s*PUBLISHER NOTES\s*===([\s\S]*?)(?:```|$)/i);
+  if(m) return { publisherNotes: ('=== PUBLISHER NOTES ===' + m[1]).trim(), found: true };
+  // 3) whatever trails after the body, if anything
+  const tail = bodyEndIdx < raw.length ? raw.slice(bodyEndIdx).trim() : '';
+  return { publisherNotes: tail, found: tail.length > 0 };
+}
+
+/* Scaffolding comments (<!-- SECTION 1 -->, <!-- SVG 2: ... -->, <!-- End of
+   Notes Body -->, <!-- Ad Slots... -->, etc.) are the AI organizing its own
+   output — never reader-facing, and a dead giveaway of AI-generated content
+   if they ride through to the published page source. Strip every HTML
+   comment from the body regardless of which extraction path found it. */
+function stripHtmlComments(html){
+  return String(html||'').replace(/<!--[\s\S]*?-->/g, '').trim();
+}
+
+/* ================= BLOCK-TAG EXPANSION =================
+   The Long Post prompt has the AI write {* type: title *} ... {* END *} markers
+   instead of hand-written styled HTML (saves a large share of output tokens on
+   long runs). This turns those markers into the same styled card HTML the
+   Notes Factory prompt has the AI write by hand.
+
+   Auto-detection of a missing/forgotten {* END *}: rather than requiring an
+   explicit close, a block's content is simply everything between its opening
+   marker and the START of the NEXT marker (whether that next marker is another
+   block's open tag or a literal {* END *}) — so a dropped END never loses or
+   corrupts content, it just means the next open tag silently closes the
+   previous block, exactly as if the END had been there. */
+const BLOCK_TYPES = new Set(['h2','def','tip','exam','question','trick','mistake','summary','revision','insight','update','toc','faq','table','svg','img','plain']);
+
+function escBlockTitle(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function cardBlockHtml(bg, accent, label, body){
+  return `<div style="background:${bg};border-left:6px solid ${accent};padding:16px;border-radius:12px;margin:14px 0;box-sizing:border-box;max-width:100%;">${label?`<b>${escBlockTitle(label)}</b><div style="margin-top:6px;line-height:1.6">${body}</div>`:`<div style="line-height:1.6">${body}</div>`}</div>`;
+}
+const BLOCK_RENDERERS = {
+  h2:       (t,b)=>`<h2 id="${slugify(t)||'section'}" style="background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:22px;font-weight:700;margin:14px 0;box-sizing:border-box;max-width:100%;">${escBlockTitle(t)}</h2>\n${b}`,
+  def:      (t,b)=>cardBlockHtml('#f8fbff','#2563eb', t||'Definition', b),
+  tip:      (t,b)=>cardBlockHtml('#fff8e6','#f59e0b', t||'Tip', b),
+  exam:     (t,b)=>cardBlockHtml('#ecfeff','#06b6d4', t||'Exam Point', b),
+  question: (t,b)=>cardBlockHtml('#fff1f2','#e11d48', t||'Question', b),
+  trick:    (t,b)=>cardBlockHtml('#f5f3ff','#7c3aed', t||'Memory Trick', b),
+  mistake:  (t,b)=>cardBlockHtml('#fff7ed','#ea580c', t||'Mistake', b),
+  summary:  (t,b)=>cardBlockHtml('#ecfccb','#65a30d', t||'Section Summary', b),
+  revision: (t,b)=>`<div style="background:#eff6ff;border:2px dashed #2563eb;border-radius:12px;padding:16px;margin:14px 0;box-sizing:border-box;max-width:100%;"><b>${escBlockTitle(t||'Rapid Revision')}</b><div style="margin-top:6px;line-height:1.6">${b}</div></div>`,
+  insight:  (t,b)=>cardBlockHtml('#faf5ff','#9333ea', t||'Advanced Insight', b),
+  update:   (t,b)=>cardBlockHtml('#f0fdf4','#16a34a', t||'Update', b),
+  toc:      (t,b)=>`<div style="background:#eff6ff;border:2px solid #2563eb;border-radius:12px;padding:16px;margin:14px 0;box-sizing:border-box;max-width:100%;"><b>${escBlockTitle(t||'Table of Contents')}</b><div style="margin-top:6px;line-height:1.6">${b}</div></div>`,
+  faq:      (t,b)=>`<div style="margin:14px 0"><h3 style="font-size:15px;font-weight:700;color:#1e293b;margin:14px 0 6px;">${escBlockTitle(t)}</h3><div style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#334155;">${b}</div></div>`,
+  table:    (t,b)=>`<div style="overflow-x:auto;margin:14px 0"><div style="min-width:480px">${t?`<div style="font-weight:600;margin-bottom:6px">${escBlockTitle(t)}</div>`:''}${b}</div></div>`,
+  svg:      (t,b)=>`<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin:14px 0;box-sizing:border-box;max-width:100%;">${b}</div>`,
+  img:      (t,b)=>`<div style="margin:14px 0">${b}</div>`,
+  plain:    (t,b)=>t ? `<div style="margin:14px 0"><b>${escBlockTitle(t)}</b><div style="margin-top:6px">${b}</div></div>` : `<div style="margin:14px 0">${b}</div>`
+};
+const AD_SNIPPET_TEMPLATE = n => `<div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:10px 14px;margin:18px 0;text-align:center;box-sizing:border-box;max-width:100%;">
+<div style="font-size:11px;color:#94a3b8;letter-spacing:0.5px;margin-bottom:6px;">— Advertisement — <span style="background:#eef2f7;padding:2px 8px;border-radius:10px;margin-left:6px;">📢 Sponsored</span></div>
+<ins class="adsbygoogle" id="ad-slot-${n}" style="display:block;min-height:1px;" data-ad-client="ca-pub-7389686596343881" data-ad-slot="000000000${n}" data-ad-format="auto" data-full-width-responsive="true"></ins>
+</div>`;
+
+function parseBlockHeader(header){
+  const idx = header.indexOf(':');
+  let type, title;
+  if(idx !== -1){
+    type = header.slice(0,idx).trim().toLowerCase();
+    title = header.slice(idx+1).trim();
+  } else {
+    const key = header.trim().toLowerCase();
+    if(BLOCK_TYPES.has(key)){ type = key; title = ''; }
+    else { type = 'plain'; title = header.trim(); }
+  }
+  if(!BLOCK_TYPES.has(type)) type = 'plain';
+  return { type, title };
+}
+
+/* returns {html, blockCount, unclosedCount} — unclosedCount is informational
+   only (shown as a parse warning), never blocks publishing since every block
+   auto-closes at the next marker regardless */
+function expandLongPostBlocks(raw){
+  const text = String(raw||'');
+  const OPEN_RE = /\{\*\s*([^*}]+?)\s*\*\}/g;
+  const markers = [];
+  let m;
+  while((m = OPEN_RE.exec(text))){
+    markers.push({ start: m.index, end: m.index + m[0].length, header: m[1].trim() });
+  }
+  if(!markers.length) return { html: text, blockCount: 0, unclosedCount: 0 }; // no block tags found — pass through untouched (back-compat with plain-HTML replies)
+
+  let out = text.slice(0, markers[0].start);
+  let blockCount = 0, unclosedCount = 0, adIdx = 0;
+  const subAds = s => s.replace(/\[\[AD\]\]/g, ()=>AD_SNIPPET_TEMPLATE(++adIdx));
+  for(let i=0;i<markers.length;i++){
+    const mk = markers[i];
+    const next = markers[i+1];
+    const gapEnd = next ? next.start : text.length;
+    const gap = text.slice(mk.end, gapEnd);
+    if(/^end$/i.test(mk.header)){
+      // END markers are boundaries, not blocks — but anything sitting between
+      // this END and the next marker (e.g. an [[AD]] placeholder dropped
+      // between two blocks) must still pass through, not vanish silently.
+      out += subAds(gap.trim()) + '\n';
+      continue;
+    }
+    const explicitEnd = next && /^end$/i.test(next.header);
+    if(!explicitEnd) unclosedCount++;
+    const content = subAds(gap.trim());
+    const { type, title } = parseBlockHeader(mk.header);
+    out += BLOCK_RENDERERS[type](title, content) + '\n';
+    blockCount++;
+  }
+  return { html: out, blockCount, unclosedCount };
+}
+
+function parseResponse(raw){
+  const seoResult = extractSEO(raw);
+  const bodyResult = extractBody(raw);
+  const pubResult = extractPublisherNotes(raw, bodyResult.endIdx);
+  const cleanedBody = stripHtmlComments(bodyResult.bodyHtml);
+  const blockResult = expandLongPostBlocks(cleanedBody);
+  const result = {
+    seo: seoResult.seo,
+    bodyHtml: blockResult.html,
+    publisherNotes: pubResult.publisherNotes,
+    method: seoResult.method + ' + ' + bodyResult.method + (blockResult.blockCount ? ' + blocks:'+blockResult.blockCount : ''),
+    truncated: bodyResult.cutOff && !pubResult.found
+  };
+  const warnings = [];
+  if(!result.seo.focusKeyword) warnings.push('Focus Keyword missing — fill in manually on the next step.');
+  if(!result.seo.seoTitle) warnings.push('SEO Title missing — fill in manually.');
+  if(!result.seo.slug) warnings.push('URL Slug missing — fill in manually.');
+  if(!result.seo.metaDescription) warnings.push('Meta Description missing — fill in manually.');
+  if(!result.seo.h1) warnings.push('H1 missing — fill in manually.');
+  if(!result.seo.imageAltText) warnings.push('Image ALT text missing — fill in manually.');
+  if(!result.seo.imagePrompt) warnings.push('Image generation prompt missing — fill in manually if you want one.');
+  if(!result.bodyHtml || result.bodyHtml.length < 500) warnings.push('Notes body looks too short or missing — re-check the paste, or edit it manually on the next step.');
+  if(result.truncated) warnings.push('The reply looks CUT OFF midway (no closing marker found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
+  if(blockResult.blockCount === 0) warnings.push('No {* type: title *} block tags were found in the body — it was passed through as-is. If the AI wrote plain HTML instead of block tags, either re-run with the block-tag reminder or edit the body manually on the next step.');
+  if(blockResult.unclosedCount > 0) warnings.push(`${blockResult.unclosedCount} block(s) were missing an explicit {* END *} — auto-closed at the next marker (or end of body). Double-check no content got merged into the wrong block.`);
+  if(seoResult.method==='label-text') warnings.push('SEO fields: no JSON block found — read from the plain labeled panel instead. Double-check every field.');
+  if(bodyResult.method==='h2-scan') warnings.push('Notes body: no marker comments found — guessed the body by scanning from the first <h2> to the next recognizable end-of-notes marker. Double-check the body did not get cut short or include trailing text.');
+  result.warnings = warnings;
+  return result;
+}
+
+var accumulatedRaw = '';
+function copyContinue(btn){
+  const t = `Continue EXACTLY from where your previous reply stopped. Rules:
+- Do NOT repeat anything already written. Do NOT start over. No introduction, no summary of what came before.
+- Resume mid-block: if you stopped inside <<<NOTES_BODY_HTML>>>, continue the HTML from the next element, inside a new \`\`\`html code fence.
+- When the current block is complete, close it with its END marker and continue with the remaining blocks per the original PIPELINE OUTPUT CONTRACT (code fences mandatory).`;
+  doCopy(t, btn, msg('parseMsg'), '"Continue" prompt copied — paste it in the SAME chat, then paste the new reply here with the continuation checkbox ticked.');
+}
+function parseAndGo(){
+  let raw = document.getElementById('rawIn').value;
+  if(!raw.trim()){ show(msg('parseMsg'),'bad','Paste the AI reply first.'); return; }
+  if(document.getElementById('appendMode').checked && accumulatedRaw){
+    raw = accumulatedRaw + '\n' + raw;   // stitch continuation onto the earlier paste(s)
+  }
+  accumulatedRaw = raw;
+  const result = parseResponse(raw);
+  state.parsed = result;
+  state.seo = result.seo;
+  state.bodyHtml = result.bodyHtml;
+  state.publisherNotes = result.publisherNotes;
+  saveDraft();
+
+  const issuesEl = document.getElementById('parseIssues');
+  if(result.warnings.length){
+    issuesEl.className = 'issues show';
+    issuesEl.innerHTML = result.warnings.map(w=>'<div>⚠ '+w+'</div>').join('');
+  } else { issuesEl.className = 'issues'; issuesEl.innerHTML=''; }
+
+  show(msg('parseMsg'), result.warnings.length ? 'warn' : 'ok',
+    result.warnings.length ? 'Parsed with '+result.warnings.length+' thing(s) to check — continue to Review.' : 'Parsed cleanly ('+result.method+' method) — continue to Review.');
+}
+
+/* ================= STEP 3 — review & edit ================= */
+function fillReviewForm(){
+  document.getElementById('fFocusKeyword').value = state.seo.focusKeyword || '';
+  document.getElementById('fSeoTitle').value = state.seo.seoTitle || '';
+  document.getElementById('fSlug').value = state.seo.slug || '';
+  document.getElementById('fMetaDescription').value = state.seo.metaDescription || '';
+  document.getElementById('fH1').value = state.seo.h1 || '';
+  document.getElementById('fImageAltText').value = state.seo.imageAltText || '';
+  document.getElementById('fImagePrompt').value = state.seo.imagePrompt || '';
+  document.getElementById('fBodyHtml').value = state.bodyHtml || '';
+  document.getElementById('fPublisherNotes').value = state.publisherNotes || '';
+}
+function syncFormToState(){
+  state.seo = {
+    focusKeyword: document.getElementById('fFocusKeyword').value.trim(),
+    seoTitle: document.getElementById('fSeoTitle').value.trim(),
+    slug: slugify(document.getElementById('fSlug').value.trim()),
+    metaDescription: document.getElementById('fMetaDescription').value.trim(),
+    h1: document.getElementById('fH1').value.trim(),
+    imageAltText: document.getElementById('fImageAltText').value.trim(),
+    imagePrompt: document.getElementById('fImagePrompt').value.trim()
+  };
+  state.bodyHtml = document.getElementById('fBodyHtml').value;
+  state.publisherNotes = document.getElementById('fPublisherNotes').value;
+  saveDraft();
+}
+
+/* ---------- draft autosave: survives an accidental refresh/tab close mid-review ---------- */
+const DRAFT_KEY = 'lp_draft_v1';
+let saveDraftTimer = null;
+function saveDraft(){
+  clearTimeout(saveDraftTimer);
+  saveDraftTimer = setTimeout(()=>{
+    try{ localStorage.setItem(DRAFT_KEY, JSON.stringify({state, cur})); }catch(e){}
+  }, 400);
+}
+function clearDraft(){ try{ localStorage.removeItem(DRAFT_KEY); }catch(e){} }
+function restoreDraftIfAny(){
+  let data;
+  try{ data = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); }catch(e){ return; }
+  if(!data || !data.state) return;
+  const s = data.state;
+  const hasContent = s.topic || s.bodyHtml || (s.seo && s.seo.slug);
+  if(!hasContent) return;
+  const label = s.topic || (s.seo && s.seo.slug) || 'untitled note';
+  if(!confirm('Restore your last unsaved draft — "'+label+'"?')){ clearDraft(); return; }
+  state = s;
+  cur = data.cur || 0;
+  document.getElementById('topic').value = state.topic || '';
+  document.getElementById('examType').value = state.examType || '';
+  document.getElementById('subject').value = state.subject || 'Auto-detect';
+  document.getElementById('hindiPercent').value = state.hindiPercent || 70;
+  updateLangMixLabel();
+  if(state.validation && state.validation.result) renderValidationResults(state.validation.result);
+  updatePublishGate();
+}
+function copyReviewField(e, id, label){
+  /* the copy button lives inside a <summary> — stop the click from also
+     toggling the collapsed section open/closed */
+  e.preventDefault(); e.stopPropagation();
+  syncFormToState();
+  const val = document.getElementById(id).value;
+  if(!val.trim()){ show(msg('reviewMsg'),'bad', label+' is empty — nothing to copy.'); return; }
+  doCopy(val, null, msg('reviewMsg'), label+' copied.');
+}
+
+function updatePreview(){
+  syncFormToState();
+  const frame = document.getElementById('previewFrame');
+  /* the closing body tag below MUST keep its backslash escape: dev servers
+     (Live Server) inject their reload script before the first unescaped
+     closing-body sequence in the file, which would split this script element
+     and dump the rest of the source as visible page text.
+     The DOCTYPE is load-bearing too: without it the iframe renders in quirks
+     mode, where the notes cards' box-sizing/margin CSS displays wrong. */
+  frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'<\/body></html>';
+  const text = state.bodyHtml.replace(/<[^>]+>/g,' ');
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  document.getElementById('bodyWords').textContent = words.toLocaleString();
+}
+['fFocusKeyword','fSeoTitle','fSlug','fMetaDescription','fH1','fImageAltText','fImagePrompt','fPublisherNotes'].forEach(id=>{
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', syncFormToState);
+  });
+});
+
+/* ================= STEP 4 — save to GitHub ================= */
+const GH_OWNER = 'bugignore';
+const GH_REPO = 'question-factory';
+/* Paste the blob produced by admin-encrypt-token.html here (owner-only tool, not linked from this app). */
+const ENCRYPTED_GH_TOKEN = 'yPCzkBT4bp+U9ljuG0Bj/DM2ET8ZNq9HRABXBPUWo7afbr7d9VUeyOtAuQEuSpXlBcSqaJBWTiQm0d3WepO2slgYVLjuj2FcEuAiuCpFrb3NGJeyMB2BynFdnH1Du/vNvGp6lZDHwAz/w7PhBQgXk7bmSbLeMqwF5QMiYVXkm94fGQs/IVU64EA=';
+
+function loadSettings(){
+  const unlocked = !!sessionStorage.getItem('ghUnlockedToken');
+  document.getElementById('ghLockBox').style.display = unlocked ? 'none' : '';
+}
+
+function b64ToBytes(b64){ return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+
+async function deriveKey(password, salt){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations:200000, hash:'SHA-256' },
+    keyMaterial, { name:'AES-GCM', length:256 }, false, ['decrypt']
+  );
+}
+
+async function unlockGithub(btn){
+  const m = msg('unlockMsg');
+  const password = document.getElementById('ghAppPassword').value;
+  if(!password){ show(m,'bad','Enter the app password first.'); return; }
+  if(ENCRYPTED_GH_TOKEN.startsWith('REPLACE_WITH')){ show(m,'bad','This app has not been set up yet — the owner needs to run admin-encrypt-token.html first.'); return; }
+  try{
+    const raw = b64ToBytes(ENCRYPTED_GH_TOKEN);
+    const salt = raw.slice(0,16), iv = raw.slice(16,28), ct = raw.slice(28);
+    const key = await deriveKey(password, salt);
+    const ptBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+    const token = new TextDecoder().decode(ptBuf);
+    sessionStorage.setItem('ghUnlockedToken', token);
+    document.getElementById('ghAppPassword').value = '';
+    document.getElementById('ghLockBox').style.display = 'none';
+    show(m,'ok','Unlocked for this browser session.');
+  }catch(e){
+    show(m,'bad','Wrong password — try again.');
+  }
+}
+
+function buildBundle(){
+  return {
+    topic: state.topic, examType: state.examType, subject: state.subject, targetYear: 2026,
+    hindiPercent: state.hindiPercent,
+    seo: state.seo, bodyHtml: state.bodyHtml, publisherNotes: state.publisherNotes,
+    createdAt: new Date().toISOString()
+  };
+}
+
+function utf8ToBase64(str){
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+
+/* Create-or-update a file in a GitHub repo via the Contents API — runs entirely
+   from the browser using the session-unlocked token, no backend involved. */
+async function githubPutFile(owner, repo, token, path, content, message){
+  const api = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`;
+  const headers = {
+    'Authorization': 'token ' + token,
+    'Accept': 'application/vnd.github+json'
+  };
+  let sha;
+  const getRes = await fetch(api + '?ref=main', { headers });
+  if(getRes.status === 200){
+    sha = (await getRes.json()).sha;
+  } else if(getRes.status !== 404){
+    throw new Error(`GitHub check failed (${getRes.status}): ${(await getRes.text()).slice(0,200)}`);
+  }
+  const body = { message, content: utf8ToBase64(content), branch: 'main' };
+  if(sha) body.sha = sha;
+  const putRes = await fetch(api, { method:'PUT', headers: {...headers,'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if(!putRes.ok){
+    throw new Error(`GitHub save failed (${putRes.status}): ${(await putRes.text()).slice(0,300)}`);
+  }
+  return putRes.json();
+}
+
+async function autoSaveToGithub(btn){
+  syncFormToState();
+  const m = msg('sendMsg');
+  const healBtn = document.getElementById('autoHealBtn');
+  const integrity = vCheckMarkupIntegrity(state.bodyHtml);
+  if(!integrity.ok){
+    show(m,'bad','Auto-save blocked — the notes body has broken HTML that would break the published page. Tap "Auto-fix HTML" below to try an automatic repair, or edit the Notes Body HTML field by hand using the list below.');
+    renderShareBlock('integrityShare', integrity.issues.map(i=>'• '+i).join('\n'), true);
+    if(healBtn) healBtn.style.display = '';
+    cur = 2; render();
+    const field = document.getElementById('fBodyHtml');
+    if(field){ field.scrollIntoView({behavior:'smooth', block:'center'}); field.focus(); }
+    return;
+  }
+  clearShareBlock('integrityShare');
+  if(healBtn) healBtn.style.display = 'none';
+  if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
+  const hardPass = !!(state.validation && state.validation.result && state.validation.result.hardPass);
+  const overrideCheck = document.getElementById('overrideCheck');
+  if(!hardPass && !(overrideCheck && overrideCheck.checked)){
+    show(m,'bad','Validation has not passed — run "Run validation" above and check the override box if you want to post anyway.');
+    updatePublishGate();
+    return;
+  }
+  const token = sessionStorage.getItem('ghUnlockedToken');
+  if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
+  const saveBtn = document.getElementById('autoSaveBtn');
+  saveBtn.disabled = true;
+  show(m,'warn','Saving to GitHub…');
+  const bundle = buildBundle();
+  const path = `pending-long-posts/${state.seo.slug}.json`;
+  try{
+    const res = await githubPutFile(GH_OWNER, GH_REPO, token, path, JSON.stringify(bundle, null, 2), `Add long post: ${state.seo.slug}`);
+    document.getElementById('dlSlug').textContent = state.seo.slug;
+    const sha = res.commit && res.commit.sha;
+    show(m,'ok',`Saved to ${path} — tracking the pipeline below.`);
+    clearDraft();
+    trackPipeline(token, sha);
+  }catch(e){
+    show(m,'bad','Auto-save failed: '+e.message+' — use the manual fallback below if this keeps happening.');
+  }finally{
+    saveBtn.disabled = false;
+  }
+}
+
+async function healAndRetrySave(btn){
+  syncFormToState();
+  const m = msg('sendMsg');
+  const healed = vHealMarkup(state.bodyHtml);
+  const recheck = vCheckMarkupIntegrity(healed);
+  state.bodyHtml = healed;
+  const field = document.getElementById('fBodyHtml');
+  if(field) field.value = healed;
+  saveDraft();
+  if(!recheck.ok){
+    show(m,'bad',"Auto-fix couldn't fully repair the markup — edit the Notes Body HTML field by hand to fix what's left below.");
+    renderShareBlock('integrityShare', recheck.issues.map(i=>'• '+i).join('\n'), true);
+    return;
+  }
+  clearShareBlock('integrityShare');
+  show(m,'ok','Auto-fix repaired the HTML. Retrying Auto-save…');
+  const saveBtn = document.getElementById('autoSaveBtn');
+  await autoSaveToGithub(saveBtn);
+}
+
+/* ---------- batch queue: stage several notes locally, push them all in one action ---------- */
+const QUEUE_KEY = 'lp_batchQueue';
+function loadQueue(){ try{ return JSON.parse(localStorage.getItem(QUEUE_KEY)||'[]'); }catch(e){ return []; } }
+function saveQueueList(q){ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); renderQueue(); }
+function renderQueue(){
+  const q = loadQueue();
+  const listEl = document.getElementById('queueList');
+  const postBtn = document.getElementById('queuePostBtn');
+  const countEl = document.getElementById('queueCount');
+  if(countEl) countEl.textContent = q.length;
+  if(postBtn) postBtn.style.display = q.length ? '' : 'none';
+  if(!listEl) return;
+  listEl.innerHTML = q.map((item,i)=>`<div class="copyRow"><div style="flex:1;min-width:0">${item.slug}</div><button class="btn small ghost" onclick="removeFromQueue(${i})">✕ remove</button></div>`).join('');
+}
+function removeFromQueue(i){
+  const q = loadQueue();
+  q.splice(i,1);
+  saveQueueList(q);
+}
+async function addToQueue(btn){
+  syncFormToState();
+  const m = msg('queueMsg');
+  const integrity = vCheckMarkupIntegrity(state.bodyHtml);
+  if(!integrity.ok){ show(m,'bad','Fix the broken HTML in Step 3 before queueing (see Auto-save for details).'); return; }
+  if(!state.seo.slug){ show(m,'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
+  const hardPass = !!(state.validation && state.validation.result && state.validation.result.hardPass);
+  const overrideCheck = document.getElementById('overrideCheck');
+  if(!hardPass && !(overrideCheck && overrideCheck.checked)){
+    show(m,'bad','Validation has not passed — run "Run validation" above and check the override box if you want to queue anyway.');
+    updatePublishGate();
+    return;
+  }
+  const q = loadQueue();
+  if(q.some(item=>item.slug===state.seo.slug)){ show(m,'bad',`"${state.seo.slug}" is already in the queue.`); return; }
+  q.push({ slug: state.seo.slug, bundle: buildBundle() });
+  saveQueueList(q);
+  show(m,'ok',`Added "${state.seo.slug}" to the batch queue (${q.length} queued). Start the next note at Step 1, or post the queue when everyone's done.`);
+  clearDraft();
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+  cur = 0; render();
+}
+async function postQueue(btn){
+  const m = msg('queueMsg');
+  const token = sessionStorage.getItem('ghUnlockedToken');
+  if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
+  const q = loadQueue();
+  if(!q.length){ show(m,'bad','The queue is empty.'); return; }
+  if(btn) btn.disabled = true;
+  const failed = [];
+  let ok = 0;
+  for(const item of q){
+    show(m,'warn',`Posting ${item.slug} (${ok+failed.length+1}/${q.length})…`);
+    try{
+      await githubPutFile(GH_OWNER, GH_REPO, token, `pending-long-posts/${item.slug}.json`, JSON.stringify(item.bundle,null,2), `Add long post: ${item.slug}`);
+      ok++;
+    }catch(e){ failed.push(item); }
+  }
+  saveQueueList(failed);
+  show(m, failed.length ? 'warn' : 'ok',
+    failed.length
+      ? `Posted ${ok}/${q.length}. Failed: ${failed.map(f=>f.slug).join(', ')} — still in the queue, retry when ready.`
+      : `Posted ${ok} note(s) to GitHub — Actions will publish each one to WordPress as a draft.`);
+  if(btn) btn.disabled = false;
+}
+
+/* ---------- pipeline tracker: GitHub save -> Actions run -> WordPress publish ---------- */
+function setPipelinePct(pct, tone){
+  const fill = document.getElementById('pipelineFill');
+  fill.style.width = pct+'%';
+  fill.className = 'pipeline-fill' + (tone ? ' '+tone : '');
+  document.getElementById('pipelinePct').textContent = pct+'%';
+}
+function setStepState(elId, state, text){
+  const el = document.getElementById(elId);
+  el.className = 'pstep' + (state ? ' '+state : '');
+  if(text) document.getElementById(elId+'Txt').textContent = text;
+}
+async function ghApi(token, path){
+  const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}${path}`, {
+    headers: { 'Authorization':'token '+token, 'Accept':'application/vnd.github+json' }
+  });
+  if(!res.ok) throw new Error('GitHub API '+res.status);
+  return res.json();
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+function togglePipelineMini(){
+  document.getElementById('pipelineWrap').classList.toggle('open');
+}
+function closePipelineMini(){
+  document.getElementById('pipelineWrap').style.display = 'none';
+}
+
+/* runs standalone from a small floating widget (outside the step sections) so
+   it keeps tracking in the background while the user goes back to Step 1 and
+   works on another note — takes its own slug snapshot rather than reading
+   live state, since state.seo.slug may belong to a different note by the
+   time this finishes */
+async function trackPipeline(token, sha){
+  const slug = state.seo.slug;
+  const wrap = document.getElementById('pipelineWrap');
+  wrap.style.display = '';
+  wrap.classList.remove('open');
+  document.getElementById('pipelineMiniLabel').textContent = 'Publishing: ' + slug;
+  const hint = document.getElementById('pipelineHint');
+  if(hint) hint.style.display = '';
+  setPipelinePct(33);
+  setStepState('pStepGit','done','Added to GitHub');
+  setStepState('pStepActions','wait','GitHub Actions running…');
+  setStepState('pStepWp','','Published to WordPress (draft)');
+
+  const startedAt = new Date().toISOString();
+
+  // --- stage 2: find and watch the Actions run triggered by this commit ---
+  let run = null;
+  for(let i=0;i<24 && !run;i++){ // up to ~2 min to appear
+    try{
+      const data = sha ? await ghApi(token, `/actions/runs?head_sha=${sha}`) : await ghApi(token, `/actions/runs?branch=main`);
+      if(data.workflow_runs && data.workflow_runs.length) run = data.workflow_runs[0];
+    }catch(e){ /* keep trying */ }
+    if(!run) await sleep(5000);
+  }
+  if(!run){
+    setStepState('pStepActions','bad','Could not find the Actions run — check the repo\'s Actions tab manually.');
+    setPipelinePct(33,'bad');
+    return;
+  }
+  for(let i=0;i<36;i++){ // up to ~3 min
+    try{ run = await ghApi(token, `/actions/runs/${run.id}`); }catch(e){}
+    if(run.status === 'completed') break;
+    await sleep(5000);
+  }
+  if(run.status !== 'completed' || run.conclusion !== 'success'){
+    setStepState('pStepActions','bad', run.status==='completed' ? `Actions run finished with "${run.conclusion}" — check the Actions tab.` : 'Actions run is taking longer than expected — check the Actions tab.');
+    setPipelinePct(33,'bad');
+    return;
+  }
+  setStepState('pStepActions','done','GitHub Actions finished');
+  setPipelinePct(66);
+
+  // --- stage 3: watch for the "Publish long post(s) to WordPress" commit on main ---
+  setStepState('pStepWp','wait','Publishing to WordPress…');
+  let published = null;
+  for(let i=0;i<24 && !published;i++){ // up to ~2 min
+    try{
+      const commits = await ghApi(token, `/commits?sha=main&since=${encodeURIComponent(startedAt)}&per_page=10`);
+      published = commits.find(c => /Publish long post\(s\) to WordPress/i.test(c.commit.message));
+    }catch(e){ /* keep trying */ }
+    if(!published) await sleep(5000);
+  }
+  if(!published){
+    setStepState('pStepWp','bad','No WordPress-publish commit seen yet — it may still be running, check back shortly.');
+    setPipelinePct(66,'bad');
+    return;
+  }
+  setPipelinePct(100,'done');
+
+  // best-effort: fetch published-long-posts/<slug>.json for the direct draft link
+  let link = '';
+  try{
+    const meta = await ghApi(token, `/contents/published-long-posts/${slug}.json?ref=main`);
+    const parsed = JSON.parse(atob(meta.content.replace(/\n/g,'')));
+    link = parsed.wordpress && parsed.wordpress.link;
+  }catch(e){ /* the link is a nice-to-have, not worth failing the step over */ }
+
+  const stepEl = document.getElementById('pStepWp');
+  stepEl.className = 'pstep done';
+  document.getElementById('pStepWpTxt').innerHTML = link
+    ? `Published to WordPress as a draft — <a href="${link}" target="_blank" rel="noopener">view draft ↗</a>`
+    : 'Published to WordPress as a draft ✓';
+}
+
+function downloadBundle(btn){
+  syncFormToState();
+  if(!state.seo.slug){ show(msg('sendMsg'),'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
+  const bundle = buildBundle();
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = state.seo.slug + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  document.getElementById('dlSlug').textContent = state.seo.slug;
+  show(msg('sendMsg'),'ok','Downloaded '+state.seo.slug+'.json — now open the GitHub upload page and drop it into pending-long-posts/.');
+}
+function openGithubUpload(btn){
+  const url = `https://github.com/${encodeURIComponent(GH_OWNER)}/${encodeURIComponent(GH_REPO)}/upload/main/pending-long-posts`;
+  window.open(url, '_blank', 'noopener');
+  show(msg('sendMsg'),'ok','Opened the GitHub upload page in a new tab — drag the downloaded file in and commit.');
+}
+const COPY_FIELDS = [
+  ['focusKeyword','Focus Keyword'],
+  ['seoTitle','SEO Title'],
+  ['slug','URL Slug'],
+  ['metaDescription','Meta Description'],
+  ['h1','H1'],
+  ['imageAltText','Featured Image — ALT Text'],
+  ['imagePrompt','Featured Image — Generation Prompt']
+];
+function renderCopyFields(){
+  syncFormToState();
+  const wrap = document.getElementById('copyFieldRows');
+  wrap.innerHTML = COPY_FIELDS.map(([key,label])=>{
+    const val = state.seo[key] || '';
+    const esc = val.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const escLabel = label.replace(/'/g,"\\'");
+    return `<div class="copyRow">
+      <div style="flex:1;min-width:0">
+        <div class="cLabel">${label}</div>
+        <div class="cVal" onclick="tryRun(()=>copyField('${key}','${escLabel}'),this)" title="Tap to copy">${esc}</div>
+      </div>
+      <button class="btn small ghost" onclick="tryRun(()=>copyField('${key}','${escLabel}'),this)">📋</button>
+    </div>`;
+  }).join('');
+}
+function copyField(key, label){
+  const val = state.seo[key] || '';
+  if(!val){ show(msg('sendMsg'),'bad', label+' is empty — nothing to copy.'); return; }
+  doCopy(val, null, msg('sendMsg'), label+' copied.');
+}
+function copyBodyHtml(btn){
+  syncFormToState();
+  doCopy(state.bodyHtml, btn, msg('sendMsg'), 'Notes body HTML copied — paste into a WordPress Custom HTML block.');
+}
+function copySeoFields(btn){
+  syncFormToState();
+  const t = `Focus Keyword:       ${state.seo.focusKeyword}
+SEO Title:           ${state.seo.seoTitle}
+Permalink/Slug:      ${state.seo.slug}
+Meta Description:    ${state.seo.metaDescription}
+H1 (Post Title):     ${state.seo.h1}
+Image ALT Text:      ${state.seo.imageAltText || ''}
+Image Gen Prompt:    ${state.seo.imagePrompt || ''}`;
+  doCopy(t, btn, msg('sendMsg'), 'All SEO fields copied.');
+}
+function resetAll(){
+  if(!confirm('Clear this note and start over?')) return;
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+  accumulatedRaw = '';
+  clearDraft();
+  document.getElementById('promptOut').value='';
+  document.getElementById('topic').value='';
+  document.getElementById('examType').value='';
+  document.getElementById('rawIn').value='';
+  document.getElementById('appendMode').checked=false;
+  document.getElementById('pStats').innerHTML='';
+  document.getElementById('hindiPercent').value = 70;
+  updateLangMixLabel();
+  cur=0; render();
+}
+
+/* ================= STEP 2.5 — VALIDATE (deterministic Rank Math gate) =================
+   Re-derives every fact from the actual generated HTML in a real DOM — never trusts the
+   AI's own checklist. Built after an audit found 14/17 published notes silently missing
+   the mandatory image, and one (number-system-ctet-notes-2026) shipped with 1,523 words
+   and 0.07% keyphrase density despite the AI's self-report claiming compliance. */
+
+const TARGET_SITE_HOST = 'examnotespdf.in'; // where notes get published — used to tell internal vs external links apart
+const APPROVED_POWER_WORDS = ['Complete','Ultimate','Essential','Proven','Definitive','Powerful','Master','Instant'];
+const APPROVED_SENTIMENT_WORDS = ['Best','Easy','Top','Smart','Perfect','Amazing'];
+
+function vParseBody(html){ return new DOMParser().parseFromString(html || '', 'text/html'); }
+
+/* ---------- markup integrity: the ONE real blocker — broken HTML/JS, not SEO quality ----------
+   Browsers auto-repair malformed HTML when parsed via DOMParser, which hides the breakage from
+   every other check. This walks the raw markup as a tag stream (stack-based, like a real parser
+   would before auto-correcting) so mismatched/unclosed tags and stray <script> are caught before
+   they ever reach WordPress. This is the only check Auto-save cannot be forced past. */
+const VOID_TAGS = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+function vCheckMarkupIntegrity(html){
+  const issues = [];
+  const raw = html || '';
+  if(/<script\b/i.test(raw)){
+    issues.push('Contains a <script> tag — WordPress strips in-content scripts, leaving broken visible text. Remove it.');
+  }
+  const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(\/?)>/g;
+  const stack = [];
+  let m;
+  while((m = tagRe.exec(raw))){
+    const full = m[0], name = m[1].toLowerCase(), selfClosed = m[2]==='/' || VOID_TAGS.has(name);
+    if(selfClosed) continue;
+    if(full.startsWith('</')){
+      if(stack.length && stack[stack.length-1]===name){
+        stack.pop();
+      } else {
+        const idx = stack.lastIndexOf(name);
+        if(idx===-1){
+          issues.push(`Stray closing tag </${name}> with no matching open <${name}>.`);
+        } else {
+          const unclosed = stack.splice(idx).slice(1);
+          issues.push(`</${name}> closes out of order — <${unclosed[unclosed.length-1]||name}> was opened after it and never closed before this point.`);
+        }
+      }
+    } else {
+      stack.push(name);
+    }
+  }
+  if(stack.length){
+    const counts = {};
+    stack.forEach(t=>counts[t]=(counts[t]||0)+1);
+    const list = Object.entries(counts).map(([t,n])=>`<${t}>×${n}`).join(', ');
+    issues.push(`${stack.length} tag(s) opened but never closed: ${list}.`);
+  }
+  return { ok: issues.length===0, issues };
+}
+
+/* ---------- healing: best-effort auto-repair, not a substitute for the check above ----------
+   Strips banned <script> blocks, then round-trips the remainder through the browser's own
+   forgiving HTML parser — the same auto-repair a real browser applies when it renders slightly
+   broken markup (auto-closing unclosed tags, dropping stray closers, fixing nesting). Re-run
+   vCheckMarkupIntegrity on the result before trusting it; healing can still fail on markup that's
+   broken in a way no HTML parser can guess the intent of. */
+function vHealMarkup(html){
+  const stripped = (html || '').replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '');
+  const doc = new DOMParser().parseFromString(stripped, 'text/html');
+  return doc.body.innerHTML;
+}
+
+function vProseText(doc){
+  const clone = doc.body.cloneNode(true);
+  clone.querySelectorAll('script,style,svg').forEach(n=>n.remove());
+  return (clone.textContent || '').replace(/https?:\/\/\S+/g,' ').replace(/\s+/g,' ').trim();
+}
+function vWordCount(text){ return text ? text.split(/\s+/).filter(Boolean).length : 0; }
+function vNormalize(s){ return String(s||'').toLowerCase().trim().replace(/\s+/g,' '); }
+
+function vCountKeyphrase(text, keyphrase){
+  const t = ' ' + vNormalize(text) + ' ';
+  const k = vNormalize(keyphrase);
+  if(!k) return { exact:0, variant:0, total:0 };
+  const esc = k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const exact = (t.match(new RegExp('\\b'+esc+'\\b','g')) || []).length;
+  const variantPattern = esc.replace(/[\s-]+/g,'[\\s-]+');
+  const total = (t.match(new RegExp('\\b'+variantPattern+'\\b','g')) || []).length;
+  return { exact, variant: Math.max(0,total-exact), total };
+}
+
+/* ---- individual checks: each returns {id,label,tier:'hard'|'soft',pass,detail} with a REAL number in detail ---- */
+function vCheckWordCount(words){
+  return { id:'word-count', label:'Word count 6,000–8,000 (hard gate)', tier:'hard', pass: words>=6000 && words<=8500, detail: words.toLocaleString()+' words' };
+}
+function vCheckDensity(words, kw){
+  const pct = words ? (kw.total/words*100) : 0;
+  return { id:'density', label:'Keyphrase density 1.0–1.4%', tier:'hard', pass: pct>=1.0 && pct<=1.4,
+    detail: `${kw.exact} exact + ${kw.variant} variant = ${kw.total} / ${words} words = ${pct.toFixed(2)}%` };
+}
+function vCheckHeadings(doc, keyphrase){
+  const k = vNormalize(keyphrase);
+  const h2s = k ? [...doc.querySelectorAll('h2')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
+  const h3s = k ? [...doc.querySelectorAll('h3')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
+  return { id:'headings', label:'Keyphrase in ≥3 H2s and ≥1 H3', tier:'hard', pass: h2s.length>=3 && h3s.length>=1,
+    detail: `${h2s.length} H2(s), ${h3s.length} H3(s) contain it` };
+}
+function vCheckImageAlt(doc, keyphrase){
+  const imgs = [...doc.querySelectorAll('img')];
+  const k = vNormalize(keyphrase);
+  const alts = imgs.map(i=>i.getAttribute('alt')||'');
+  const pass = imgs.length>=1 && alts.some(a=>vNormalize(a).startsWith(k)) && k.length>0;
+  return { id:'image-alt', label:'≥1 <img> with ALT starting with keyphrase', tier:'hard', pass,
+    detail: imgs.length===0 ? 'NO <img> TAGS FOUND IN BODY' : `${imgs.length} image(s), alt="${alts.join('" / "')}"` };
+}
+function vCheckSvg(doc, keyphrase){
+  const svgs = [...doc.querySelectorAll('svg')];
+  const k = vNormalize(keyphrase);
+  const withLabel = svgs.filter(s=>vNormalize(s.getAttribute('aria-label')||'').includes(k)).length;
+  return { id:'svg-count', label:'5–7 SVG visuals (informational — NOT counted as Rank Math "media", see media check)', tier:'soft',
+    pass: svgs.length>=5 && svgs.length<=7, detail: `${svgs.length} SVG(s), ${withLabel} with keyphrase in aria-label` };
+}
+function vCheckMedia(doc){
+  const count = doc.querySelectorAll('img, video').length; // Rank Math's real "Media in Posts" test: img/video only, not svg
+  return { id:'media', label:'Rank Math media test — 4+ real <img>/<video> for 100%', tier:'soft',
+    pass: count>=4, detail: `${count} real <img>/<video> element(s) found — SVGs don't count toward this` };
+}
+function vCheckParagraphs(doc){
+  let longest=0, sample='';
+  doc.querySelectorAll('p').forEach(p=>{ const w=vWordCount(p.textContent); if(w>longest){longest=w; sample=p.textContent.trim().slice(0,60);} });
+  return { id:'paragraphs', label:'No <p> over 120 words', tier:'hard', pass: longest<=120,
+    detail: `longest = ${longest} words${sample?` ("${sample}…")`:''}` };
+}
+function vCheckLinks(doc){
+  let internal=0, external=0, externalNofollow=0, hashLinks=0;
+  doc.querySelectorAll('a[href]').forEach(a=>{
+    const href = (a.getAttribute('href')||'').trim();
+    if(href==='#'){ hashLinks++; return; }
+    if(/^https?:\/\//i.test(href)){
+      let host=''; try{ host = new URL(href).hostname.replace(/^www\./,''); }catch(e){}
+      if(host===TARGET_SITE_HOST) internal++;
+      else { external++; if(/nofollow/i.test(a.getAttribute('rel')||'')) externalNofollow++; }
+    } else if(href.startsWith('/')) internal++;
+  });
+  return { id:'links', label:'≥7 internal + ≥3 external link, zero href="#"', tier:'hard',
+    pass: internal>=7 && external>=3 && hashLinks===0,
+    detail: `${internal} internal, ${external} external (${externalNofollow} nofollow), ${hashLinks} href="#"` };
+}
+function vCheckDuplicateIds(doc){
+  const ids = [...doc.querySelectorAll('[id]')].map(el=>el.id);
+  const seen=new Set(), dupes=new Set();
+  ids.forEach(id=>{ if(seen.has(id)) dupes.add(id); seen.add(id); });
+  return { id:'dup-ids', label:'No duplicate id attributes', tier:'hard', pass: dupes.size===0,
+    detail: dupes.size ? 'duplicated: '+[...dupes].join(', ') : `${ids.length} unique id(s)` };
+}
+function vCheckBareH3(doc){
+  const h3s = [...doc.querySelectorAll('h3')];
+  const bare = h3s.filter(h=>!(h.getAttribute('style')||'').trim());
+  return { id:'bare-h3', label:'Every <h3> has an inline style (no bare h3)', tier:'hard', pass: bare.length===0,
+    detail: `${h3s.length} total, ${bare.length} bare` };
+}
+function vCheckScriptTags(doc){
+  const n = doc.querySelectorAll('script').length;
+  return { id:'no-script', label:'Zero <script> tags in body', tier:'hard', pass: n===0, detail: `${n} found` };
+}
+function vCheckCitations(doc){
+  const sups = [...doc.querySelectorAll('sup[id^="cite-"]')];
+  const refs = [...doc.querySelectorAll('li[id^="ref-"]')];
+  const supTargets = new Set(sups.map(s=>{ const a=s.querySelector('a[href^="#ref-"]'); return a ? a.getAttribute('href').slice(1) : null; }).filter(Boolean));
+  const refIds = new Set(refs.map(r=>r.id));
+  const orphanCitations = [...supTargets].filter(t=>!refIds.has(t));
+  const orphanRefs = [...refIds].filter(id=>!supTargets.has(id));
+  return { id:'citations', label:'≥6 inline citations, zero orphans either direction', tier:'hard',
+    pass: sups.length>=6 && orphanCitations.length===0 && orphanRefs.length===0,
+    detail: `${sups.length} citation(s), ${refs.length} reference(s), ${orphanCitations.length} orphan citation(s), ${orphanRefs.length} orphan reference(s)` };
+}
+function vCheckToc(doc){
+  const h2Ids = new Set([...doc.querySelectorAll('h2[id]')].map(h=>h.id));
+  const matching = [...doc.querySelectorAll('a[href^="#"]')].filter(a=>h2Ids.has(a.getAttribute('href').slice(1)));
+  return { id:'toc', label:'Linked TOC present (proxy — Rank Math’s real TOC-plugin detection is unconfirmed, see audit)', tier:'soft',
+    pass: matching.length>=2, detail: `${matching.length} anchor link(s) resolve to a real H2 id` };
+}
+function vCheckAdSlots(doc){
+  const ads = [...doc.querySelectorAll('ins.adsbygoogle')];
+  if(ads.length!==3) return { id:'ad-slots', label:'Exactly 3 ad slots, spread early/mid/late', tier:'soft', pass:false, detail:`${ads.length} found (need exactly 3)` };
+  const allNodes = [...doc.body.querySelectorAll('*')];
+  const total = allNodes.length || 1;
+  const thirds = ads.map(ad=>{
+    const idx = allNodes.indexOf(ad.parentElement || ad);
+    const frac = idx/total;
+    return frac<1/3 ? 'early' : frac<2/3 ? 'middle' : 'late';
+  });
+  const pass = new Set(thirds).size>=2 && !(thirds[0]==='late' && thirds[1]==='late' && thirds[2]==='late');
+  return { id:'ad-slots', label:'3 ad slots spread across zones, not bunched at the end', tier:'soft', pass, detail: `positions: ${thirds.join(', ')}` };
+}
+function vCheckTitle(seo){
+  const k = vNormalize(seo.focusKeyword), t = seo.seoTitle||'';
+  return { id:'title', label:'SEO Title starts with keyphrase, ≤60 chars', tier:'hard',
+    pass: k.length>0 && vNormalize(t).startsWith(k) && t.length<=60, detail: `"${t}" (${t.length} chars)` };
+}
+function vCheckTitleWords(seo){
+  const t = seo.seoTitle||'';
+  const hasNumber = /\d/.test(t), hasPower = APPROVED_POWER_WORDS.some(w=>t.includes(w)), hasSentiment = APPROVED_SENTIMENT_WORDS.some(w=>t.includes(w));
+  return { id:'title-words', label:'Title has a number + power word + sentiment word', tier:'hard',
+    pass: hasNumber && hasPower && hasSentiment, detail: `number:${hasNumber} power:${hasPower} sentiment:${hasSentiment}` };
+}
+function vCheckMeta(seo){
+  const m = seo.metaDescription||'';
+  const count = vCountKeyphrase(m, seo.focusKeyword).total;
+  return { id:'meta', label:'Meta description 150–155 chars, keyphrase exactly once', tier:'hard',
+    pass: m.length>=150 && m.length<=155 && count===1, detail: `${m.length} chars, keyphrase found ${count}x` };
+}
+function vCheckSlug(seo){
+  const slug = seo.slug||'';
+  const kwWords = vNormalize(seo.focusKeyword).split(' ').filter(Boolean);
+  const slugWords = slug.split('-');
+  const pass = slug.length>0 && slug.length<75 && /^[a-z0-9-]+$/.test(slug) && kwWords.every(w=>slugWords.includes(w));
+  return { id:'slug', label:'Slug has every keyphrase word, <75 chars', tier:'hard', pass, detail: `"${slug}" (${slug.length} chars)` };
+}
+function vCheckH1(seo){
+  const k = vNormalize(seo.focusKeyword), h1 = seo.h1||'';
+  return { id:'h1', label:'H1 starts with keyphrase', tier:'hard', pass: k.length>0 && vNormalize(h1).startsWith(k), detail: `"${h1}"` };
+}
+function vCheckFirst100Words(doc, seo){
+  const words = vProseText(doc).split(/\s+/).filter(Boolean).slice(0,100).join(' ');
+  const pass = vCountKeyphrase(words, seo.focusKeyword).total>=1;
+  return { id:'first-100', label:'Keyphrase in first 100 words of BODY text (not just the WP title)', tier:'hard',
+    pass, detail: pass ? 'found' : 'not found in: "'+words.slice(0,120)+'…"' };
+}
+
+function vRunChecks(seo, bodyHtml){
+  seo = seo || {};
+  const doc = vParseBody(bodyHtml);
+  const proseText = vProseText(doc);
+  const words = vWordCount(proseText);
+  const kw = vCountKeyphrase(proseText, seo.focusKeyword);
+  const checks = [
+    vCheckWordCount(words), vCheckDensity(words, kw), vCheckHeadings(doc, seo.focusKeyword),
+    vCheckImageAlt(doc, seo.focusKeyword), vCheckSvg(doc, seo.focusKeyword), vCheckMedia(doc),
+    vCheckParagraphs(doc), vCheckLinks(doc), vCheckDuplicateIds(doc), vCheckBareH3(doc),
+    vCheckScriptTags(doc), vCheckCitations(doc), vCheckToc(doc), vCheckAdSlots(doc),
+    vCheckTitle(seo), vCheckTitleWords(seo), vCheckMeta(seo), vCheckSlug(seo), vCheckH1(seo),
+    vCheckFirst100Words(doc, seo)
+  ];
+  const hardChecks = checks.filter(c=>c.tier==='hard');
+  return { checks, hardFails: hardChecks.filter(c=>!c.pass), hardPass: hardChecks.every(c=>c.pass),
+    softWarnings: checks.filter(c=>c.tier==='soft' && !c.pass), words, density: kw.total/(words||1)*100 };
+}
+
+/* ---- the one network call: read every already-saved note's focus keyword for the uniqueness test ---- */
+async function vFetchAllNoteFiles(){
+  const dirs = ['published-long-posts','pending-long-posts'];
+  const listings = [];
+  for(const dir of dirs){
+    try{
+      const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${dir}`, { headers:{'Accept':'application/vnd.github+json'} });
+      if(res.ok) listings.push(...(await res.json()).filter(f=>f.name.endsWith('.json')));
+    }catch(e){ /* best-effort: a fetch failure just means fewer files to compare against, never a crash */ }
+  }
+  const files = await Promise.all(listings.map(async f=>{
+    try{ const r = await fetch(f.download_url); if(!r.ok) return null; return { name:f.name, data: JSON.parse(await r.text()) }; }
+    catch(e){ return null; }
+  }));
+  return files.filter(Boolean);
+}
+async function vCheckUniqueness(seo){
+  let files;
+  try{ files = await vFetchAllNoteFiles(); }
+  catch(e){ return { id:'uniqueness', label:'Focus keyword not reused on another note', tier:'soft', pass:true, detail:'could not fetch existing notes to compare — check manually' }; }
+  const k = vNormalize(seo.focusKeyword);
+  const collision = k ? files.find(f=>f.data.seo && vNormalize(f.data.seo.focusKeyword)===k && f.data.seo.slug!==seo.slug) : null;
+  return { id:'uniqueness', label:'Focus keyword not reused on another note', tier:'hard', pass: !collision,
+    detail: collision ? `already used by ${collision.name}` : `checked against ${files.length} existing note(s)` };
+}
+async function vValidate(seo, bodyHtml){
+  const result = vRunChecks(seo, bodyHtml);
+  const u = await vCheckUniqueness(seo);
+  result.checks.push(u);
+  if(!u.pass){ if(u.tier==='hard') result.hardFails.push(u); else result.softWarnings.push(u); }
+  if(u.tier==='hard') result.hardPass = result.hardPass && u.pass;
+  return result;
+}
+
+/* ---- Step 3 UI: run + render ---- */
+async function runValidationUI(btn){
+  syncFormToState();
+  const m = msg('validateMsg');
+  show(m,'warn','Running validation…');
+  const result = await vValidate(state.seo, state.bodyHtml);
+  state.validation = { result, forBodyHtml: state.bodyHtml, forSeo: JSON.stringify(state.seo) };
+  saveDraft();
+  renderValidationResults(result, true);
+  show(m, result.hardPass?'ok':'bad', result.hardPass ? 'All hard checks passed — Auto-save unlocked.' : `${result.hardFails.length} hard check(s) failed — fix before publishing.`);
+  updatePublishGate();
+}
+function renderValidationResults(result, autoSelect){
+  const wrap = document.getElementById('validateResults');
+  if(!wrap) return;
+  const row = c => `<div class="copyRow" style="align-items:flex-start">
+    <div style="flex:none;width:22px;padding-top:2px;">${c.pass?'✅':(c.tier==='hard'?'❌':'⚠️')}</div>
+    <div style="flex:1;min-width:0">
+      <div class="cLabel" style="text-transform:none;font-weight:600;color:var(--ink)">${c.label}</div>
+      <div class="cVal" style="white-space:normal">${c.detail}</div>
+    </div>
+  </div>`;
+  const fails = [...result.hardFails, ...result.softWarnings];
+  let html = `<div style="font-weight:600;margin-bottom:8px">${result.hardPass ? '✅ All hard checks passed' : `❌ ${result.hardFails.length} hard check(s) failed`}${result.softWarnings.length ? ` · ⚠️ ${result.softWarnings.length} warning(s)` : ''}</div>`;
+  if(fails.length){
+    html += fails.map(row).join('');
+    html += `<div id="validateFixShare" style="margin-top:8px"></div>`;
+  }
+  html += `<details style="margin-top:10px"><summary>Full report (${result.checks.length} checks, incl. passing)</summary><div style="margin-top:6px">${result.checks.map(row).join('')}</div></details>`;
+  wrap.innerHTML = html;
+  if(fails.length){
+    const text = fails.map(c=>`${c.tier==='hard'?'❌':'⚠️'} ${c.label}: ${c.detail}`).join('\n');
+    renderShareBlock('validateFixShare', text, autoSelect);
+  }
+}
+function updatePublishGate(){
+  const gateMsg = document.getElementById('gateMsg');
+  const wrap = document.getElementById('overrideWrap');
+  const check = document.getElementById('overrideCheck');
+  const saveBtn = document.getElementById('autoSaveBtn');
+  const queueBtn = document.getElementById('queueAddBtn');
+  if(!gateMsg || !wrap || !check) return;
+  const v = state.validation;
+  const hardPass = !!(v && v.result && v.result.hardPass);
+  if(hardPass){
+    gateMsg.style.display = 'none';
+    wrap.style.display = 'none';
+    check.checked = false;
+    if(saveBtn) saveBtn.disabled = false;
+    if(queueBtn) queueBtn.disabled = false;
+    return;
+  }
+  gateMsg.style.display = '';
+  gateMsg.className = 'msg show warn';
+  gateMsg.textContent = v
+    ? `${v.result.hardFails.length} hard validation check(s) failed — check the box below to post anyway, or fix them and re-run validation.`
+    : 'Validation has not been run yet — run it above, or check the box below to skip and post anyway.';
+  wrap.style.display = '';
+  const allowed = check.checked;
+  if(saveBtn) saveBtn.disabled = !allowed;
+  if(queueBtn) queueBtn.disabled = !allowed;
+}
+
+/* ---- retroactive backlog scorecard: same validator, run against files already on disk, no generation ---- */
+async function runBacklogAudit(btn){
+  const m = msg('backlogMsg');
+  show(m,'warn','Fetching existing notes…');
+  const files = await vFetchAllNoteFiles();
+  if(!files.length){ show(m,'bad','Could not fetch any notes — check your connection.'); return; }
+  show(m,'warn',`Validating ${files.length} note(s)…`);
+  const rows = files.map(f=>{
+    const seo = (f.data && f.data.seo) || {};
+    const r = vRunChecks(seo, (f.data && f.data.bodyHtml) || '');
+    return { name:f.name, slug: seo.slug||f.name, words:r.words, density:r.density, hardPass:r.hardPass, failLabels:r.hardFails.map(c=>c.id) };
+  });
+  const kwMap = {};
+  files.forEach(f=>{ const k=vNormalize(f.data.seo && f.data.seo.focusKeyword); if(k) (kwMap[k]=kwMap[k]||[]).push(f.name); });
+  Object.values(kwMap).filter(list=>list.length>1).forEach(list=>list.forEach(name=>{
+    const row = rows.find(r=>r.name===name); if(row){ row.hardPass=false; row.failLabels.push('uniqueness'); }
+  }));
+  renderBacklogResults(rows);
+  const passCount = rows.filter(r=>r.hardPass).length;
+  show(m, passCount===rows.length?'ok':'warn', `${passCount} / ${rows.length} pass all hard checks.`);
+}
+function renderBacklogResults(rows){
+  const wrap = document.getElementById('backlogResults');
+  if(!wrap) return;
+  wrap.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+  <tr style="text-align:left;border-bottom:2px solid var(--line)"><th style="padding:6px 4px">Note</th><th style="padding:6px 4px">Words</th><th style="padding:6px 4px">Density</th><th style="padding:6px 4px">Result</th></tr>
+  ${rows.map(r=>`<tr style="border-bottom:1px solid var(--line-soft)">
+    <td style="padding:6px 4px">${r.slug}</td>
+    <td style="padding:6px 4px">${r.words.toLocaleString()}</td>
+    <td style="padding:6px 4px">${r.density.toFixed(2)}%</td>
+    <td style="padding:6px 4px;color:${r.hardPass?'var(--ok)':'var(--bad)'}">${r.hardPass?'✅ pass':'❌ '+r.failLabels.join(', ')}</td>
+  </tr>`).join('')}
+  </table></div>`;
+}
+
+restoreDraftIfAny();
+render();
+</script>
+</body>
+</html>

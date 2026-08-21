@@ -1,0 +1,249 @@
+name: Publish long post to WordPress
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pending-long-posts/**.json"
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Retry a specific file (path like pending-long-posts/my-slug.json). Leave empty to process every pending long post."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-long-posts
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # loop guard: never re-run on the bot's own commit that moves files to published-long-posts/
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish pending long posts as WordPress drafts
+        env:
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          ONLY_FILE: ${{ inputs.file }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${WP_SITE_URL:-}" ] || [ -z "${WP_USERNAME:-}" ] || [ -z "${WP_APP_PASSWORD:-}" ]; then
+            echo "::error::Missing secrets. Set WP_SITE_URL, WP_USERNAME and WP_APP_PASSWORD in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+          # App label -> real taxonomy term name, matching what already exists on the
+          # site (see notes-factory/index.html's EXAM_TYPES/subject <select> for the
+          # full label list). Labels with no mapping here are skipped with a warning
+          # rather than auto-creating a stray near-duplicate term — add a line here
+          # once you decide what term a new label should map to.
+          declare -A EXAM_TERM_MAP=(
+            ["CTET Paper I"]="CTET"
+            ["CTET Paper II"]="CTET"
+            ["PGT"]="PGT"
+            ["TGT"]="TGT"
+            ["KVS"]="KVS"
+            ["NVS"]="NVS"
+            ["DSSSB"]="DSSSB PRT"
+            ["UPTET"]="UPTET"
+            ["BPSC TRE"]="BPSC TRE"
+          )
+          declare -A SUBJECT_TERM_MAP=(
+            ["CDP"]="Child Development & Pedagogy"
+            ["Geography"]="Geography"
+            ["History"]="History"
+            ["Science"]="Science"
+            ["Maths"]="Maths"
+            ["Hindi"]="Hindi"
+            ["English"]="English"
+            ["EVS"]="EVS"
+          )
+          # "Auto-detect" is intentionally unmapped — the app never resolves what
+          # subject it auto-detected to, so there's nothing reliable to assign.
+
+          # Look up a term by exact name in a taxonomy; create it if missing.
+          # Prints the term ID on success, prints nothing (just a ::warning::) on failure.
+          # Never propagates a hard failure (network hiccup, non-2xx, unparseable
+          # response) up via set -e/pipefail — a term-assignment miss must degrade
+          # to a warning for this one term, not abort the whole publish run.
+          resolve_term_id(){
+            local tax="$1" name="$2" enc id http
+            enc="$(jq -rn --arg n "$name" '$n|@uri')"
+            http="$(curl -sS -o /tmp/term-search.json -w "%{http_code}" \
+                      "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}?search=${enc}&per_page=100" \
+                      -u "$WP_USERNAME:$WP_APP_PASSWORD" || echo "000")"
+            id=""
+            if [ "$http" = "200" ]; then
+              id="$(jq -r --arg n "$name" '[.[] | select(.name==$n)] | .[0].id // empty' /tmp/term-search.json 2>/dev/null || true)"
+            fi
+            if [ -n "$id" ]; then echo "$id"; return 0; fi
+            http="$(curl -sS -o /tmp/term-resp.json -w "%{http_code}" \
+                      -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}" \
+                      -H "Content-Type: application/json" \
+                      -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                      --data-binary "$(jq -n --arg n "$name" '{name:$n}')" || echo "000")"
+            if [ "$http" = "201" ]; then
+              jq -r '.id' /tmp/term-resp.json 2>/dev/null || true
+            else
+              echo "::warning::Could not find or create $tax term \"$name\" (HTTP $http) — skipping this term assignment." >&2
+            fi
+            return 0
+          }
+
+          shopt -s nullglob
+          if [ -n "$ONLY_FILE" ]; then
+            files=("$ONLY_FILE")
+          else
+            files=(pending-long-posts/*.json)
+          fi
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "Nothing to publish — pending-long-posts/ is empty."
+            exit 0
+          fi
+
+          mkdir -p published-long-posts
+          failed=0
+
+          for f in "${files[@]}"; do
+            [ -f "$f" ] || { echo "::warning::$f not found, skipping"; continue; }
+            slug="$(basename "$f" .json)"
+            echo "── Processing $slug ──"
+
+            # dedupe guard: re-uploading the same slug must not create a second draft
+            if [ -f "published-long-posts/$slug.json" ]; then
+              echo "::warning::$slug already published earlier (published-long-posts/$slug.json exists) — skipping to avoid a duplicate draft. Delete that file first if you really want to publish again."
+              git rm -q "$f"
+              continue
+            fi
+
+            # validate the JSON before touching WordPress
+            if ! jq -e '.seo.seoTitle and .seo.slug and .bodyHtml' "$f" >/dev/null 2>&1; then
+              echo "::error::$f is not valid — needs seo.seoTitle, seo.slug and bodyHtml. Leaving it in pending-long-posts/."
+              failed=1
+              continue
+            fi
+
+            # Resolve exam/subject taxonomy term IDs for this note (see the maps above).
+            exam_ids=()
+            raw_exam="$(jq -r '.examType // empty' "$f")"
+            if [ -n "$raw_exam" ]; then
+              IFS='/' read -ra exam_labels <<< "$raw_exam"
+              for raw_label in "${exam_labels[@]}"; do
+                label="$(echo "$raw_label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+                [ -z "$label" ] && continue
+                mapped="${EXAM_TERM_MAP[$label]:-}"
+                if [ -z "$mapped" ]; then
+                  echo "::warning::$slug — no exam-taxonomy mapping for \"$label\", leaving unassigned."
+                  continue
+                fi
+                tid="$(resolve_term_id exam "$mapped")"
+                [ -n "$tid" ] && exam_ids+=("$tid")
+              done
+            fi
+            exam_ids_json="[]"
+            [ ${#exam_ids[@]} -gt 0 ] && exam_ids_json="$(printf '%s\n' "${exam_ids[@]}" | jq -R . | jq -sc 'map(tonumber)')"
+
+            subject_ids_json="[]"
+            raw_subject="$(jq -r '.subject // empty' "$f")"
+            if [ -n "$raw_subject" ] && [ "$raw_subject" != "Auto-detect" ]; then
+              mapped="${SUBJECT_TERM_MAP[$raw_subject]:-}"
+              if [ -n "$mapped" ]; then
+                tid="$(resolve_term_id subject "$mapped")"
+                [ -n "$tid" ] && subject_ids_json="[$tid]"
+              else
+                echo "::warning::$slug — no subject-taxonomy mapping for \"$raw_subject\", leaving unassigned."
+              fi
+            fi
+
+            # Wrap the body in Gutenberg Custom-HTML block markup so the editor
+            # shows ONE proper Custom HTML block (the only block type that renders
+            # the inline-styled cards verbatim) instead of unstructured classic
+            # content. A leading <h1> is stripped first: the post title already IS
+            # the page H1, so one inside the body would double the H1 on-page.
+            # HTML comments (AI scaffolding like <!-- SECTION 1 --> or
+            # <!-- End of Notes Body -->) are stripped too — they're invisible to
+            # readers but sit in the page source as a giveaway that the content
+            # is AI-generated, and files can land here via the manual upload
+            # fallback without ever passing through the notes-factory tool's own
+            # comment-stripping, so this is the last guaranteed gate before WordPress.
+            payload="$(jq --argjson exam "$exam_ids_json" --argjson subj "$subject_ids_json" '{
+              title: .seo.h1,
+              slug: .seo.slug,
+              excerpt: .seo.metaDescription,
+              content: ("<!-- wp:html -->\n" + (.bodyHtml | gsub("<!--.*?-->"; ""; "s") | sub("^\\s*<h1[^>]*>[\\s\\S]*?</h1>\\s*"; "")) + "\n<!-- /wp:html -->"),
+              status: "draft",
+              meta: {
+                rank_math_focus_keyword: (.seo.focusKeyword // ""),
+                rank_math_title: (.seo.seoTitle // ""),
+                rank_math_description: (.seo.metaDescription // "")
+              }
+            } | if .title == null or .title == "" then .title = .slug else . end
+              | if ($exam|length) > 0 then .exam = $exam else . end
+              | if ($subj|length) > 0 then .subject = $subj else . end' "$f")"
+
+            # HTTP 000 means curl couldn't connect at all (transient network/hosting
+            # blip, not a WordPress-side rejection) — worth a couple of retries
+            # before giving up, since these have recurred and cost a whole draft.
+            http_code="000"
+            for attempt in 1 2 3; do
+              http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+                -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/free_notes" \
+                -H "Content-Type: application/json" \
+                -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                --data-binary "$payload" || echo "000")"
+              [ "$http_code" != "000" ] && break
+              echo "::warning::$slug — connection attempt $attempt to WordPress failed, retrying…"
+              sleep 5
+            done
+
+            # If WP rejects the meta keys (Rank Math REST snippet not installed yet),
+            # retry once without meta so the draft is never lost — with a loud warning.
+            if [ "$http_code" = "400" ] || [ "$http_code" = "403" ]; then
+              if grep -q "rank_math" /tmp/wp-response.json 2>/dev/null; then
+                echo "::warning::$slug — WordPress rejected the Rank Math meta fields. Install the register-rank-math-meta snippet (see notes-factory/README.md) to publish SEO fields automatically. Retrying WITHOUT meta so the draft still lands; paste the Rank Math fields manually for this post."
+                payload="$(echo "$payload" | jq 'del(.meta)')"
+                http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+                  -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/free_notes" \
+                  -H "Content-Type: application/json" \
+                  -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                  --data-binary "$payload" || echo "000")"
+              fi
+            fi
+
+            if [ "$http_code" = "201" ]; then
+              post_id="$(jq -r '.id' /tmp/wp-response.json)"
+              post_link="$(jq -r '.link' /tmp/wp-response.json)"
+              echo "✔ Draft created: id=$post_id  $post_link"
+              jq --argjson id "$post_id" --arg link "$post_link" \
+                 --arg at "$(date -u +%FT%TZ)" \
+                 '. + {wordpress: {postId: $id, link: $link, publishedAt: $at, status: "draft"}}' \
+                 "$f" > "published-long-posts/$slug.json"
+              git rm -q "$f"
+              git add "published-long-posts/$slug.json"
+            else
+              echo "::error::WordPress rejected $slug (HTTP $http_code). Response follows. File stays in pending-long-posts/ — fix the cause and re-run this workflow from the Actions tab."
+              cat /tmp/wp-response.json || true
+              failed=1
+            fi
+          done
+
+          # commit whatever succeeded, even if something else failed
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Publish long post(s) to WordPress as draft [skip ci]"
+            git push
+          fi
+
+          exit $failed
