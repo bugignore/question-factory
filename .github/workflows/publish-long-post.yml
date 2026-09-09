@@ -322,6 +322,34 @@ jobs:
               fi
             fi
 
+            # An update targeting a postId that no longer exists (deleted/
+            # trashed on WordPress) has nothing left to protect by failing —
+            # fall back to publishing as a brand-new post instead of leaving
+            # it stuck in pending-long-posts/ forever. Any OTHER failure
+            # (400/403/500/network) still hard-fails below for a human to
+            # review — auto-retrying those could just as easily publish
+            # something wrong (bad content, malformed payload) under a new
+            # post with nobody noticing.
+            if [ -n "$update_post_id" ] && [ "$http_code" = "404" ]; then
+              echo "::warning::$slug — WordPress post #$update_post_id no longer exists (404). Falling back to creating a new post instead of updating."
+              payload="$(echo "$payload" | jq '. + {status: "draft"}')"
+              wp_method="POST"
+              wp_url="${WP_SITE_URL%/}/wp-json/wp/v2/free_notes"
+              ok_code="201"
+              update_post_id=""
+              http_code="000"
+              for attempt in 1 2 3; do
+                http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+                  -X "$wp_method" "$wp_url" \
+                  -H "Content-Type: application/json" \
+                  -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                  --data-binary "$payload" || echo "000")"
+                [ "$http_code" != "000" ] && break
+                echo "::warning::$slug — connection attempt $attempt to WordPress failed, retrying…"
+                sleep 5
+              done
+            fi
+
             if [ "$http_code" = "$ok_code" ]; then
               post_id="$(jq -r '.id' /tmp/wp-response.json)"
               post_link="$(jq -r '.link' /tmp/wp-response.json)"
