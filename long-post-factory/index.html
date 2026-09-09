@@ -222,6 +222,18 @@
   <details class="fieldRow"><summary><span class="fLabel">Featured Image — Generation Prompt</span><button class="miniCopy" onclick="copyReviewField(event,'fImagePrompt','Image Generation Prompt')">📋</button></summary>
     <textarea id="fImagePrompt" style="min-height:70px;font-family:inherit;font-size:14px"></textarea></details>
 
+  <fieldset style="margin-top:16px">
+    <legend>🖼️ Featured image</legend>
+    <p class="hint" style="margin-top:0">Copy the Generation Prompt above into Gemini/ChatGPT, generate the image there, then bring the result back here — paste it (Ctrl+V) or pick the file. This strips EXIF/metadata and resizes it client-side (nothing uploads until you save in Step 4); on save it's committed alongside the note and the publish workflow uploads it to WordPress, sets it as the featured image, sets its ALT text, and swaps it into the body in place of the placeholder.</p>
+    <div id="imageDropZone" tabindex="0" style="border:1.5px dashed var(--line);border-radius:var(--radius-sm);padding:16px;text-align:center;cursor:pointer;background:var(--card-2)">
+      <div style="font-size:13px;color:var(--ink-soft)">Tap to choose a file, or paste an image here</div>
+      <input type="file" id="featuredImageFile" accept="image/*" style="display:none">
+    </div>
+    <img id="featuredImagePreview" style="display:none;max-width:100%;border-radius:var(--radius-sm);margin-top:10px;border:1px solid var(--line)">
+    <div class="msg" id="imageMsg"></div>
+    <button class="btn small ghost" id="removeImageBtn" onclick="tryRun(removeFeaturedImage,this)" style="display:none;margin-top:8px">✕ Remove image</button>
+  </fieldset>
+
   <details class="fieldRow"><summary><span class="fLabel">Notes body HTML — <span id="bodyWords">0</span> words</span><button class="miniCopy" onclick="copyReviewField(event,'fBodyHtml','Notes body HTML')">📋</button></summary>
     <textarea id="fBodyHtml" style="min-height:220px" oninput="updatePreview()"></textarea></details>
 
@@ -584,7 +596,7 @@ function clearShareBlock(containerId){
 
 /* ================= STEP 1 — build prompt ================= */
 var builtPromptText = null;
-var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null };
 
 function updateLangMixLabel(){
   const hindi = document.getElementById('hindiPercent').value;
@@ -631,13 +643,14 @@ If you are genuinely running low on room mid-article, stop cleanly at the end of
 ## SILENT SEED (derived: ${seed} — state once in Publisher Notes, do not print this number's meaning to the reader)
 Lede type (seed%4): update-hook / question / exam-hall scenario / surprising-fact. Headline formula (seed%6, see below). Misconception style (seed%3): ❌/✅ pairs / woven prose / Q&A. FAQ position (seed%3): end / after Section 6 / split in two. Pick 2 of 4 deep-blocks fitting TOPIC for \`insight\` blocks: Examiner's Logic / Cross-Topic Bridge / real Timeline / Compare-&-Contrast Matrix. Uneven structure: 1–2 sections short, 1–2 long, matching real importance.
 
-## HEADLINE FORMULA (seed%6 picks ONE)
+## HEADLINE FORMULA (seed%6 picks ONE) — the [Keyphrase] slot must be the TOPIC-SPECIFIC keyphrase below, never a generic "[Exam] Notes" placeholder
 Keyphrase = literal first characters of the title, ≤60 chars, with a number + power word + sentiment word.
 1. \`[Keyphrase]: [Sentiment] [Power] Guide for [Exam]\` 2. \`[Keyphrase]: Score [Sentiment] Marks — [Power] Notes\` 3. \`[Keyphrase]: [N]+ [Sentiment] Solved Qs and Tricks\` (N must be true/countable) 4. \`[Keyphrase]: [Power] Update-Ready [Sentiment] Guide\` 5. \`[Keyphrase]: [Sentiment] [Power] Crash Course in 1 Read\` 6. \`[Keyphrase]: [Power] [Sentiment] Notes, No Topic Missed\`
-Power words: Complete, Ultimate, Essential, Proven, Definitive, Powerful, Master, Instant. Sentiment words: Best, Easy, Top, Smart, Perfect, Amazing (sparingly).
+Power words: Complete, Ultimate, Essential, Proven, Definitive, Powerful, Master, Instant. Sentiment words: Best, Easy, Top, Smart, Perfect, Amazing (sparingly) — pick ONE power word and ONE sentiment word per article and don't default to the same pair every run (rotate per seed, state the pick in Publisher Notes).
+**Anti-generic check on the finished title:** read it back — if it would be byte-identical (apart from the exam name) to the title you'd write for a *different* topic on this same exam, it has failed. It must name the actual concept(s), not just the exam+subject wrapper.
 
 ## SEO — RANK MATH 90+ GATE (SEO panel FIRST, before any content)
-Focus Keyphrase: \`[Topic] ${profile.label} Notes ${year}\` (or the closest natural equivalent) — plain English/Roman, "and" never "&", 2–4 word core.
+Focus Keyphrase: build it FROM THE TOPIC, not from a template. Take the 2–4 most specific, exam-searchable nouns actually named in TOPIC (transliterate/translate Hindi terms to the Roman/English words students actually search — e.g. TOPIC "लिंग, वचन, पुरुष, काल और कारक" → keyphrase nouns "Ling Vachan Kaal Karak", not "Hindi Grammar"), then append \`${profile.label} Notes ${year}\`. **Never collapse a multi-concept topic down to just "[Subject] Notes [Exam] [Year]"** — that throws away the one thing that makes this article distinct from every other article on the same exam/subject and is the single most common cause of generic-sounding SEO output. If TOPIC genuinely names only one broad concept, use that concept's specific name (not the subject category) as the keyphrase core. Plain English/Roman, "and" never "&", 2–4 word core.
 Print this panel:
 \`\`\`
 Focus Keyword:    [exact keyphrase]
@@ -878,17 +891,28 @@ function extractSEO(raw){
   return { seo: {focusKeyword, seoTitle, slug: slugify(slugRaw), metaDescription, h1, imageAltText, imagePrompt}, method:'label-text' };
 }
 
+/* Defense-in-depth against a leaked markdown fence LANGUAGE word (e.g. a
+   reply opening with ```html where only the backtick line got stripped
+   upstream, leaving a literal "html" sitting before the first real tag —
+   this rode through to a live page once; see Content-Pipeline-Audit.md
+   Finding F4). stripFences() already strips a fence line that's ONLY
+   backticks+lang, so this only fires on the rarer case where that didn't
+   happen first. */
+function stripLeakedFenceWord(html){
+  return String(html||'').replace(/^\s*(?:html|htm)\s*\n+(?=\s*<)/i, '').trim();
+}
+
 function extractBody(raw){
   // 1) pipeline sentinel wrapper
   let m = raw.match(/<<<NOTES_BODY_HTML>>>([\s\S]*?)(?:<<<END_NOTES_BODY_HTML>>>|$)/);
   if(m){
-    const html = stripFences(m[1]).trim();
+    const html = stripLeakedFenceWord(stripFences(m[1]).trim());
     if(html) return { bodyHtml: html, method:'sentinel-html', cutOff: raw.indexOf('<<<END_NOTES_BODY_HTML>>>')===-1, endIdx: m.index + m[0].length };
   }
   // 2) master prompt's native <!-- NOTES BODY START/END --> comments
   m = raw.match(/<!--\s*NOTES BODY START\s*-->([\s\S]*?)<!--\s*NOTES BODY END\s*-->/i);
   if(m){
-    const html = stripFences(m[1]).trim();
+    const html = stripLeakedFenceWord(stripFences(m[1]).trim());
     if(html) return { bodyHtml: html, method:'body-comments', cutOff: false, endIdx: m.index + m[0].length };
   }
   // 3) heuristic: first <h2> through the first recognizable end-of-notes marker
@@ -900,7 +924,7 @@ function extractBody(raw){
     const idx = raw.search(em);
     if(idx !== -1 && idx < endIdx && idx > h2Start) endIdx = idx;
   }
-  return { bodyHtml: raw.slice(h2Start, endIdx).trim(), method:'h2-scan', cutOff: endIdx===raw.length, endIdx };
+  return { bodyHtml: stripLeakedFenceWord(raw.slice(h2Start, endIdx).trim()), method:'h2-scan', cutOff: endIdx===raw.length, endIdx };
 }
 
 function extractPublisherNotes(raw, bodyEndIdx){
@@ -1098,7 +1122,103 @@ function fillReviewForm(){
   document.getElementById('fImagePrompt').value = state.seo.imagePrompt || '';
   document.getElementById('fBodyHtml').value = state.bodyHtml || '';
   document.getElementById('fPublisherNotes').value = state.publisherNotes || '';
+  showImagePreview(state.featuredImage);
 }
+
+/* ================= FEATURED IMAGE — capture, strip metadata, resize =================
+   The image itself is generated externally (copy the Image Generation Prompt
+   above into Gemini/ChatGPT/etc, the user pastes the result back here) — this
+   tool never calls an image-generation API. What it does do: re-encode the
+   picked/pasted file through a <canvas>, which inherently drops EXIF/IPTC/XMP
+   metadata (canvas export never carries it forward — there's no separate
+   "strip" step needed), cap it to a sane width, and hand it to the save flow
+   as a base64 payload committed alongside the note. The publish workflow
+   uploads it to WordPress, sets it as the featured image + ALT text, and
+   swaps it into the body in place of the placeholder <img> the block system
+   renders. */
+const FEATURED_IMAGE_MAX_WIDTH = 1600;
+function stripImageMetadataAndResize(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if(w > FEATURED_IMAGE_MAX_WIDTH){ h = Math.round(h * FEATURED_IMAGE_MAX_WIDTH / w); w = FEATURED_IMAGE_MAX_WIDTH; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const mime = 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mime, 0.87);
+        resolve({ dataUrl, mime, ext:'jpg', width:w, height:h });
+      };
+      img.onerror = ()=>reject(new Error('Could not read that as an image — try a different file.'));
+      img.src = reader.result;
+    };
+    reader.onerror = ()=>reject(new Error('Could not read the file.'));
+    reader.readAsDataURL(file);
+  });
+}
+async function handleFeaturedImageFile(file){
+  const m = msg('imageMsg');
+  if(!file || !file.type || !file.type.startsWith('image/')){ show(m,'bad','That is not an image file.'); return; }
+  show(m,'warn','Processing image (stripping metadata, resizing)…');
+  try{
+    const result = await stripImageMetadataAndResize(file);
+    state.featuredImage = result;
+    saveDraft();
+    showImagePreview(result);
+    show(m,'ok',`Image ready (${result.width}×${result.height}, metadata stripped) — it uploads to WordPress and becomes the featured image when you save in Step 4.`);
+  }catch(e){ show(m,'bad', e.message); }
+}
+function showImagePreview(img){
+  const el = document.getElementById('featuredImagePreview');
+  const removeBtn = document.getElementById('removeImageBtn');
+  if(!el) return;
+  if(img && img.dataUrl){
+    el.src = img.dataUrl; el.style.display = '';
+    if(removeBtn) removeBtn.style.display = '';
+  } else {
+    el.style.display = 'none'; el.removeAttribute('src');
+    if(removeBtn) removeBtn.style.display = 'none';
+  }
+}
+function clearImagePreview(){ showImagePreview(null); const m=msg('imageMsg'); if(m){ m.className='msg'; m.textContent=''; } }
+function removeFeaturedImage(){
+  state.featuredImage = null;
+  saveDraft();
+  clearImagePreview();
+  const fileInput = document.getElementById('featuredImageFile');
+  if(fileInput) fileInput.value = '';
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  const dropZone = document.getElementById('imageDropZone');
+  const fileInput = document.getElementById('featuredImageFile');
+  if(!dropZone || !fileInput) return;
+  dropZone.addEventListener('click', ()=> fileInput.click());
+  dropZone.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fileInput.click(); } });
+  fileInput.addEventListener('change', function(){
+    const f = this.files && this.files[0];
+    if(f) tryRun(()=>handleFeaturedImageFile(f));
+  });
+  dropZone.addEventListener('paste', e=>{
+    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find(i=>i.type && i.type.startsWith('image/'));
+    if(item) tryRun(()=>handleFeaturedImageFile(item.getAsFile()));
+  });
+  document.addEventListener('paste', e=>{
+    // also catch a paste anywhere on Step 3, not just when the drop zone has focus —
+    // matches how mobile "paste" actually gets triggered from a long-press menu
+    if(cur !== 2) return;
+    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find(i=>i.type && i.type.startsWith('image/'));
+    if(item) tryRun(()=>handleFeaturedImageFile(item.getAsFile()));
+  });
+  ['dragover','dragenter'].forEach(evt=> dropZone.addEventListener(evt, e=>{ e.preventDefault(); dropZone.style.borderColor='var(--accent)'; }));
+  ['dragleave','drop'].forEach(evt=> dropZone.addEventListener(evt, e=>{ e.preventDefault(); dropZone.style.borderColor='var(--line)'; }));
+  dropZone.addEventListener('drop', e=>{
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) tryRun(()=>handleFeaturedImageFile(f));
+  });
+});
 function syncFormToState(){
   state.seo = {
     focusKeyword: document.getElementById('fFocusKeyword').value.trim(),
@@ -1120,7 +1240,14 @@ let saveDraftTimer = null;
 function saveDraft(){
   clearTimeout(saveDraftTimer);
   saveDraftTimer = setTimeout(()=>{
-    try{ localStorage.setItem(DRAFT_KEY, JSON.stringify({state, cur})); }catch(e){}
+    // the featured image's dataUrl can be several hundred KB to a few MB —
+    // persisting it would risk blowing the shared per-origin localStorage
+    // quota (and taking the whole draft down with it), so the draft keeps
+    // only the image's metadata; a refresh loses the picked image itself
+    // and the user re-picks it, but never loses the note text.
+    const { featuredImage, ...rest } = state;
+    const lightState = { ...rest, featuredImage: featuredImage ? { mime:featuredImage.mime, ext:featuredImage.ext, width:featuredImage.width, height:featuredImage.height, pending:true } : null };
+    try{ localStorage.setItem(DRAFT_KEY, JSON.stringify({state:lightState, cur})); }catch(e){}
   }, 400);
 }
 function clearDraft(){ try{ localStorage.removeItem(DRAFT_KEY); }catch(e){} }
@@ -1135,6 +1262,8 @@ function restoreDraftIfAny(){
   if(!confirm('Restore your last unsaved draft — "'+label+'"?')){ clearDraft(); return; }
   state = s;
   cur = data.cur || 0;
+  const imageWasDropped = !!(state.featuredImage && state.featuredImage.pending);
+  if(imageWasDropped) state.featuredImage = null;
   document.getElementById('topic').value = state.topic || '';
   document.getElementById('examType').value = state.examType || '';
   document.getElementById('subject').value = state.subject || 'Auto-detect';
@@ -1142,6 +1271,7 @@ function restoreDraftIfAny(){
   updateLangMixLabel();
   if(state.validation && state.validation.result) renderValidationResults(state.validation.result);
   updatePublishGate();
+  if(imageWasDropped) show(msg('imageMsg'),'warn','Your draft was restored, but the featured image itself is not saved across a refresh — pick or paste it again in Step 3.');
 }
 function copyReviewField(e, id, label){
   /* the copy button lives inside a <summary> — stop the click from also
@@ -1256,6 +1386,24 @@ async function githubPutFile(owner, repo, token, path, content, message){
   return putRes.json();
 }
 
+/* Same as githubPutFile but for content that's already base64 (images) —
+   githubPutFile always UTF-8-encodes text first, which would corrupt binary
+   data, so this skips that step and sends the raw base64 payload straight
+   through to the Contents API. */
+async function githubPutBinaryFile(owner, repo, token, path, base64Content, message){
+  const api = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`;
+  const headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' };
+  let sha;
+  const getRes = await fetch(api + '?ref=main', { headers });
+  if(getRes.status === 200){ sha = (await getRes.json()).sha; }
+  else if(getRes.status !== 404){ throw new Error(`GitHub check failed (${getRes.status}): ${(await getRes.text()).slice(0,200)}`); }
+  const body = { message, content: base64Content, branch: 'main' };
+  if(sha) body.sha = sha;
+  const putRes = await fetch(api, { method:'PUT', headers: {...headers,'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if(!putRes.ok){ throw new Error(`GitHub image save failed (${putRes.status}): ${(await putRes.text()).slice(0,300)}`); }
+  return putRes.json();
+}
+
 async function autoSaveToGithub(btn){
   syncFormToState();
   const m = msg('sendMsg');
@@ -1291,7 +1439,18 @@ async function autoSaveToGithub(btn){
     const res = await githubPutFile(GH_OWNER, GH_REPO, token, path, JSON.stringify(bundle, null, 2), `Add long post: ${state.seo.slug}`);
     document.getElementById('dlSlug').textContent = state.seo.slug;
     const sha = res.commit && res.commit.sha;
-    show(m,'ok',`Saved to ${path} — tracking the pipeline below.`);
+    let imageNote = '';
+    if(state.featuredImage && state.featuredImage.dataUrl){
+      try{
+        show(m,'warn','Note saved — uploading featured image…');
+        const base64Only = state.featuredImage.dataUrl.split(',')[1];
+        await githubPutBinaryFile(GH_OWNER, GH_REPO, token, `pending-long-posts/${state.seo.slug}.${state.featuredImage.ext}`, base64Only, `Add featured image: ${state.seo.slug}`);
+        imageNote = ' + featured image';
+      }catch(imgErr){
+        imageNote = ' (featured image upload failed: '+imgErr.message+' — the note itself still saved fine; the publish workflow will just skip the featured image for this run)';
+      }
+    }
+    show(m,'ok',`Saved to ${path}${imageNote} — tracking the pipeline below.`);
     clearDraft();
     trackPipeline(token, sha);
   }catch(e){
@@ -1353,13 +1512,18 @@ async function addToQueue(btn){
     updatePublishGate();
     return;
   }
+  if(state.featuredImage){
+    show(m,'bad','This note has a featured image attached — the batch queue does not carry images yet (they would be silently lost). Use "Auto-save to GitHub" above instead for notes with an image.');
+    return;
+  }
   const q = loadQueue();
   if(q.some(item=>item.slug===state.seo.slug)){ show(m,'bad',`"${state.seo.slug}" is already in the queue.`); return; }
   q.push({ slug: state.seo.slug, bundle: buildBundle() });
   saveQueueList(q);
   show(m,'ok',`Added "${state.seo.slug}" to the batch queue (${q.length} queued). Start the next note at Step 1, or post the queue when everyone's done.`);
   clearDraft();
-  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null };
+  clearImagePreview();
   cur = 0; render();
 }
 async function postQueue(btn){
@@ -1558,7 +1722,7 @@ Image Gen Prompt:    ${state.seo.imagePrompt || ''}`;
 }
 function resetAll(){
   if(!confirm('Clear this note and start over?')) return;
-  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null };
   accumulatedRaw = '';
   clearDraft();
   document.getElementById('promptOut').value='';
@@ -1569,6 +1733,7 @@ function resetAll(){
   document.getElementById('pStats').innerHTML='';
   document.getElementById('hindiPercent').value = 70;
   updateLangMixLabel();
+  clearImagePreview();
   cur=0; render();
 }
 
@@ -1797,6 +1962,39 @@ function vCheckFirst100Words(doc, seo){
     pass, detail: pass ? 'found' : 'not found in: "'+words.slice(0,120)+'…"' };
 }
 
+/* Catches the exact failure classes found live in production during the
+   content-pipeline audit (Content-Pipeline-Audit.md F1/F2/F4): a body that's
+   literally unfilled AI-prompt scaffolding, a placeholder image URL, or a
+   leaked markdown-fence artifact. A hard fail here means the reply almost
+   certainly wasn't generated against real inputs — no soft-warning escape
+   hatch beyond the existing manual override checkbox. */
+function vCheckPipelineArtifacts(bodyHtml, seo){
+  seo = seo || {};
+  const html = String(bodyHtml||'');
+  const hay = html + ' ' + JSON.stringify(seo);
+  const offenders = [];
+
+  // Unresolved prompt-template brackets — the exact strings that reached
+  // production once ("[exact keyphrase]", "[entire notes body HTML]", ...)
+  // plus a generic catch for a body that's essentially just a bracket note.
+  const bracketPatterns = [
+    /\[exact keyphrase\]/i, /\[insert[^\]]*\]/i, /\[write here\]/i,
+    /\[entire notes body html\]/i, /\[per formula above[^\]]*\]/i,
+    /\[\s*n\s*\]/i, /\[\s*list[^\]]*\]/i
+  ];
+  for(const re of bracketPatterns){ if(re.test(hay)){ offenders.push(`unresolved template placeholder matching ${re}`); break; } }
+  const proseOnly = html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  if(proseOnly && /^\[[^\]]{1,120}\]$/.test(proseOnly)){ offenders.push('body is nothing but a single bracketed placeholder'); }
+
+  if(/via\.placeholder\.com/i.test(html)) offenders.push('via.placeholder.com placeholder image');
+  if(/lorem ipsum/i.test(html)) offenders.push('Lorem ipsum filler text');
+  if(proseOnly === 'undefined' || proseOnly === 'null') offenders.push(`body is literally "${proseOnly}"`);
+  if(/^\s*(?:html|htm)\s*\n/i.test(html)) offenders.push('leaked markdown fence language word ("html") before the first tag');
+
+  return { id:'pipeline-artifacts', label:'No leaked AI-scaffolding / placeholder artifacts', tier:'hard',
+    pass: offenders.length===0, detail: offenders.length ? offenders.join('; ') : 'clean' };
+}
+
 function vRunChecks(seo, bodyHtml){
   seo = seo || {};
   const doc = vParseBody(bodyHtml);
@@ -1804,6 +2002,7 @@ function vRunChecks(seo, bodyHtml){
   const words = vWordCount(proseText);
   const kw = vCountKeyphrase(proseText, seo.focusKeyword);
   const checks = [
+    vCheckPipelineArtifacts(bodyHtml, seo),
     vCheckWordCount(words), vCheckDensity(words, kw), vCheckHeadings(doc, seo.focusKeyword),
     vCheckImageAlt(doc, seo.focusKeyword), vCheckSvg(doc, seo.focusKeyword), vCheckMedia(doc),
     vCheckParagraphs(doc), vCheckLinks(doc), vCheckDuplicateIds(doc), vCheckBareH3(doc),

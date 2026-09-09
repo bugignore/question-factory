@@ -1,0 +1,18 @@
+{
+  "name": "examnotespdf-automation",
+  "private": true,
+  "type": "module",
+  "description": "Local-machine batch automation that calls the Claude or Gemini API directly (agentic NCERT-RAG + web search) to generate Long Post Factory articles for a whole topic list at once. Writes the same pending-long-posts/<slug>.json bundle shape the browser tool produces, so publish-long-post.yml picks it up unchanged. Provider chosen via AI_PROVIDER; only that provider's key is needed, read from the environment only — never committed. Run locally: see README.md.",
+  "scripts": {
+    "rebuild-corpus": "node src/rebuild-corpus.mjs",
+    "build-index": "node src/build-index.mjs",
+    "run-batch": "node src/run-batch.mjs"
+  },
+  "dependencies": {
+    "@anthro-ai/krutidev-unicode": "^0.1.0",
+    "@anthropic-ai/sdk": "^0.120.0",
+    "@google/genai": "^2.20.0",
+    "linkedom": "^0.18.13",
+    "openai": "^7.10.0"
+  }
+}

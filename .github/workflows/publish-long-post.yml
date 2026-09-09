@@ -147,9 +147,18 @@ jobs:
             slug="$(basename "$f" .json)"
             echo "── Processing $slug ──"
 
-            # dedupe guard: re-uploading the same slug must not create a second draft
-            if [ -f "published-long-posts/$slug.json" ]; then
-              echo "::warning::$slug already published earlier (published-long-posts/$slug.json exists) — skipping to avoid a duplicate draft. Delete that file first if you really want to publish again."
+            # An update run (see update-factory's revision flow) carries the old
+            # wordpress.postId forward in the pending file itself — that's the
+            # signal to PUT-update the existing post instead of the normal
+            # dedupe-guard/POST-create path below. Mirrors publish-note.yml.
+            update_post_id="$(jq -r '.wordpress.postId // empty' "$f")"
+
+            # dedupe guard: re-uploading the same slug WITHOUT a carried-over
+            # postId must not create a second draft — but an update run is
+            # expected to already have a published-long-posts/$slug.json (the
+            # one it's replacing), so it skips this guard entirely.
+            if [ -z "$update_post_id" ] && [ -f "published-long-posts/$slug.json" ]; then
+              echo "::warning::$slug already published earlier (published-long-posts/$slug.json exists) — skipping to avoid a duplicate draft. Delete that file first if you really want to publish again, or use update-factory's update flow to carry the postId forward."
               git rm -q "$f"
               continue
             fi
@@ -189,6 +198,52 @@ jobs:
               fi
             fi
 
+            # Featured image: an optional companion file the browser tool commits
+            # alongside the JSON (pending-long-posts/<slug>.<ext>) once the user
+            # pastes an externally-generated image back into the app — this
+            # workflow never generates images itself, only uploads what's
+            # already there. Upload it to the WP media library, tag it with the
+            # SEO alt text, and remember its URL so the payload below can wire
+            # it in as the featured image and swap it into the body in place of
+            # the placeholder <img> the block system renders.
+            media_id=""
+            media_url=""
+            img_file=""
+            img_ext=""
+            for ext in jpg jpeg png webp; do
+              if [ -f "pending-long-posts/$slug.$ext" ]; then
+                img_file="pending-long-posts/$slug.$ext"
+                img_ext="$ext"
+                break
+              fi
+            done
+            if [ -n "$img_file" ]; then
+              content_type="image/jpeg"
+              case "$img_ext" in
+                png) content_type="image/png" ;;
+                webp) content_type="image/webp" ;;
+              esac
+              media_http="$(curl -sS -o /tmp/media-response.json -w "%{http_code}" \
+                -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/media" \
+                -H "Content-Disposition: attachment; filename=\"$slug-featured.$img_ext\"" \
+                -H "Content-Type: $content_type" \
+                -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                --data-binary "@$img_file" || echo "000")"
+              if [ "$media_http" = "201" ]; then
+                media_id="$(jq -r '.id' /tmp/media-response.json)"
+                media_url="$(jq -r '.source_url' /tmp/media-response.json)"
+                echo "✔ Featured image uploaded: id=$media_id  $media_url"
+                alt_text="$(jq -r '.seo.imageAltText // ""' "$f")"
+                curl -sS -o /dev/null -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/media/$media_id" \
+                  -H "Content-Type: application/json" \
+                  -u "$WP_USERNAME:$WP_APP_PASSWORD" \
+                  --data-binary "$(jq -n --arg alt "$alt_text" '{alt_text:$alt, title:$alt}')" >/dev/null || true
+              else
+                echo "::warning::$slug — featured image upload failed (HTTP $media_http), continuing without it."
+                cat /tmp/media-response.json || true
+              fi
+            fi
+
             # Wrap the body in Gutenberg Custom-HTML block markup so the editor
             # shows ONE proper Custom HTML block (the only block type that renders
             # the inline-styled cards verbatim) instead of unstructured classic
@@ -200,11 +255,13 @@ jobs:
             # is AI-generated, and files can land here via the manual upload
             # fallback without ever passing through the notes-factory tool's own
             # comment-stripping, so this is the last guaranteed gate before WordPress.
-            payload="$(jq --argjson exam "$exam_ids_json" --argjson subj "$subject_ids_json" '{
+            # A successful featured-image upload also swaps the block system's
+            # placeholder <img> src for the real uploaded URL.
+            payload="$(jq --argjson exam "$exam_ids_json" --argjson subj "$subject_ids_json" --arg mediaUrl "$media_url" '{
               title: .seo.h1,
               slug: .seo.slug,
               excerpt: .seo.metaDescription,
-              content: ("<!-- wp:html -->\n" + (.bodyHtml | gsub("<!--.*?-->"; ""; "s") | sub("^\\s*<h1[^>]*>[\\s\\S]*?</h1>\\s*"; "")) + "\n<!-- /wp:html -->"),
+              content: ("<!-- wp:html -->\n" + (.bodyHtml | gsub("<!--.*?-->"; ""; "s") | sub("^\\s*<h1[^>]*>[\\s\\S]*?</h1>\\s*"; "") | (if $mediaUrl != "" then gsub("https://via\\.placeholder\\.com/700x350\\?text=Diagram"; $mediaUrl) else . end)) + "\n<!-- /wp:html -->"),
               status: "draft",
               meta: {
                 rank_math_focus_keyword: (.seo.focusKeyword // ""),
@@ -214,6 +271,27 @@ jobs:
             } | if .title == null or .title == "" then .title = .slug else . end
               | if ($exam|length) > 0 then .exam = $exam else . end
               | if ($subj|length) > 0 then .subject = $subj else . end' "$f")"
+            if [ -n "$media_id" ]; then
+              payload="$(echo "$payload" | jq --argjson mid "$media_id" '. + {featured_media: $mid}')"
+            fi
+
+            # Update runs PUT to the existing post (keeps its ID/link, WP bumps
+            # modified date); fresh posts POST to create. Same payload either way,
+            # EXCEPT status: an update must never force a post back to "draft" —
+            # if it was already manually published live on WordPress, a content
+            # refresh silently reverting it to draft would be a real regression.
+            # WP's REST API leaves omitted fields unchanged on an update, so
+            # dropping status here preserves whatever it currently is.
+            if [ -n "$update_post_id" ]; then
+              payload="$(echo "$payload" | jq 'del(.status)')"
+              wp_method="PUT"
+              wp_url="${WP_SITE_URL%/}/wp-json/wp/v2/free_notes/$update_post_id"
+              ok_code="200"
+            else
+              wp_method="POST"
+              wp_url="${WP_SITE_URL%/}/wp-json/wp/v2/free_notes"
+              ok_code="201"
+            fi
 
             # HTTP 000 means curl couldn't connect at all (transient network/hosting
             # blip, not a WordPress-side rejection) — worth a couple of retries
@@ -221,7 +299,7 @@ jobs:
             http_code="000"
             for attempt in 1 2 3; do
               http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
-                -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/free_notes" \
+                -X "$wp_method" "$wp_url" \
                 -H "Content-Type: application/json" \
                 -u "$WP_USERNAME:$WP_APP_PASSWORD" \
                 --data-binary "$payload" || echo "000")"
@@ -237,23 +315,41 @@ jobs:
                 echo "::warning::$slug — WordPress rejected the Rank Math meta fields. Install the register-rank-math-meta snippet (see notes-factory/README.md) to publish SEO fields automatically. Retrying WITHOUT meta so the draft still lands; paste the Rank Math fields manually for this post."
                 payload="$(echo "$payload" | jq 'del(.meta)')"
                 http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
-                  -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/free_notes" \
+                  -X "$wp_method" "$wp_url" \
                   -H "Content-Type: application/json" \
                   -u "$WP_USERNAME:$WP_APP_PASSWORD" \
                   --data-binary "$payload" || echo "000")"
               fi
             fi
 
-            if [ "$http_code" = "201" ]; then
+            if [ "$http_code" = "$ok_code" ]; then
               post_id="$(jq -r '.id' /tmp/wp-response.json)"
               post_link="$(jq -r '.link' /tmp/wp-response.json)"
-              echo "✔ Draft created: id=$post_id  $post_link"
+              verb="Draft created"; [ -n "$update_post_id" ] && verb="Existing post updated"
+              echo "✔ $verb: id=$post_id  $post_link"
               jq --argjson id "$post_id" --arg link "$post_link" \
+                 --arg mediaId "${media_id:-}" --arg mediaUrl "$media_url" \
                  --arg at "$(date -u +%FT%TZ)" \
-                 '. + {wordpress: {postId: $id, link: $link, publishedAt: $at, status: "draft"}}' \
+                 '. + {wordpress: {postId: $id, link: $link, publishedAt: $at, status: "draft"} + (if $mediaId != "" then {featuredMediaId: ($mediaId|tonumber), featuredMediaUrl: $mediaUrl} else {} end)}' \
                  "$f" > "published-long-posts/$slug.json"
               git rm -q "$f"
               git add "published-long-posts/$slug.json"
+
+              # Maintain a flat index of published slugs — GitHub Pages can't
+              # directory-list, so reporting/index.html reads this file to know
+              # which published-long-posts/*.json files exist.
+              [ -f "published-long-posts/index.json" ] || echo "[]" > "published-long-posts/index.json"
+              jq --arg s "$slug" '(. - [$s]) + [$s]' "published-long-posts/index.json" > /tmp/pub-index.json \
+                && mv /tmp/pub-index.json "published-long-posts/index.json"
+              git add "published-long-posts/index.json"
+              # the image is uploaded to the WP media library either way by this
+              # point (or the upload failed and was already logged above) — the
+              # companion file in pending-long-posts/ has served its purpose and
+              # would otherwise sit there forever with no matching JSON once this
+              # slug's dedupe guard starts skipping it on future runs.
+              if [ -n "$img_file" ]; then
+                git rm -q "$img_file" 2>/dev/null || true
+              fi
             else
               echo "::error::WordPress rejected $slug (HTTP $http_code). Response follows. File stays in pending-long-posts/ — fix the cause and re-run this workflow from the Actions tab."
               cat /tmp/wp-response.json || true

@@ -1,0 +1,16 @@
+node_modules/
+__pycache__/
+
+# input/book-library/ is where you keep adding source books over time
+# (epub/zip — copyrighted, GB-scale) — never committed. See README.md.
+input/book-library/
+
+# Working data for the NCERT corpus pipeline — regenerable any time via
+# src/rebuild-corpus.mjs, never committed:
+#   _raw/            near-verbatim extracted text (copyright-sensitive, large)
+#   ncert_corpus.csv fully derived from by-subject/, redundant with it in git
+# output/ncert-corpus/by-subject/ (the cleaned, organized chapter text — the
+# canonical corpus) and output/ncert-index.json (the search index built from
+# it) ARE committed — see README.md.
+output/ncert-corpus/_raw/
+output/ncert-corpus/ncert_corpus.csv

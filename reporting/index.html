@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Long Post Factory — Reporting</title>
+<style>
+  :root{ color-scheme: light; }
+  body{ margin:0; background:#F2F4F8; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#1e293b; }
+  header{ background:#2A4D9B; color:#fff; padding:20px 24px; }
+  header h1{ margin:0; font-size:20px; }
+  header p{ margin:6px 0 0; font-size:13px; opacity:.85; }
+  main{ max-width:1100px; margin:0 auto; padding:20px; }
+  .stats{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+  .stat{ background:#fff; border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(0,0,0,.08); min-width:120px; }
+  .stat b{ display:block; font-size:22px; }
+  .stat span{ font-size:12px; color:#64748b; }
+  .controls{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .controls input, .controls select{ padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; }
+  table{ width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  th,td{ text-align:left; padding:10px 12px; font-size:13px; border-bottom:1px solid #eef1f5; vertical-align:top; }
+  th{ background:#f8fafc; font-weight:700; color:#475569; position:sticky; top:0; }
+  tr:last-child td{ border-bottom:none; }
+  .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge.done{ background:#dcfce7; color:#166534; }
+  .badge.pending{ background:#fef9c3; color:#854d0e; }
+  .badge.running{ background:#dbeafe; color:#1e40af; }
+  .badge.failed{ background:#fee2e2; color:#991b1b; }
+  .badge.flagged{ background:#ffedd5; color:#9a3412; }
+  a{ color:#2A4D9B; }
+  .msg{ padding:12px; color:#64748b; font-size:13px; }
+  .small{ font-size:11px; color:#94a3b8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Long Post Factory — Reporting</h1>
+  <p>What's been published, what's still queued, and each note's grounding signal.</p>
+</header>
+<main>
+  <div class="stats" id="stats"></div>
+  <div class="controls">
+    <input type="text" id="searchBox" placeholder="Search topic / exam / slug...">
+    <select id="statusFilter">
+      <option value="">All statuses</option>
+      <option value="done">Done</option>
+      <option value="pending">Pending</option>
+      <option value="running">Running</option>
+      <option value="failed">Failed</option>
+    </select>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Topic</th><th>Exam</th><th>Status</th><th>NCERT cites</th><th>Self-check</th><th>Published</th><th>Link</th></tr>
+    </thead>
+    <tbody id="rows"><tr><td colspan="7" class="msg">Loading…</td></tr></tbody>
+  </table>
+</main>
+<script>
+// Reads two repo-relative JSON sources — no secrets, safe on GitHub Pages:
+//   ../automation/topics.json          — the batch checklist (pending/running/failed/done)
+//   ../published-long-posts/index.json + per-slug files — actually published drafts
+const TOPICS_URL = '../automation/topics.json';
+const PUB_INDEX_URL = '../published-long-posts/index.json';
+const PUB_FILE = slug => `../published-long-posts/${slug}.json`;
+
+async function safeFetchJson(url, fallback){
+  try{
+    const res = await fetch(url, { cache: 'no-store' });
+    if(!res.ok) return fallback;
+    return await res.json();
+  }catch(e){ return fallback; }
+}
+
+function badge(status){
+  return `<span class="badge ${status}">${status}</span>`;
+}
+
+async function load(){
+  const [topics, pubIndex] = await Promise.all([
+    safeFetchJson(TOPICS_URL, []),
+    safeFetchJson(PUB_INDEX_URL, [])
+  ]);
+
+  const published = await Promise.all(pubIndex.map(slug => safeFetchJson(PUB_FILE(slug), null)));
+  const pubBySlug = new Map();
+  published.filter(Boolean).forEach(p => pubBySlug.set(p.seo?.slug || p.slug, p));
+
+  const rows = topics.map(t => {
+    const pub = t.slug ? pubBySlug.get(t.slug) : null;
+    return {
+      topic: t.topic, exam: t.exam, status: t.status || 'pending',
+      slug: t.slug, error: t.error,
+      ncertCount: pub?.ncertCitationCount ?? null,
+      selfCheckClean: pub?.selfCheck?.clean ?? null,
+      selfCheckFlags: pub?.selfCheck?.flagCount ?? null,
+      publishedAt: pub?.wordpress?.publishedAt || null,
+      link: pub?.wordpress?.link || null
+    };
+  });
+
+  // stats
+  const counts = { done: 0, pending: 0, running: 0, failed: 0 };
+  rows.forEach(r => { counts[r.status] = (counts[r.status]||0) + 1; });
+  document.getElementById('stats').innerHTML = Object.entries(counts).map(([k,v]) =>
+    `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('') +
+    `<div class="stat"><b>${rows.length}</b><span>total topics</span></div>`;
+
+  function render(){
+    const q = document.getElementById('searchBox').value.trim().toLowerCase();
+    const statusFilter = document.getElementById('statusFilter').value;
+    const filtered = rows.filter(r => {
+      if(statusFilter && r.status !== statusFilter) return false;
+      if(!q) return true;
+      return (r.topic||'').toLowerCase().includes(q) || (r.exam||'').toLowerCase().includes(q) || (r.slug||'').toLowerCase().includes(q);
+    });
+    const tbody = document.getElementById('rows');
+    if(!filtered.length){ tbody.innerHTML = '<tr><td colspan="7" class="msg">No matching rows.</td></tr>'; return; }
+    tbody.innerHTML = filtered.map(r => `
+      <tr>
+        <td>${r.topic || ''}${r.error ? `<div class="small">⚠ ${r.error}</div>` : ''}</td>
+        <td>${r.exam || ''}</td>
+        <td>${badge(r.status)}</td>
+        <td>${r.ncertCount === null ? '—' : r.ncertCount}</td>
+        <td>${r.selfCheckClean === null ? '—' : (r.selfCheckClean ? '✅ clean' : `${badge('flagged')} ${r.selfCheckFlags} flag(s)`)}</td>
+        <td>${r.publishedAt ? new Date(r.publishedAt).toLocaleDateString() : '—'}</td>
+        <td>${r.link ? `<a href="${r.link}" target="_blank" rel="noopener">draft ↗</a>` : '—'}</td>
+      </tr>`).join('');
+  }
+  document.getElementById('searchBox').addEventListener('input', render);
+  document.getElementById('statusFilter').addEventListener('change', render);
+  render();
+}
+load();
+</script>
+</body>
+</html>

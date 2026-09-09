@@ -1,0 +1,13 @@
+[
+  {
+    "id": "example-1",
+    "exam": "CTET Paper I",
+    "topic": "Growth & Development",
+    "subject": "CDP",
+    "hindiPercent": 70,
+    "status": "pending",
+    "slug": null,
+    "error": null,
+    "attempts": 0
+  }
+]

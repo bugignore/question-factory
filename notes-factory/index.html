@@ -144,6 +144,13 @@
   <h2>1 · Build &amp; copy the prompt</h2>
   <p class="hint">Fills your exact TOPIC / EXAM TYPE / SUBJECT into the ExamNotesPDF master prompt (the file itself is never edited) and copies the whole thing — paste it into a new DeepSeek / ChatGPT / Claude chat.</p>
 
+  <fieldset>
+    <legend>🔄 Updating an existing note instead?</legend>
+    <p class="hint" style="margin-top:0">Pick a file from <code>published-notes/</code> — its topic/exam/subject prefill below, and "Build prompt" switches to a revision prompt: the AI gets the old SEO + body as context and is told to fix thin depth, fabricated stats, and generic SEO, keeping the same slug so this republishes over the same WordPress post instead of creating a new one.</p>
+    <input type="file" id="oldNoteFile" accept=".json">
+    <div class="msg" id="oldNoteMsg"></div>
+  </fieldset>
+
   <label>Topic (type any topic — suggestions shown from the CDP list, but any subject's topic is fine)</label>
   <input type="text" id="topic" list="topicSuggestions" placeholder="e.g. Photosynthesis, Mughal Empire, Growth & Development..." oninput="this.classList.remove('fieldErr')">
   <datalist id="topicSuggestions"></datalist>
@@ -207,6 +214,7 @@
 <section class="step" id="step2">
   <h2>3 · Review &amp; edit</h2>
   <p class="hint">Fix anything the parser missed before handing it off. This is what actually gets published.</p>
+  <div class="msg show warn" id="updateBadge" style="display:none">🔄 Update mode — this will overwrite the existing WordPress post, not create a new one. <button class="miniCopy" onclick="clearUpdateMode()" style="margin-left:8px">Cancel update</button></div>
 
   <div class="msg" id="reviewMsg"></div>
 
@@ -380,7 +388,7 @@ function render(){
   document.getElementById('backBtn').disabled = cur===0;
   document.getElementById('nextBtn').textContent = cur===3 ? 'Done' : 'Next →';
   document.getElementById('nextBtn').disabled = cur===3;
-  if(cur===2){ fillReviewForm(); updatePreview(); }
+  if(cur===2){ fillReviewForm(); updatePreview(); document.getElementById('updateBadge').style.display = state.isUpdate ? '' : 'none'; }
   if(cur===3){ loadSettings(); document.getElementById('dlSlug').textContent = (state.seo && state.seo.slug) || 'note'; renderCopyFields(); updatePublishGate(); renderQueue(); }
   document.querySelector('main').scrollTop=0;
 }
@@ -487,7 +495,7 @@ function clearShareBlock(containerId){
 /* ================= STEP 1 — build prompt ================= */
 var masterPromptText = null;
 var builtPromptText = null;
-var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, isUpdate:false, oldSeo:null, oldBodyHtml:'', wordpress:null };
 
 function updateLangMixLabel(){
   const hindi = document.getElementById('hindiPercent').value;
@@ -526,7 +534,46 @@ document.addEventListener('DOMContentLoaded', ()=>{
     reader.onerror = ()=>show(msg('pMsg'),'bad','Could not read that file — try picking it again.');
     reader.readAsText(f);
   });
+
+  document.getElementById('oldNoteFile').addEventListener('change', function(){
+    const f = this.files && this.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      let old;
+      try{ old = JSON.parse(String(reader.result||'')); }
+      catch(e){ show(msg('oldNoteMsg'),'bad','Not valid JSON — pick a file from published-notes/.'); return; }
+      if(!old.seo || !old.bodyHtml){ show(msg('oldNoteMsg'),'bad','Missing seo/bodyHtml — is this a published-notes/*.json file?'); return; }
+
+      state.isUpdate = true;
+      state.oldSeo = old.seo;
+      state.oldBodyHtml = old.bodyHtml;
+      state.wordpress = old.wordpress || null;
+      // pipeline uses whatever's typed in these fields at "Build prompt" time —
+      // prefill them from the old note so the run config still matches, but the
+      // update prompt itself (see buildPrompt) is what actually carries the old
+      // content + revision instructions, not these fields.
+      document.getElementById('topic').value = old.topic || '';
+      document.getElementById('subject').value = old.subject || 'Auto-detect';
+      document.getElementById('hindiPercent').value = old.hindiPercent || 70;
+      updateLangMixLabel();
+      const oldExams = String(old.examType||'').split('/').map(s=>s.trim());
+      document.querySelectorAll('.examChk').forEach(c => c.checked = oldExams.includes(c.value));
+      masterPromptText = null; // force a fresh load in case this session already built a normal prompt
+      document.getElementById('promptOut').value = '';
+      show(msg('oldNoteMsg'),'ok',`Loaded "${old.seo.slug}" for update (WordPress post ${old.wordpress?old.wordpress.postId:'— none recorded'}). Tap "Build prompt" below.`);
+    };
+    reader.onerror = ()=>show(msg('oldNoteMsg'),'bad','Could not read that file — try picking it again.');
+    reader.readAsText(f);
+  });
 });
+
+function clearUpdateMode(){
+  state.isUpdate = false; state.oldSeo = null; state.oldBodyHtml = ''; state.wordpress = null;
+  const f = document.getElementById('oldNoteFile'); if(f) f.value = '';
+  clearShareBlock('oldNoteMsg');
+  const badge = document.getElementById('updateBadge'); if(badge) badge.style.display = 'none';
+}
 
 function outputContract(){
   return `
@@ -582,7 +629,7 @@ async function buildPrompt(){
 
   const master = await loadMasterPrompt();
 
-  const config = `=== RUN THIS GENERATION WITH THESE EXACT INPUT VARIABLES ===
+  const config = state.isUpdate ? updateConfig(topic, examType, subject, hindiPercent) : `=== RUN THIS GENERATION WITH THESE EXACT INPUT VARIABLES ===
 TOPIC: ${topic}
 EXAM TYPE: ${examType}
 SUBJECT: ${subject}
@@ -592,6 +639,52 @@ LANGUAGE MIX: Hindi ${hindiPercent}% + English ${100-hindiPercent}% — this OVE
 
 `;
   return config + master + outputContract();
+}
+
+// The revision variant of the run-config block: instead of a blank TOPIC,
+// this hands the AI the existing published note (old SEO fields + old body)
+// and tells it to rewrite it — same master prompt rules apply below
+// unchanged, so depth/grounding/HARD BANS are identical to a fresh run.
+function updateConfig(topic, examType, subject, hindiPercent){
+  const oldSeo = state.oldSeo || {};
+  return `=== THIS IS A REVISION RUN, NOT A FRESH ARTICLE — READ CAREFULLY ===
+The note below is ALREADY PUBLISHED (as a WordPress draft) and needs updating —
+either Google flagged the site for thin/low-quality content, or this specific
+note has known problems. Your job is to REWRITE it end-to-end against the
+FULL master prompt rules that follow (length target, HARD BANS, SEO panel,
+everything) — not to patch a sentence here or there.
+
+KNOWN FAILURE PATTERNS TO ACTIVELY CHECK FOR AND FIX (found across this
+site's existing notes — assume this note may have any of them until you've
+verified otherwise):
+1. A fabricated specific stat with no real source — e.g. "पिछले 5 सालों में
+   12+ questions आए हैं" written with no actual PYQ list behind it. If you
+   cannot name the real questions, delete the claim — do not soften it into
+   a vaguer version of the same fabrication.
+2. A generic, template-shaped SEO title/keyphrase that could apply to any
+   topic on this exam ("[Subject] Notes [Exam] [Year]: Best Guide") instead
+   of naming the actual specific concepts in the topic.
+3. Thin word count and shallow, single-layer explanations that don't meet
+   this prompt's real length/depth target below.
+4. The exact same section skeleton/opening-line shape as every other note on
+   the site — vary structure and voice per the master prompt's variety rules.
+
+OLD TOPIC: ${topic}
+OLD EXAM TYPE: ${examType}
+OLD SUBJECT: ${subject}
+TARGET_YEAR: 2026 (locked, same as before)
+LANGUAGE MIX: Hindi ${hindiPercent}% + English ${100-hindiPercent}% — applies to explanations/tricks/teacher-talk prose only, same rule as the master prompt below.
+
+OLD SEO PANEL (for reference only — do not just copy this, fix anything generic per point 2 above, but KEEP THE SAME SLUG so this republishes over the same WordPress post rather than creating a new one):
+${JSON.stringify(oldSeo, null, 2)}
+
+OLD BODY (the actual published HTML — this is what's getting flagged; read it, decide what's fabricated/generic/thin, and do not just lightly edit it — write the replacement fresh against the rules below, reusing only what's genuinely accurate and worth keeping):
+${state.oldBodyHtml}
+
+=== END OLD NOTE — THE FULL MASTER PROMPT RULES YOU MUST FOLLOW FOR THE REWRITE ARE BELOW, UNCHANGED ===
+REMINDER: the slug in your new SEO panel MUST be exactly "${oldSeo.slug || ''}" — do not change it even if you'd naturally pick a different one for a fresh article.
+
+`;
 }
 
 async function copyPrompt(btn){
@@ -784,6 +877,12 @@ function parseAndGo(){
   state.seo = result.seo;
   state.bodyHtml = result.bodyHtml;
   state.publisherNotes = result.publisherNotes;
+  // Update mode: the slug MUST stay the same as the old note regardless of
+  // what the AI wrote, or this republishes as a brand-new WordPress post
+  // instead of updating the flagged one.
+  if(state.isUpdate && state.oldSeo && state.oldSeo.slug){
+    state.seo.slug = state.oldSeo.slug;
+  }
   saveDraft();
 
   const issuesEl = document.getElementById('parseIssues');
@@ -926,12 +1025,16 @@ async function unlockGithub(btn){
 }
 
 function buildBundle(){
-  return {
+  const bundle = {
     topic: state.topic, examType: state.examType, subject: state.subject, targetYear: 2026,
     hindiPercent: state.hindiPercent,
     seo: state.seo, bodyHtml: state.bodyHtml, publisherNotes: state.publisherNotes,
     createdAt: new Date().toISOString()
   };
+  // Carry the old WordPress post id forward so publish-note.yml knows to
+  // PUT-update that existing post instead of creating a new draft.
+  if(state.isUpdate && state.wordpress) bundle.wordpress = state.wordpress;
+  return bundle;
 }
 
 function utf8ToBase64(str){
