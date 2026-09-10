@@ -1,38 +1,60 @@
-"""End-to-end automation: CSV topic list -> DeepSeek (browser) -> validated
+"""End-to-end automation: CSV topic list -> DeepSeek/ChatGPT -> validated
 pending-long-posts/<slug>.json -> git push -> existing publish-long-post.yml
 GitHub Action drafts it to WordPress.
 
-Everything runs from the terminal except the DeepSeek exchange itself,
-which needs a real logged-in browser session (DeepSeek has no API key
-issued here). Chrome is launched ONCE for the whole run; each topic opens
-exactly one new tab to chat.deepseek.com and closes it before the next
-topic opens its own - never more than one DeepSeek tab open at a time.
+Two ways to get the AI reply for each topic:
+
+  MANUAL mode (default) - one topic at a time, you do the paste yourself.
+  The script builds the prompt, puts it on your clipboard, and waits; you
+  paste it into DeepSeek or ChatGPT (whichever tab you already have open),
+  copy the finished reply back onto your clipboard, and press Enter. Only
+  after that topic is validated, bundled, and pushed does the script move
+  to the next one. Nothing opens a browser tab on its own, so there's never
+  more than the one conversation you're already watching - this is the
+  mode to use.
+
+  BROWSER mode (--browser) - the old fully-automated path: launches your
+  real Chrome profile and drives chat.deepseek.com itself, one new tab per
+  topic (closed before the next opens). Kept for unattended overnight runs,
+  but you don't see each reply as it happens, which is exactly what made
+  the post-534 bad-parse incident hard to catch in the moment.
 
 Prompt-building, reply-parsing, and hard-fail validation all run in Node
 (automation/build-automation-prompt.mjs, automation/validate-bundle.mjs) -
-this script only orchestrates: CSV -> prompt -> browser -> reply -> Node
-validator -> file -> git. See automation/prompt-builder-automation.mjs for
-the actual prompt content (same quality bar as the manual long-post-factory
-tool, with the self-report/checklist scaffolding stripped out - this
-script's Node validator does those checks in code instead, and only a
-HARD FAIL blocks a topic; anything softer still publishes with a note).
+this script only orchestrates: CSV -> prompt -> AI reply -> Node validator
+-> file -> git. See automation/prompt-builder-automation.mjs for the actual
+prompt content (same quality bar as the manual long-post-factory tool, with
+the self-report/checklist scaffolding stripped out - this script's Node
+validator does those checks in code instead, and only a HARD FAIL blocks a
+topic; anything softer still publishes with a note).
 
 Usage:
-    python run_pipeline.py --sanity-test         # no browser, no DeepSeek, no git
-    python run_pipeline.py --dry-run --limit 3   # build prompts only
-    python run_pipeline.py --start 0 --limit 5   # the real thing
+    python run_pipeline.py --sanity-test          # no AI, no browser, no git
+    python run_pipeline.py --dry-run --limit 3    # build prompts only
+    python run_pipeline.py --start 0 --limit 5    # manual mode, one topic at a time
+    python run_pipeline.py --browser --limit 5    # old fully-automated Chrome/DeepSeek flow
 """
 
 import argparse
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
 import time
 from getpass import getpass
 from pathlib import Path
+
+# Topics and prompts are Hindi text; a console stuck on a legacy codepage
+# (cp1252 etc., which some terminals still default to on Windows) would
+# otherwise crash on the very first print() rather than just showing the
+# text a little wrong. UTF-8 output degrades gracefully everywhere it isn't
+# already the default.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from patchright.sync_api import sync_playwright, Page
 
@@ -208,6 +230,76 @@ def jitter(a, b):
     return random.uniform(a, b)
 
 
+# ------------------------------------------------------------ clipboard --
+# Manual mode's whole interface to the outside world is the OS clipboard --
+# no browser, no API. Both directions go through a staging file rather than
+# piping text straight into/out of powershell.exe's stdin/stdout, because
+# that pipe uses the console's legacy codepage and mangles Hindi; a UTF-8
+# file read with an explicit -Encoding does not.
+CLIPBOARD_STAGE_DIR = Path(os.environ.get("TEMP", ".")) / "enp-notes-automate"
+
+
+def copy_to_clipboard(text: str):
+    CLIPBOARD_STAGE_DIR.mkdir(parents=True, exist_ok=True)
+    stage = CLIPBOARD_STAGE_DIR / "to-clipboard.txt"
+    stage.write_text(text, encoding="utf-8-sig")  # BOM so PowerShell autodetects UTF-8
+    subprocess.run(
+        ["powershell", "-NoProfile", "-Command",
+         f"Get-Content -Raw -Encoding UTF8 -LiteralPath '{stage}' | Set-Clipboard"],
+        check=True,
+    )
+
+
+def read_clipboard() -> str:
+    CLIPBOARD_STAGE_DIR.mkdir(parents=True, exist_ok=True)
+    stage = CLIPBOARD_STAGE_DIR / "from-clipboard.txt"
+    subprocess.run(
+        ["powershell", "-NoProfile", "-Command",
+         f"Get-Clipboard -Raw | Out-File -LiteralPath '{stage}' -Encoding utf8"],
+        check=True,
+    )
+    return stage.read_text(encoding="utf-8-sig")
+
+
+END_SENTINEL = "<<<END_PUBLISHER_NOTES>>>"
+
+# Excludes the trailing CSS-module hash (e.g. "db183363") that changes on
+# every DeepSeek deploy — these utility classes are the stable part of the
+# button's signature.
+COPY_BUTTON_CLASS_SELECTOR = (
+    'div[role="button"].ds-button--iconLabelTertiary'
+    '.ds-button--icon.ds-button--capsule.ds-button--xs'
+)
+
+
+def find_copy_button(ds_page: Page):
+    """DeepSeek only renders the per-message action toolbar (Copy /
+    Regenerate / etc.) once that message has finished streaming — so
+    locating this button doubles as the "reply is complete" signal, which
+    is far more reliable than polling whole-page text length (that can
+    plateau during a mid-stream pause and trigger a premature capture).
+    Since each topic runs in its own fresh tab (one exchange per tab, see
+    run_topic_through_deepseek), there is exactly one Copy button on the
+    page once the reply is done — no scoping to "the last message" needed.
+    Tries the accessible name first (most stable across UI rebuilds/CSS
+    hash changes); falls back to the class signature if that fails."""
+    by_name = ds_page.get_by_role("button", name=re.compile("copy", re.I))
+    if by_name.count() > 0:
+        return by_name.last
+    return ds_page.locator(COPY_BUTTON_CLASS_SELECTOR).last
+
+
+def copy_via_button(ds_page: Page, copy_btn) -> str:
+    """Clicks DeepSeek's own Copy button (copies just the assistant's
+    message — none of the sidebar/prompt-echo noise inner_text("body")
+    picks up), waits for the clipboard write to actually land, then reads
+    it back. Requires clipboard-read/write permission granted on the
+    browser context (see main())."""
+    copy_btn.click()
+    ds_page.wait_for_timeout(int(jitter(2000, 3500)))  # let the clipboard write land
+    return ds_page.evaluate("navigator.clipboard.readText()")
+
+
 def run_topic_through_deepseek(context, prompt_text: str) -> str:
     """Opens one new tab, sends the prompt, waits for the reply, returns the
     raw text, then closes that tab. Never more than one DeepSeek tab open."""
@@ -239,7 +331,23 @@ def run_topic_through_deepseek(context, prompt_text: str) -> str:
         except Exception:
             textarea.press("Enter")
 
-        # wait for the reply to finish streaming - poll for text stability
+        # Primary path: wait for DeepSeek's own Copy button to appear (the
+        # reply is genuinely done), click it, read the clean copy back from
+        # the clipboard — no sidebar/prompt-echo pollution to parse around.
+        try:
+            copy_btn = find_copy_button(ds_page)
+            copy_btn.wait_for(state="visible", timeout=600000)  # up to 10 min for a long article
+            raw_reply = copy_via_button(ds_page, copy_btn)
+            if raw_reply and END_SENTINEL in raw_reply:
+                return raw_reply
+            print(f"  [warn] Copy-button capture missing the {END_SENTINEL} sentinel — "
+                  f"falling back to full-page text capture.")
+        except Exception as e:
+            print(f"  [warn] Copy-button capture failed ({e}) — falling back to full-page text capture.")
+
+        # Fallback: the old whole-page-text approach, so a run never comes
+        # back completely empty-handed even if DeepSeek's UI changed shape.
+        # Poll for text stability first in case streaming is still running.
         stable_reads, last_len = 0, -1
         deadline = time.time() + 600
         while time.time() < deadline:
@@ -249,7 +357,6 @@ def run_topic_through_deepseek(context, prompt_text: str) -> str:
             last_len = cur_len
             if stable_reads >= 4:
                 break
-
         return ds_page.inner_text("body")
     finally:
         ds_page.close()  # destroy this tab before the next topic opens a new one
@@ -330,8 +437,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", type=int, default=0)
     ap.add_argument("--limit", type=int, default=None)
-    ap.add_argument("--dry-run", action="store_true", help="Build + validate prompts only, no DeepSeek/git")
+    ap.add_argument("--dry-run", action="store_true", help="Build + validate prompts only, no AI reply/git")
     ap.add_argument("--sanity-test", action="store_true", help="No LLM, no browser, no git — proves the code path")
+    ap.add_argument("--browser", action="store_true",
+                     help="Old fully-automated Chrome/DeepSeek flow (default is manual: you paste, one topic at a time)")
     args = ap.parse_args()
 
     if args.sanity_test:
@@ -344,6 +453,10 @@ def main():
 
     if args.dry_run:
         run_topics(topics, published_slugs, pending_pairs, context=None, dry_run=True)
+        return
+
+    if not args.browser:
+        run_topics_manual(topics, published_slugs, pending_pairs)
         return
 
     user_data_root = ensure_clone()
@@ -364,8 +477,93 @@ def main():
             str(user_data_root), channel="chrome", headless=False,
             args=[f"--profile-directory={PROFILE_DIR}"], viewport=None,
         )
+        # Needed to read back what DeepSeek's own Copy button puts on the
+        # clipboard (see copy_via_button()) — without this, navigator.
+        # clipboard.readText() silently returns "" instead of erroring.
+        context.grant_permissions(["clipboard-read", "clipboard-write"], origin=DEEPSEEK_URL.rstrip("/"))
         run_topics(topics, published_slugs, pending_pairs, context=context, dry_run=False)
         context.close()
+
+
+def run_topics_manual(topics, published_slugs, pending_pairs):
+    """One topic fully processed - build, paste, copy, validate, push -
+    before the next topic's prompt is even built. No browser, no automated
+    tab-opening: you're in the loop for the actual AI exchange, so you see
+    every reply as it happens instead of a batch racing ahead unattended."""
+    done, skipped, failed = 0, 0, 0
+    i = 0
+    while i < len(topics):
+        row = topics[i]
+        i += 1
+        topic, exam, subject, hindi_pct = row["topic"], row["exam"], row["subject"], row["hindi_pct"]
+        print(f"\n{'=' * 70}\n[{i}/{len(topics)}] #{row['no']} {row['subject_raw']} -> {subject} ({hindi_pct}% Hindi)")
+        print(f"Topic: {topic}\nExam:  {exam}")
+
+        if is_duplicate(topic, exam, published_slugs, pending_pairs):
+            print("  Skipping — already published or pending.")
+            skipped += 1
+            continue
+
+        prompt_text = build_prompt(topic, exam, subject, hindi_pct)
+
+        while True:  # retry loop for this one topic — 'r' below re-enters it
+            copy_to_clipboard(prompt_text)
+            print(f"\n  Prompt built ({len(prompt_text.split())} words) and copied to your clipboard.")
+            print("  -> Paste it into DeepSeek or ChatGPT now, wait for the full reply, then copy that reply.")
+            input("  Press Enter once the AI's reply is on your clipboard... ")
+
+            raw_reply = read_clipboard()
+            print(f"  Read {len(raw_reply)} chars from clipboard.")
+            if END_SENTINEL not in raw_reply:
+                choice = input(f"  [warn] Clipboard is missing {END_SENTINEL} — doesn't look like the full reply. "
+                                f"Re-copy and press Enter to read again, or type 's' to skip this topic: ").strip().lower()
+                if choice == "s":
+                    failed += 1
+                    break
+                continue  # re-read the clipboard, same topic
+
+            result = validate_and_bundle(raw_reply, topic, exam, subject, hindi_pct)
+            if not result["pass"]:
+                print("  HARD FAIL:")
+                for f in result["hardFails"]:
+                    print(f"    - {f}")
+                debug_path = DEBUG_REPLIES_DIR / f"{i:03d}-{slugify(topic)[:60]}.txt"
+                DEBUG_REPLIES_DIR.mkdir(parents=True, exist_ok=True)
+                debug_path.write_text(raw_reply, encoding="utf-8")
+                print(f"  Raw reply saved for debugging: {debug_path}")
+                choice = input("  Fix it in the chat and retry this topic? [y/N]: ").strip().lower()
+                if choice == "y":
+                    continue  # re-paste for the same topic
+                failed += 1
+                break
+
+            if result["warnings"]:
+                print(f"  Passed with {len(result['warnings'])} warning(s) (non-blocking):")
+                for w in result["warnings"]:
+                    print(f"    - {w}")
+
+            slug = result["bundle"]["seo"]["slug"]
+            out_path = PENDING_DIR / f"{slug}.json"
+            out_path.write_text(json.dumps(result["bundle"], ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"  Wrote {out_path.name} ({result['wordCount']} words)")
+
+            push_choice = input("  Push to GitHub now? (triggers publish-long-post.yml) [Y/n]: ").strip().lower()
+            if push_choice in ("", "y", "yes"):
+                git_commit_and_push(out_path, f"Add long post: {slug} [automation]")
+            else:
+                print("  Left as a local pending file — push it yourself later when ready.")
+
+            pending_pairs.add((topic.strip().lower(), exam.strip().lower()))
+            done += 1
+            break
+
+        if i < len(topics):
+            cont = input("\n  Continue to next topic? [Y/n]: ").strip().lower()
+            if cont in ("n", "no"):
+                print("  Stopping early at your request.")
+                break
+
+    print(f"\nBatch done: {done} published, {skipped} skipped (duplicate), {failed} failed/skipped.")
 
 
 def run_topics(topics, published_slugs, pending_pairs, context, dry_run: bool):
