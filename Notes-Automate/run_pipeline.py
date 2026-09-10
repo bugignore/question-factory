@@ -1,38 +1,36 @@
-"""End-to-end automation: CSV topic list -> DeepSeek/ChatGPT -> validated
+"""End-to-end automation: CSV topic list -> DeepSeek (browser) -> validated
 pending-long-posts/<slug>.json -> git push -> existing publish-long-post.yml
 GitHub Action drafts it to WordPress.
 
-Two ways to get the AI reply for each topic:
-
-  MANUAL mode (default) - one topic at a time, you do the paste yourself.
-  The script builds the prompt, puts it on your clipboard, and waits; you
-  paste it into DeepSeek or ChatGPT (whichever tab you already have open),
-  copy the finished reply back onto your clipboard, and press Enter. Only
-  after that topic is validated, bundled, and pushed does the script move
-  to the next one. Nothing opens a browser tab on its own, so there's never
-  more than the one conversation you're already watching - this is the
-  mode to use.
-
-  BROWSER mode (--browser) - the old fully-automated path: launches your
-  real Chrome profile and drives chat.deepseek.com itself, one new tab per
-  topic (closed before the next opens). Kept for unattended overnight runs,
-  but you don't see each reply as it happens, which is exactly what made
-  the post-534 bad-parse incident hard to catch in the moment.
+Everything runs from the terminal except the DeepSeek exchange itself,
+which needs a real logged-in browser session (DeepSeek has no API key
+issued here). Chrome is launched ONCE for the whole run; each topic opens
+exactly one new tab to chat.deepseek.com and closes it before the next
+topic opens its own - never more than one DeepSeek tab open at a time.
+The browser runs headed (headless=False), so this is watchable, not a
+black box - if topics are flying past faster than you can follow, that's
+the per-topic cooldown (15-40s) plus DeepSeek's own reply time, not a
+bug where several tabs are open at once.
 
 Prompt-building, reply-parsing, and hard-fail validation all run in Node
 (automation/build-automation-prompt.mjs, automation/validate-bundle.mjs) -
-this script only orchestrates: CSV -> prompt -> AI reply -> Node validator
--> file -> git. See automation/prompt-builder-automation.mjs for the actual
-prompt content (same quality bar as the manual long-post-factory tool, with
-the self-report/checklist scaffolding stripped out - this script's Node
-validator does those checks in code instead, and only a HARD FAIL blocks a
-topic; anything softer still publishes with a note).
+this script only orchestrates: CSV -> prompt -> browser -> reply -> Node
+validator -> file -> git. See automation/prompt-builder-automation.mjs for
+the actual prompt content (same quality bar as the manual long-post-factory
+tool, with the self-report/checklist scaffolding stripped out - this
+script's Node validator does those checks in code instead, and only a
+HARD FAIL blocks a topic; anything softer still publishes with a note).
+
+A --manual mode also exists (build the prompt, you paste it into
+DeepSeek/ChatGPT yourself and copy the reply back) for when you don't have
+the DeepSeek Chrome profile handy - it is NOT the default; the default is
+the automated browser flow above.
 
 Usage:
-    python run_pipeline.py --sanity-test          # no AI, no browser, no git
-    python run_pipeline.py --dry-run --limit 3    # build prompts only
-    python run_pipeline.py --start 0 --limit 5    # manual mode, one topic at a time
-    python run_pipeline.py --browser --limit 5    # old fully-automated Chrome/DeepSeek flow
+    python run_pipeline.py --sanity-test         # no browser, no DeepSeek, no git
+    python run_pipeline.py --dry-run --limit 3   # build prompts only
+    python run_pipeline.py --start 0 --limit 5   # the real thing (automated)
+    python run_pipeline.py --manual --limit 5    # you paste into DeepSeek/ChatGPT yourself
 """
 
 import argparse
@@ -439,8 +437,8 @@ def main():
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--dry-run", action="store_true", help="Build + validate prompts only, no AI reply/git")
     ap.add_argument("--sanity-test", action="store_true", help="No LLM, no browser, no git — proves the code path")
-    ap.add_argument("--browser", action="store_true",
-                     help="Old fully-automated Chrome/DeepSeek flow (default is manual: you paste, one topic at a time)")
+    ap.add_argument("--manual", action="store_true",
+                     help="Paste into DeepSeek/ChatGPT yourself instead of the automated Chrome/DeepSeek flow (default is automated)")
     args = ap.parse_args()
 
     if args.sanity_test:
@@ -455,7 +453,7 @@ def main():
         run_topics(topics, published_slugs, pending_pairs, context=None, dry_run=True)
         return
 
-    if not args.browser:
+    if args.manual:
         run_topics_manual(topics, published_slugs, pending_pairs)
         return
 
