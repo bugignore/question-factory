@@ -1,21 +1,31 @@
-# Auto Long-Post batch pipeline
+# automation/ — NCERT corpus build + shared pipeline scripts
 
-Feeds an exam + topic list into `long-post-factory`'s existing pipeline
-automatically: an agentic Claude call researches each topic (local NCERT
-corpus search + web search), writes the long post, self-checks it, and
-drops the same `pending-long-posts/<slug>.json` bundle the manual browser
-tool produces — `.github/workflows/publish-long-post.yml` picks it up
-unchanged and drafts it to WordPress.
+This folder is **not** a standalone pipeline you run directly — it's shared
+infrastructure used by two other things:
 
-**Runs on your machine only.** The one API key this needs never touches git
-or the repo — it's read from your shell's environment for that session only.
+1. **`../ncert-knowledge-base/`** is built and maintained by the corpus
+   scripts here (extraction → Kruti-Dev decode → organize → BM25 index).
+2. **`../Notes-Automate/run_pipeline.py`** (Python, browser-automation —
+   drives DeepSeek's free web chat via a real signed-in Chrome profile, no
+   API key) shells out to `src/build-automation-prompt.mjs` and
+   `src/validate-bundle.mjs` for the one piece that has to match the manual
+   browser tools *exactly*: prompt building and reply parsing/validation.
+   See `../Notes-Automate/README.md` for that pipeline's own docs — this
+   file only covers what lives here.
+
+There used to be a second, API-key-based batch generator here
+(`generate-long-post.mjs` / `run-batch.mjs` / `providers/*.mjs`, calling
+Claude/Gemini/OpenAI directly). It's been removed — `Notes-Automate`'s
+browser-driven approach is the one actually in production (free, no
+per-article API cost), and keeping two separate generation pipelines side by
+side was more confusing than useful.
 
 ## Folder layout
 
 ```
 automation/
 ├── src/          all the code — nothing else lives here
-├── input/        things you edit/add by hand (book-library/, topics.json)
+├── input/        things you edit/add by hand (book-library/, topics.json — see below)
 ├── output/       build-intermediate data only (raw extracted text, the CSV
 │                 export) — the FINISHED corpus lives in ../ncert-knowledge-base/
 ├── package.json / package-lock.json / requirements.txt
@@ -25,14 +35,18 @@ automation/
 ├── by-subject/   the canonical NCERT corpus text, committed
 ├── index.json    the BM25 search index built from it, committed
 └── retrieve.mjs  the search function other tools import
+
+../Notes-Automate/         (repo root, sibling of automation/ — see its own README)
+└── run_pipeline.py         the actual browser-driven batch orchestrator
 ```
 
 - **`src/`** — every script. Nothing in here writes anywhere except into
   `../output/` (build intermediates) and `../../ncert-knowledge-base/` (the
   finished corpus + index) — nothing here needs you to edit it for day-to-day use.
 - **`input/`** — your standing local inputs: `book-library/` (source
-  epub/zip books, gitignored) and `topics.json` (the batch list you edit
-  before each run).
+  epub/zip books, gitignored). `topics.json` is a leftover from the removed
+  batch runner — `Notes-Automate` reads its topic list from its own CSV
+  instead (see that folder's README).
 - **`output/`** — build-intermediate data: `ncert-corpus/_raw/` (raw
   extracted text, gitignored) and `ncert-corpus/ncert_corpus.csv` (a
   convenience export, gitignored). The corpus this pipeline actually feeds
@@ -71,72 +85,12 @@ subject-organizing → BM25 index build → a quality-verification report. See
 `../ncert-knowledge-base/README.md` for the full pipeline diagram and what
 each step does.
 
-## Running a note-generation batch
+## Running an actual generation batch
 
-1. Edit `input/topics.json` — list every `{ exam, topic, subject, hindiPercent }`
-   you want generated this run. Leave `status` unset/absent on new entries
-   (it defaults to being treated as pending); the runner manages `status`,
-   `slug`, `error`, `attempts` for you after that.
-2. Pick a provider and set its key for this shell session (PowerShell).
-   Default is Claude:
-   ```
-   $env:ANTHROPIC_API_KEY = "sk-ant-..."
-   node src/run-batch.mjs
-   ```
-   To use Gemini instead:
-   ```
-   $env:AI_PROVIDER = "gemini"
-   $env:GEMINI_API_KEY = "AIza..."
-   node src/run-batch.mjs
-   ```
-   To use OpenAI instead:
-   ```
-   $env:AI_PROVIDER = "openai"
-   $env:OPENAI_API_KEY = "sk-..."
-   node src/run-batch.mjs
-   ```
-   The OpenAI provider is pinned to `gpt-4.1`, not `gpt-4o` — testing found
-   `gpt-4o` flatly refuses this pipeline's long, multi-thousand-word single-shot
-   prompt (a blank "I can't assist with that"), while `gpt-4.1` completes it
-   normally. See `src/providers/openai.mjs`.
-3. Run it (if not already run above):
-   ```
-   node src/run-batch.mjs
-   ```
-   Or via npm: `npm run run-batch` (also `npm run rebuild-corpus`,
-   `npm run build-index`).
-
-All three providers write the identical `pending-long-posts/<slug>.json`
-bundle shape — same NCERT retrieval, same prompts, same self-check contract.
-See `src/providers/claude.mjs`, `src/providers/gemini.mjs`, and
-`src/providers/openai.mjs` for the API implementations behind the shared
-`runAgenticDraft` / `runSelfCheck` interface.
-
-The runner processes one topic at a time, commits + pushes each result as it
-finishes (so `publish-long-post.yml` starts drafting it right away), then
-cools down before the next topic. Default cooldown is 120s — override with
-`$env:COOLDOWN_SECONDS = "300"` before running.
-
-## Resuming after a crash / Ctrl+C
-
-Just run `node src/run-batch.mjs` again — it only reprocesses topics still
-marked `pending` or `failed` in `input/topics.json`. A topic that failed
-`MAX_RETRIES` times (default 2) is skipped with a log line instead of
-retried forever; fix the underlying issue and reset its `status`/`attempts`
-manually to retry it.
-
-## Rotating / changing the API key
-
-Nothing to clean up — just export a different key value (`ANTHROPIC_API_KEY`,
-`GEMINI_API_KEY`, or `OPENAI_API_KEY`, matching `AI_PROVIDER`) in your shell
-before the next run. It's never written to disk by any script here.
-
-## Tuning the writer
-
-Edit `src/prompts/research-writer-system.md` (persona, grounding rules, tone)
-or `src/prompts/self-check.md` (accuracy-audit pass) directly — they're
-loaded at runtime, no code change needed. Diff/review them like any other
-commit.
+There's no runner in this folder anymore — see
+**`../Notes-Automate/README.md`** and run `python run_pipeline.py` from
+there. This folder just supplies the corpus and the shared prompt/parse/
+validate scripts it calls into.
 
 ## Reporting
 
@@ -155,11 +109,6 @@ status, and per-post NCERT-citation / self-check signal.
 | `../ncert-knowledge-base/retrieve.mjs` | No | Queries the index (used as the `search_ncert` tool) — lives in the shared knowledge-base folder, not here |
 | `src/verify_corpus.py` | No | Sanity-checks corpus completeness/quality |
 | `src/rebuild-corpus.mjs` | No | Runs all of the scripts above in order |
-| `src/prompt-builder.mjs` / `src/parse-reply.mjs` | No | Ported from `long-post-factory/index.html` — prompt contract + reply parsing |
-| `src/prompt-builder-automation.mjs` / `src/build-automation-prompt.mjs` | No | Automation-only prompt variant + a CLI to print it for one topic (debugging) |
-| `src/validate-bundle.mjs` | No | CLI: hard-fail-only checks on a raw AI reply piped via stdin |
-| `src/generate-long-post.mjs` | **Yes** — provider key | Per-topic agentic generation + self-check |
-| `src/run-batch.mjs` | **Yes** — provider key | CLI batch runner over `input/topics.json` |
-| `src/providers/claude.mjs` | **Yes** — `ANTHROPIC_API_KEY` | Claude implementation of the agentic loop + self-check |
-| `src/providers/gemini.mjs` | **Yes** — `GEMINI_API_KEY` | Gemini implementation of the agentic loop + self-check |
-| `src/providers/openai.mjs` | **Yes** — `OPENAI_API_KEY` | OpenAI (`gpt-4.1`) implementation of the agentic loop + self-check |
+| `src/prompt-builder.mjs` / `src/parse-reply.mjs` | No | Ported from `long-post-factory/index.html` — prompt contract + reply parsing. Called by `Notes-Automate/run_pipeline.py` via the two scripts below. |
+| `src/prompt-builder-automation.mjs` / `src/build-automation-prompt.mjs` | No | Automation-only prompt variant + a CLI `Notes-Automate/run_pipeline.py` calls to build each prompt |
+| `src/validate-bundle.mjs` | No | CLI: hard-fail-only checks on a raw AI reply piped via stdin — `Notes-Automate/run_pipeline.py` calls this to parse + validate each scraped reply |
