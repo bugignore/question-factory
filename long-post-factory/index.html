@@ -142,7 +142,7 @@
 <!-- STEP 1 -->
 <section class="step show" id="step0">
   <h2>1 · Build &amp; copy the prompt</h2>
-  <p class="hint">Builds a prompt entirely on this page — no master-prompt file is loaded, which keeps the prompt short. It casts the AI as a veteran exam-faculty teacher for whichever exam you type (built-in personas for CTET / BPSC TRE / DSSSB TGT &amp; PRT / UPTET / UP TGT / KVS / NVS / PGT / PRT — any other exam name still works, using a generic-but-real persona built from the name), and demands a full 6,000–8,000 words every run — a hard gate in the prompt, not a suggestion. The AI writes plain content inside <code>{* type: title *} ... {* END *}</code> blocks instead of hand-written styled HTML — far fewer output tokens, so it's less likely to run out mid-article. On mobile, expect the AI's reply to land in several messages given the length — that's normal, see Step 2.</p>
+  <p class="hint">Builds a prompt entirely on this page — no master-prompt file is loaded, which keeps the prompt short. It casts the AI as four internal roles (teacher, examiner, note-maker, editor) for whichever exam you type (built-in personas for CTET / BPSC TRE / DSSSB TGT &amp; PRT / UPTET / UP TGT / KVS / NVS / PGT / PRT — any other exam name still works, using a generic-but-real persona built from the name), and asks it to teach the topic as deeply as it genuinely needs — no fixed word count, no padding. The AI writes plain content inside <code>{* type: title *} ... {* END *}</code> blocks instead of hand-written styled HTML — far fewer output tokens, so it's less likely to run out mid-article. On mobile, a long reply may land in several messages — that's normal, see Step 2.</p>
 
   <label>Topic (type any topic — suggestions shown from the CDP list, but any subject's topic is fine)</label>
   <input type="text" id="topic" list="topicSuggestions" placeholder="e.g. Photosynthesis, Mughal Empire, Growth & Development..." oninput="this.classList.remove('fieldErr')">
@@ -191,7 +191,7 @@
 <!-- STEP 2 -->
 <section class="step" id="step1">
   <h2>2 · Paste the AI's reply</h2>
-  <p class="hint">Paste the whole reply from DeepSeek/ChatGPT/Claude. The parser reads the machine-readable markers first, and falls back to reading the visible SEO panel + HTML if a model ignored them — nothing is ever a dead end. This prompt asks for 6,000–8,000 words every time, so on a phone the AI app itself will very likely split its answer across several messages — that's expected, not an error. Paste each chunk here as it arrives, tick "This is a continuation," and tap Parse again after every chunk; the last chunk should end with the <code>&lt;&lt;&lt;END_PUBLISHER_NOTES&gt;&gt;&gt;</code> marker.</p>
+  <p class="hint">Paste the whole reply from DeepSeek/ChatGPT/Claude. The parser reads the machine-readable markers first, and falls back to reading the visible SEO panel + HTML if a model ignored them — nothing is ever a dead end. This prompt asks the AI to teach the topic as thoroughly as it genuinely needs, which can run long, so on a phone the AI app itself may split its answer across several messages — that's expected, not an error. Paste each chunk here as it arrives, tick "This is a continuation," and tap Parse again after every chunk; the last chunk should end with the <code>&lt;&lt;&lt;END_PUBLISHER_NOTES&gt;&gt;&gt;</code> marker.</p>
   <textarea id="rawIn" style="min-height:220px" placeholder="Paste the full AI reply here…"></textarea>
   <label style="font-weight:500"><input type="checkbox" id="appendMode" style="width:auto;margin-right:6px">This is a continuation — add it to what I already pasted (AI stopped midway)</label>
   <button class="btn" onclick="tryRun(parseAndGo,this)">🔎 Parse</button>
@@ -617,7 +617,12 @@ function buildLongPostPrompt(topic, examType, subject, hindiPercent, year){
   return `# LONG POST — ${profile.label} — ${topic} (${year})
 
 ## WHO YOU ARE
-You are ${profile.persona} — also grounded in NCERT, NCF 2005/2023, and NEP 2020 where relevant, and in the specific exam body's own syllabus/policy documents for ${profile.label}. You write as this person, in a teacher-to-student voice ("आपसे यह पूछा जाएगा"), never salesy — and as a careful editor who would rather write a true, verifiable sentence than an impressive-sounding invented one. You are NOT a visual designer here — a script turns your block tags into styled HTML, so spend your effort on real content, not markup.
+This is a premium exam-study resource, not an SEO article — you are writing it, in one pass, as four internal roles working together:
+- **TEACHER** — ${profile.persona}, grounded in NCERT, NCF 2005/2023, and NEP 2020 where relevant, and in ${profile.label}'s own syllabus/policy documents. Decides what the learner must actually understand.
+- **EXAMINER** — knows exactly how ${profile.label} tests this material. Decides how each concept could genuinely be examined.
+- **NOTE-MAKER** — decides what belongs in prose versus what should be shown visually (table, diagram, revision visual) for maximum learning value per screen, not maximum information density.
+- **EDITOR** — a careful reviewer who would rather write a true, verifiable sentence than an impressive-sounding invented one, and who cuts anything that doesn't add real learning value.
+First understand the topic. Then let these four roles decide, together, what this specific topic needs — never mechanically apply a fixed article template. You are NOT a visual designer for markup purposes — a script turns your block tags into styled HTML, so spend your effort on real content and real decisions, not hand-styled markup.
 
 ## INPUTS
 TOPIC: ${topic}
@@ -628,106 +633,106 @@ SUBJECT SCOPE FOR THIS EXAM: ${profile.subjects}
 EXAM-SPECIFIC ANGLE: ${profile.angle}
 
 ## HARD BANS (never do these)
-1. No \`<script>\` tag anywhere. 2. No locked/blurred/paywalled content — everything visible. 3. No invented PYQs — verified "PYQ [Exam] [Year]" or honest "Practice Question — [Exam] pattern". 4. No unsourced numbers — cite, soften, or delete. 5. No keyword stuffing, but near-zero density fails just as hard (see T9). 6. No fabricated URLs — only the exam body's official domain, ncert.nic.in, cbseacademic.nic.in, indiacode.nic.in, education.gov.in, pib.gov.in, other .gov.in/.nic.in, or en.wikipedia.org. No \`href="#"\`. 7. **No hand-written styled HTML.** Every chunk of content is wrapped in a \`{* type: title *} ... {* END *}\` block per the BLOCK-TAG SYSTEM below — plain semantic tags (\`<p>\`, \`<strong>\`, \`<table>\`, \`<svg>\`, \`<ol>\`/\`<li>\`, \`<sup>\`/\`<a>\`) are fine *inside* a block, just never a styled \`<div>\` wrapper. 8. **No scaffolding from memory.** The SEO panel / Publisher Notes / FINAL CHECKS templates below are pipeline-parsed — copy field-for-field, line-for-line, never paraphrase or drop a field. 9. **No "YES" without a number.** Every FINAL CHECKS line asking for a count must show the actual count — "YES" alone is an automatic failure on that line. 10. **No bare \`<h3>\`** anywhere you write one directly (e.g. the References heading) — always carry an inline style, exactly like every other raw tag you're allowed to write outside a block.
+1. No \`<script>\` tag anywhere. 2. No locked/blurred/paywalled content — everything visible. 3. **Never invent an exam-claim** — no invented PYQs, no "asked every year," no "most repeated," no predicted questions, no guaranteed marks, no percentage weightage without real evidence. Only state such a claim when evidence is actually available; when it is, distinguish **VERIFIED PYQ** (a real, sourced past question) from **PRACTICE QUESTION IN EXAM STYLE** (your own, honestly labeled as such) — never blur the two. 4. No unsourced numbers of any kind — cite it, soften it into an honest estimate, or delete it. 5. No keyword stuffing — but also no forcing the keyphrase in artificially; use it where it fits naturally (see SEO below). 6. No fabricated URLs — only the exam body's official domain, ncert.nic.in, cbseacademic.nic.in, indiacode.nic.in, education.gov.in, pib.gov.in, other .gov.in/.nic.in, or en.wikipedia.org. No \`href="#"\`. 7. **No hand-written styled HTML.** Every chunk of content is wrapped in a \`{* type: title *} ... {* END *}\` block per the BLOCK-TAG SYSTEM below — plain semantic tags (\`<p>\`, \`<strong>\`, \`<table>\`, \`<svg>\`, \`<ol>\`/\`<li>\`, \`<sup>\`/\`<a>\`) are fine *inside* a block, just never a styled \`<div>\` wrapper. 8. **No scaffolding from memory.** The SEO panel / Publisher Notes templates below are pipeline-parsed — copy field-for-field, line-for-line, never paraphrase or drop a field. 9. **No bare \`<h3>\`** anywhere you write one directly (e.g. the References heading) — always carry an inline style, exactly like every other raw tag you're allowed to write outside a block. 10. **Never merely summarize a source.** If NCERT/reference material is supplied (see RAG/SOURCES below), use it as evidence to extract facts from, then explain those facts in your own original, student-friendly language — copied-over source prose is a failure even if accurate.
 
 ## LANGUAGE (Hinglish, Hindi ${hindiPercent}% + English ${100-hindiPercent}%)
 Apply this ratio to explanations/tricks/teacher-talk/connecting prose only — key terms, definitions, and technical labels stay in English regardless. Never force tatsam Hindi or awkward transliteration. Banned words: delve, tapestry, crucial/pivotal role, holistic, seamless, robust, comprehensive guide, game-changer, unlock, "it is important to note", moreover, furthermore, अत्यंत महत्वपूर्ण, यह ध्यान देने योग्य है, निष्कर्षतः, "इस लेख में हम", "आइए जानते हैं". Vary sentence length/openers, never repeat a section-opener pattern back-to-back.
 
-## LENGTH — NON-NEGOTIABLE: 6,000–8,000 prose words (excl. tags/URLs), every single run, no exceptions
-This is the most important rule in this prompt — a run that ships under 6,000 words has failed regardless of how good everything else is. **Most models' default instinct is to stop around 3,000–4,500 words because that "feels like" a complete article — that instinct is wrong for this task and you must override it.** Reach the real target via genuine depth (more worked examples, more sub-topics, fuller theory, more solved questions, richer comparisons) — never via repetition, filler sentences, or restating the same point in different words. The WORD BUDGET table in CONTENT ARCHITECTURE below shows how the 6,000–8,000 splits across sections; if a topic feels "too narrow" to reach it, that is never a valid reason to fall short — widen genuinely: historical/policy background, worked numerical/scenario examples, exam-body-specific angle, comparative analysis against adjacent concepts, common-misconception deep-dives, a richer PYQ/practice-question set, and a fuller FAQ. Do this for EVERY topic and EVERY exam, including ones you have thin real knowledge of — go deeper into what IS known (definitions, classifications, examples, pedagogy angle, comparison) rather than inventing specifics you're not sure of.
+## RAG / SOURCES — evidence, never article text
+If NCERT corpus material or source URLs are supplied for this run, use them as evidence: extract the facts and concepts, then explain them in your own original, student-friendly language — never copy the source's prose. Where sources disagree, or evidence is genuinely insufficient, do not invent a compromise answer — flag the uncertainty honestly or omit the claim entirely. Where nothing is supplied, write from your own reliable knowledge under the same honesty rules (HARD BAN 3–4 still apply in full either way).
 
-**Mandatory running checkpoint — do not skip this, it is how you catch a shortfall before it's too late to fix:** immediately after every \`h2\` block's content is complete (i.e. right before starting the next section), stop and print a single bare line with your actual running prose-word tally so far, in exactly this form: \`[[WC: <number>]]\` (a real count of the whole article's prose from the start through this point, not an estimate rounded to a nice number — the publisher's script strips these lines from the final page, they are a working checkpoint for you, not reader-facing content). If your \`[[WC: N]]\` after Section 2 is under ~2,600, or after Section 5 is under ~4,500, or after Section 8 is under ~5,700 — you are behind budget and MUST add more depth to the sections that follow before continuing, not just note the shortfall and move on anyway.
+## LENGTH AND DEPTH — no fixed target, no padding
+This is the **deep** version of the same educational design language as the site's shorter Notes — meaningfully longer and more thorough than a quick note, because it earns that length through real teaching value, not because a word count demands it. Write however long it genuinely takes to teach TOPIC properly for a ${profile.label} candidate — covering it shallowly to hit a page-length feel is a failure; padding with repetition, filler transitions, or restating a point in different words to hit a number is an equal and opposite failure. If you are genuinely running low on room mid-article, stop cleanly at the end of a complete block's \`{* END *}\` — the user will say "continue" and you resume exactly where you left off. Never cite token limits or "conciseness" as a reason to under-teach a topic; never cite a word-count target as a reason to over-write one.
 
-If you are genuinely running low on room mid-article, stop cleanly at the end of a complete block's \`{* END *}\` — no scaffolding yet — the user says "continue" and you resume with the next block, still driving toward the same 6,000–8,000 total. Never cite token limits, "conciseness," or topic narrowness as an excuse for shorter output — see the HARD GATE in COUNT-BEFORE-PRINT below, which blocks you from printing anything under 6,000 words.
+## STRUCTURE — adapt it to the topic and subject, don't force a template
+Do not mechanically apply a fixed section architecture. Decide the best structure for THIS topic by asking, for each major concept: **Understand → Example → Confusion → Exam application → Remember** — not every concept needs all five lenses, and the order/weight should follow what the topic actually demands.
 
-## SILENT SEED (derived: ${seed} — state once in Publisher Notes, do not print this number's meaning to the reader)
-Lede type (seed%4): update-hook / question / exam-hall scenario / surprising-fact. Headline formula (seed%6, see below). Misconception style (seed%3): ❌/✅ pairs / woven prose / Q&A. FAQ position (seed%3): end / after Section 6 / split in two. Pick 2 of 4 deep-blocks fitting TOPIC for \`insight\` blocks: Examiner's Logic / Cross-Topic Bridge / real Timeline / Compare-&-Contrast Matrix. Uneven structure: 1–2 sections short, 1–2 long, matching real importance.
+**Adapt the teaching format to SUBJECT:**
+- **Maths:** worked examples, formulas, error analysis, visual solution steps.
+- **EVS/Science:** processes, diagrams, classification, real-life examples.
+- **History:** timeline, chronology, cause/effect, comparison.
+- **Geography:** maps/connections, processes, classification, cause/effect.
+- **CDP/Pedagogy:** classroom situations, teacher decisions, misconceptions, theory → classroom application.
+- **Language:** examples, contrast, rules, usage and error correction.
+- **Other subjects:** infer the closest-fitting pattern above rather than defaulting to a generic essay shape.
 
-## HEADLINE FORMULA (seed%6 picks ONE) — the [Keyphrase] slot must be the TOPIC-SPECIFIC keyphrase below, never a generic "[Exam] Notes" placeholder
-Keyphrase = literal first characters of the title, ≤60 chars, with a number + power word + sentiment word.
-1. \`[Keyphrase]: [Sentiment] [Power] Guide for [Exam]\` 2. \`[Keyphrase]: Score [Sentiment] Marks — [Power] Notes\` 3. \`[Keyphrase]: [N]+ [Sentiment] Solved Qs and Tricks\` (N must be true/countable) 4. \`[Keyphrase]: [Power] Update-Ready [Sentiment] Guide\` 5. \`[Keyphrase]: [Sentiment] [Power] Crash Course in 1 Read\` 6. \`[Keyphrase]: [Power] [Sentiment] Notes, No Topic Missed\`
-Power words: Complete, Ultimate, Essential, Proven, Definitive, Powerful, Master, Instant. Sentiment words: Best, Easy, Top, Smart, Perfect, Amazing (sparingly) — pick ONE power word and ONE sentiment word per article and don't default to the same pair every run (rotate per seed, state the pick in Publisher Notes).
-**Anti-generic check on the finished title:** read it back — if it would be byte-identical (apart from the exam name) to the title you'd write for a *different* topic on this same exam, it has failed. It must name the actual concept(s), not just the exam+subject wrapper.
+A typical run will still cover, in whatever order/weight the topic earns: why this matters for ${profile.label} (exam relevance, honestly sourced or labeled estimated) · the core concepts themselves, taught properly, not just listed · the exam-body/pedagogy angle where genuinely relevant · comparisons and misconceptions where they aid understanding · memory aids where a real mnemonic adds value · a closing summary/roadmap/FAQ. None of these is a mandatory numbered section with a word floor — include what the topic needs, skip what it doesn't, and let 1–2 areas run deep while others stay brief, matching real importance rather than an even split.
 
-## SEO — RANK MATH 90+ GATE (SEO panel FIRST, before any content)
-Focus Keyphrase: build it FROM THE TOPIC, not from a template. Take the 2–4 most specific, exam-searchable nouns actually named in TOPIC (transliterate/translate Hindi terms to the Roman/English words students actually search — e.g. TOPIC "लिंग, वचन, पुरुष, काल और कारक" → keyphrase nouns "Ling Vachan Kaal Karak", not "Hindi Grammar"), then append \`${profile.label} Notes ${year}\`. **Never collapse a multi-concept topic down to just "[Subject] Notes [Exam] [Year]"** — that throws away the one thing that makes this article distinct from every other article on the same exam/subject and is the single most common cause of generic-sounding SEO output. If TOPIC genuinely names only one broad concept, use that concept's specific name (not the subject category) as the keyphrase core. Plain English/Roman, "and" never "&", 2–4 word core.
-Print this panel:
-\`\`\`
-Focus Keyword:    [exact keyphrase]
-SEO Title:        [per formula above; keyphrase FIRST; ≤60 chars]
-Permalink/Slug:   [every keyphrase word in order, lowercase-hyphenated; <75 chars]
-Meta Description: [150–155 chars, keyphrase once, honest]
-H1 (Post Title):  [keyphrase FIRST] — [Hindi sub-line after]
-\`\`\`
-Every test MUST pass: T1 keyphrase starts SEO Title · T2 keyphrase once in meta description · T3 every keyphrase word in slug · T4 keyphrase (bold) in first 100 words of body · T6 **6,000–8,000 prose words (hard gate, see LENGTH above)** · T7 keyphrase exact in ≥3 \`h2\` block titles + ≥1 \`faq\` block title · T8 the \`img\` block's alt STARTS with keyphrase, ≥3 \`svg\` block aria-labels contain it · T9 keyphrase+variant density **1.0–1.4%** of prose words (60–84 occurrences at 6,000 words, 80–112 at 8,000; every section ≥4, no paragraph >2, zero = instant fail) · T10 slug <75 chars · T11 ≥3 external links to whitelisted domains · T12 external links always dofollow, never add \`rel="nofollow"\` · T13 ≥7 internal links · T14-16 title has number+power+sentiment word · T17 one \`toc\` block with real anchors · T18 no \`<p>\` >120 words · T19 the \`img\` block + 5–7 \`svg\` blocks present. Inline citations: every sourced claim carries \`<sup id="cite-N"><a href="#ref-N">[N]</a></sup>\`, min 6 across ≥4 sections, written directly in prose.
+**Self-check before finishing a section:** could this section be removed without reducing what the reader actually learns? If yes, cut it or fold it into something that earns its place.
 
-## BLOCK-TAG SYSTEM
+## BLOCK-TAG SYSTEM — choose the right block for each idea, never to fill a quota
 Wrap every chunk of content like this:
 \`\`\`
 {* type: Title text *}
 ...plain content (prose, <p>, <table>, <svg>, <ol>, whatever the type needs)...
 {* END *}
 \`\`\`
-Lowercase \`type\`. Title after the colon is optional for most types (see below), required for \`h2\`/\`insight\`/\`faq\`. Omit the colon entirely for a bare \`{* type *}\` when no title is needed. **Always close with a literal \`{* END *}\`** — if you run out of room mid-block it's safe to stop (the next \`{*\` auto-closes it), but always try to close explicitly first. Blocks never nest. Never invent a type outside this list — unknown types render as unstyled plain text and fail the visual checks.
+Lowercase \`type\`. Title after the colon is optional for most types (see below), required for \`h2\`/\`insight\`/\`faq\`. Omit the colon entirely for a bare \`{* type *}\` when no title is needed. **Always close with a literal \`{* END *}\`** — if you run out of room mid-block it's safe to stop (the next \`{*\` auto-closes it), but always try to close explicitly first. Blocks never nest. Never invent a type outside this list — unknown types render as unstyled plain text.
 
-| type | when to use | title |
+Use the most effective representation for each idea — normal prose (\`plain\`) when explanation genuinely is the best format. Do not use a block merely to satisfy a quota, and do not force every block type into every article — a short, focused topic might genuinely need only a handful of blocks; a rich, comparison-heavy topic might need many. Let the content decide.
+
+| type | use it when | title |
 |---|---|---|
-| \`h2\` | section heading (one per numbered section below) | required, keyphrase in ≥3 of them |
-| \`def\` | a definition | optional (default "Definition") |
-| \`tip\` | a study tip | optional (default "Tip") |
-| \`exam\` | exam-relevance callout | optional (default "Exam Point") |
-| \`question\` | PYQ or practice question + answer | optional (default "Question") |
-| \`trick\` | memory trick/mnemonic, fully open | optional (default "Memory Trick") |
-| \`mistake\` | common-mistake correction | optional (default "Mistake") |
-| \`summary\` | end-of-section summary | optional (default "Section Summary") |
-| \`revision\` | rapid-revision bullets (Section 8 only) | optional |
-| \`insight\` | deep-theory insight (one of the 2 seed-picked deep-blocks) | required — name which one |
-| \`update\` | dated sourced news brief | optional |
-| \`toc\` | the single Table of Contents block | optional |
-| \`faq\` | one FAQ Q&A pair (one block per question, 7–9 total) | required — the question text, exact keyphrase in ≥3 |
-| \`table\` | data/comparison table — content is raw \`<table>\` markup; 2 columns is always fine, 3 is fine too, but for 4+ columns use several small 2-column \`table\`/\`def\` blocks instead — a wide table breaks on the phone screens most readers use | optional |
-| \`svg\` | one SVG visual — content is raw \`<svg viewBox="0 0 360 H" role="img" aria-label="...">\` markup; 5–7 total, ≥3 aria-labels contain the keyphrase | not used |
-| \`img\` | the one mandatory image — content is \`<img src="https://via.placeholder.com/700x350?text=Diagram" alt="[Focus Keyphrase] — concept overview" />\`, alt MUST start with exact keyphrase | not used |
+| \`h2\` | starting a genuinely new section of the article | required |
+| \`def\` | a key definition needs its own space | optional (default "Definition") |
+| \`tip\` | a real study tip adds value | optional (default "Tip") |
+| \`exam\` | there's a genuine, specific exam-relevance point to flag | optional (default "Exam Point") |
+| \`question\` | practice genuinely helps learning here — PYQ or practice question + answer, labeled per HARD BAN 3 | optional (default "Question") |
+| \`trick\` | a real mnemonic adds value — never invent a forced one just to fill this slot | optional (default "Memory Trick") |
+| \`mistake\` | a misconception is important enough to call out explicitly | optional (default "Mistake") |
+| \`summary\` | a section genuinely benefits from a closing recap | optional (default "Section Summary") |
+| \`revision\` | rapid-revision bullets near the end, if the topic suits quick recall | optional |
+| \`insight\` | a deeper theoretical connection is worth drawing out | required — name it |
+| \`update\` | a dated, sourced news brief is genuinely relevant | optional |
+| \`toc\` | once, after the opening, if the article has enough sections to warrant one | optional |
+| \`faq\` | a real question a student would ask — one block per question | required — the question text |
+| \`table\` | a comparison is genuinely easier to read as a table than in prose — raw \`<table>\` markup; 2–3 columns fine, 4+ columns split into several small 2-column \`table\`/\`def\` blocks instead, since a wide table breaks on the phone screens most readers use | optional |
+| \`svg\` | a visual relationship, process, hierarchy, timeline, cycle, flowchart, or concept map is genuinely easier to understand visually than in prose — see VISUALS below for how to design it | not used |
+| \`img\` | the article's one representative featured image — content is \`<img src="https://via.placeholder.com/700x350?text=Diagram" alt="[Focus Keyphrase] — concept overview" />\`, alt starts with the keyphrase | not used |
 | \`plain\` | ordinary prose that doesn't fit a card type — intro, connective paragraphs, References list | optional |
 
-Ad slots: do not wrap in a block — leave a bare line \`[[AD]]\` at exactly 3 points, spread early (after Section 2) / middle (after Section 3 or 5) / late (after Section 6, 7, or FAQ), never the same trio of positions twice across different articles; the publisher inserts the ad markup automatically.
+Ad slots: do not wrap in a block — leave a bare line \`[[AD]]\` at exactly 3 points spread across the article (early / middle / late, never bunched near the end, never the same trio of positions twice across different articles) — the publisher inserts the ad markup automatically. This is a placement/monetization requirement, unrelated to content quality.
 
-**Vary block titles across sub-topics and across different articles** — don't let every \`def\` block default to the literal word "Definition" and every \`mistake\` block to "Mistake" throughout the whole piece; that reads templated. Pick a title style for this run (seed%2 — style A: "इसे ऐसे समझो" / "Exam Point" / "यहाँ गलती होती है", style B: "आसान भाषा में समझें" / "Scoring Zone" / "⚠️ ध्यान दें") and use those as the \`title\` after the colon on \`def\`/\`exam\`/\`mistake\` blocks instead of the bare defaults, rotating naturally rather than using the exact same label every time.
+**Vary block titles across sub-topics and across different articles** — don't let every \`def\` block default to the literal word "Definition" and every \`mistake\` block to "Mistake" throughout the whole piece; that reads templated. Pick titles that fit the specific content (e.g. "इसे ऐसे समझो", "Exam Point", "यहाँ गलती होती है", "Scoring Zone", "⚠️ ध्यान दें") and rotate naturally.
+
+## VISUALS — let the topic decide what deserves one
+Before creating any \`svg\`, ask internally: *"What relationship would be genuinely difficult to understand from prose alone?"* Only create a visual when it materially improves understanding — avoid decorative SVGs, giant text walls inside an SVG, or tiny unreadable labels. Design every SVG for a 360px-wide phone screen: \`viewBox="0 0 360 H"\`, \`width="100%"\`, \`role="img"\` with a real \`aria-label\`, node text short enough to stay legible at that width. Each visual should communicate one clear idea. Choose the visual form that actually fits: flowchart, concept map, timeline, process diagram, classification tree, cycle, comparison visual, cause→effect diagram, classroom process, or a worked-example visual — decide, then design it yourself as clean, responsive SVG before writing the markup.
+
+**Handwritten-note-style visuals — use selectively, not everywhere.** For a visual that's better as a student's own handwritten revision note — quick revision, a memory map, a formula summary, last-minute revision, a concept-relationship map, a mnemonic sheet — render it inside an \`svg\` block in a compact handwritten-note style: rough-but-clean pen-stroke paths, arrows, boxes, underlines, small annotations, natural uneven spacing, an exam-notebook feel — still fully legible on a phone. Never apply this styling to the main explanatory prose; it's for these specific revision-visual moments only.
+
+**Build visual moments in naturally, not on a schedule.** Across the article, look for genuine opportunities for a concept map, a comparison table, a process diagram, an exam-trap callout, a worked example, a handwritten revision visual, a real PYQ/practice question, or a quick-recall block — and place each one where the topic actually demands it, not on a fixed repeating pattern. Placing them mechanically is exactly what makes an article feel AI-generated.
+
+## SEO — natural, not mechanical
+Focus Keyphrase: build it FROM THE TOPIC, not from a template. Take the 2–4 most specific, exam-searchable nouns actually named in TOPIC (transliterate/translate Hindi terms to the Roman/English words students actually search — e.g. TOPIC "लिंग, वचन, पुरुष, काल और कारक" → keyphrase nouns "Ling Vachan Kaal Karak", not "Hindi Grammar"), then append \`${profile.label} Notes ${year}\`. **Never collapse a multi-concept topic down to just "[Subject] Notes [Exam] [Year]"** — that throws away the one thing that makes this article distinct from every other one on the same exam/subject. If TOPIC genuinely names only one broad concept, use that concept's specific name (not the subject category) as the keyphrase core. Plain English/Roman, "and" never "&", 2–4 word core.
+Print this panel:
+\`\`\`
+Focus Keyword:    [exact keyphrase]
+SEO Title:        [keyphrase FIRST, ≤60 chars, names the actual topic — not a generic exam+subject wrapper]
+Permalink/Slug:   [every keyphrase word in order, lowercase-hyphenated; <75 chars]
+Meta Description: [150–155 chars, keyphrase once, honest — this is a real technical constraint for how Google displays it, not a quota]
+H1 (Post Title):  [keyphrase FIRST] — [Hindi sub-line after]
+\`\`\`
+Use the keyphrase where it fits naturally — in the H1, early in the body, in a couple of section/FAQ titles where genuinely relevant — never force it in with an artificial repetition target, and never let density concerns override natural writing. Include a handful of real internal links (to genuinely related topics, with honest reasons) and a couple of external links to whitelisted official sources, woven into prose where they add value. Inline citations: every sourced claim carries \`<sup id="cite-N"><a href="#ref-N">[N]</a></sup>\`, pointing to a real entry in the References list.
 
 ## QUESTION TYPE DIVERSITY
-Use 6–8 genuinely different \`question\` blocks across the article, rotating type — direct-recall / scenario / comparison / assertion-reason / data-interpretation / error-spotting (or subject-appropriate equivalents: calculation/word-problem/diagram/error-spotting/data-table for Maths; fact-recall/match-the-following/assertion-reason/scenario/picture-ID for EVS; pattern/coding-decoding/analogy/blood-relation/statement-conclusion for Reasoning; classroom-scenario/definition/assertion-reason/case-study/comparison for CDP/Pedagogy). Never repeat the same type twice in a row. State the mix in Publisher Notes.
-
-## CONTENT ARCHITECTURE — WORD BUDGET (9 sections, each opened by an \`h2\` block; \`toc\` block right after Section 1's opening prose)
-The word counts below are per-section MINIMUMS that sum to 6,000–8,000 — treat every number as a floor, not a ceiling; a run that hits every floor lands near 6,000, going deeper on 3–4 sections (per the seed's "uneven structure" pick) reaches 7,000–8,000. If Section 3 or 4 is shrunk/omitted per its own rule below, redistribute that section's budget into Section 2 (more sub-topics) and Section 6 (more comparisons) rather than just dropping the total.
-
-1. **[Topic] कितना Important है? — Exam Weightage for ${profile.label}.** *(~250–350 words)* \`plain\` lede (150–200 words): keyphrase **bolded**, sourced fact, one line noting these are complete free premium notes (vary wording, no repeats), what the reader will know, read time. Then a 60–90 word \`def\` snippet definition. Then the mandatory \`img\` block. Then the \`toc\` block. Weightage figures only if verified or labeled "estimated".
-2. **Core Concept Notes.** *(~2,400–3,200 words — the longest section, always)* Cover **6–8 distinct sub-topics** (not fewer — this is where most of the depth requirement is met), each in 3 layers: Foundation (simple + real-life example + NCERT/syllabus link) → Intermediate (classifications, comparison) → Advanced (nuance, policy link, feeds an \`insight\` block). Per sub-topic: \`def\` → key points (\`plain\`, 3–5 sentences) → \`mistake\` → \`trick\` (fully open) → sourced \`<sup>\` in prose → one \`question\` block, type rotating. This or Section 5's \`h2\` title must carry the exact keyphrase.
-3. **Pedagogy & Exam-Body Policy Angle.** *(~400–600 words; shrink to ~200 or skip entirely — redistributing its budget per the rule above — only if ${profile.label} genuinely isn't a teaching-eligibility exam)* Constructivist activity idea, common error+fix (\`mistake\`), specific policy provision cited with \`<sup>\`, at least one classroom-scenario \`question\`.
-4. **हाल के Updates.** *(~250–450 words; omit entirely — redistributing its budget — only if nothing verifiable exists)* \`update\` blocks, only sourced items.
-5. **Deep Theory + Flowchart(s).** *(~800–1,100 words)* Extended theory (\`plain\`, going beyond Section 2's basics into real depth) + ≥2 \`svg\` real flowcharts/diagrams of the concept chain, not just 1.
-6. **Comparison & Differentiation.** *(~800–1,100 words)* Confusing pairs (\`table\`), real timeline if applicable (\`insight\`). ≥3 solved walkthroughs (\`question\`) with elimination reasoning + ≥3 misconception repairs (\`mistake\`) with WHY, across the doc.
-7. **Mnemonics & Memory Architecture.** *(~450–650 words)* \`trick\` blocks, fully open, no lock/blur — cover every major sub-topic from Section 2, not just one or two.
-8. **Conclusion + Related Topics Roadmap.** *(~400–600 words)* Summary (\`plain\`, keyphrase once) → \`summary\` block → \`revision\` block → roadmap (\`plain\`, 3× \`<a href="/[topic-slug]-[exam-slug]-notes-${year}/">\` distinct slugs + reasons) + ≥2 more internal links woven inline earlier — ≥7 total. **References** (\`plain\`) right after Roadmap: \`<h3 style="font-size:16px;font-weight:700;color:#1e293b;margin:16px 0 8px;">📚 References</h3>\` (never a bare \`<h3>\` — see HARD BAN 10) + \`<ol>\`, 6–10 entries, \`<li id="ref-N">\` with ↑ back-link, every entry needing ≥1 in-body \`<sup>\`.
-9. **FAQ.** *(~700–1,000 words; position per seed)* one \`faq\` block per question, **7–9 questions** (not fewer), ≥3 containing exact keyphrase, every answer opens with the answer and runs 70–120 words (a one-line answer is too thin — always give a real, useful answer). Closing section, its own \`h2\` block titled with the exact keyphrase.
+Where practice questions genuinely help learning, use a mix of types appropriate to SUBJECT rather than repeating one style — direct-recall / scenario / comparison / assertion-reason / data-interpretation / error-spotting (or subject-appropriate equivalents: calculation/word-problem/diagram/error-spotting/data-table for Maths; fact-recall/match-the-following/assertion-reason/scenario/picture-ID for EVS; pattern/coding-decoding/analogy/blood-relation/statement-conclusion for Reasoning; classroom-scenario/definition/assertion-reason/case-study/comparison for CDP/Pedagogy). Use as many as genuinely help teach the topic — never a fixed count, never merely to hit a number. State the real mix used in Publisher Notes.
 
 ## HANDLING EVERY SITUATION — read before you start
-- **Topic feels narrow?** Never use that as a reason to fall short of 6,000 words. Widen genuinely: add historical/policy background, more worked examples, a richer comparison against 2–3 adjacent concepts, more PYQ-style questions, a fuller FAQ. Depth from real angles, never repetition.
-- **Exam you have thin knowledge of (a generic-profile exam)?** Go deeper on what IS reliably known — definitions, classifications, general exam-pattern conventions, pedagogy — and be honest/qualify ("in most [exam] cycles…", "typically weighted around…") rather than inventing a precise-sounding fact you're not sure of. HARD BAN 4 (no unsourced numbers) still applies in full.
-- **Running out of room mid-block or mid-section?** Stop at a clean \`{* END *}\`, nothing else — wait for "continue," then resume the SAME block/section exactly where you left off, still driving toward the full 6,000–8,000 total. Never ship a shortened article just because a session felt long.
+- **Topic feels narrow?** Go deeper on real angles — historical/policy background, worked examples, comparison against adjacent concepts, genuine exam application — never pad with repetition to look substantial.
+- **Exam you have thin knowledge of (a generic-profile exam)?** Go deeper on what IS reliably known — definitions, classifications, general exam-pattern conventions, pedagogy — and be honest/qualify ("in most [exam] cycles…", "typically weighted around…") rather than inventing a precise-sounding fact you're not sure of. HARD BAN 3–4 still apply in full.
+- **Running out of room mid-block or mid-section?** Stop at a clean \`{* END *}\`, nothing else — wait for "continue," then resume the SAME block/section exactly where you left off.
 - **Subject is "Auto-detect" or ambiguous?** Infer the most likely subject from TOPIC + EXAM and state your inference once in Publisher Notes — never leave content generic because the subject wasn't pinned down.
 - **Bilingual/Hinglish edge cases** (a technical term with no natural Hindi equivalent, a topic that's almost entirely English-medium by convention): keep the term in English per the LANGUAGE rule, but never let that become an excuse to write entire sections in English — the ${hindiPercent}%/${100-hindiPercent}% split still applies to the connecting prose around it.
 
-## COUNT-BEFORE-PRINT (literal counting, not memory, before printing anything below)
-1. Prose word count — **HARD GATE: if this is below 6,000 or above 8,500, STOP. Do not print the SEO panel or any output.** Go back to the WORD BUDGET table above, find every section under its stated minimum, add genuine depth there (more sub-topics, more worked questions, richer comparisons — never filler), then recount. Repeat until you land inside 6,000–8,000. This gate cannot be skipped for any reason — not topic narrowness, not running low on room (use the continuation protocol instead), not exam unfamiliarity.
-2. Keyphrase+variant occurrences → % = count÷words×100; if outside 1.0–1.4% or zero, add natural carriers and recount.
-3. Which \`h2\`/\`faq\` titles carry the exact keyphrase (need ≥3 / ≥1).
-4. Inline \`<sup>\` count (≥6) and that every \`#ref-N\` target exists.
-5. Internal (≥7) and external (≥3) link counts.
-6. \`svg\` block count (5–7) and how many aria-labels carry the keyphrase (≥3).
-7. Longest \`<p>\` word count.
-8. \`question\` block count (6–8, types not repeated back-to-back) and \`faq\` block count (7–9).
-9. Scan your own output for any block missing its \`{* END *}\`.
-Only after all nine pass — word count included, non-negotiably — assemble the output below.
+## SELF-EDIT — before printing anything below, silently review your own draft
+Your goal is not maximum information density — it's maximum learning value per screen. Before finalizing, check honestly:
+- Is anything repetitive? Does every section add genuinely new learning?
+- Are all claims supported — and are every exam-specific claim (weightage, "asked every year," predicted questions) backed by real evidence per HARD BAN 3?
+- Are the visuals genuinely useful, not decorative or forced?
+- Are the examples topic-specific, not generic filler that could sit in any article on this exam?
+- Does this read like a teacher-created study resource, or like a templated SEO article? If the latter, revise.
+- Could any section be removed without reducing learning value? If yes, cut it.
+Revise weak parts before returning the final answer — this is not an extra step for the user, just something you do silently before printing.
 
 ## OUTPUT FORMAT — exact order, nothing outside these three blocks, code-fenced (chat UIs render raw HTML visually, so the fence is what keeps it copyable as source — never skip it)
 Two extra SEO fields beyond the panel above: "imageAltText" (starts with the keyphrase, describes the featured image) and "imagePrompt" (a ready-to-paste AI image-gen prompt: loud, high-CTR YouTube-thumbnail style — exaggerated expression on a student/teacher character, bold saturated colors, thick outlines, 16:9, explicitly NO baked-in text).
@@ -740,46 +745,35 @@ Two extra SEO fields beyond the panel above: "imageAltText" (starts with the key
 
 <<<NOTES_BODY_HTML>>>
 \`\`\`
-(the entire block-tagged body — every chunk wrapped in {* type: title *} ... {* END *}, [[AD]] placeholders where specified, nothing removed, nothing summarized)
+(the entire block-tagged body — every chunk wrapped in {* type: title *} ... {* END *}, [[AD]] placeholders where you placed them, nothing removed, nothing summarized)
 \`\`\`
 <<<END_NOTES_BODY_HTML>>>
 
 <<<PUBLISHER_NOTES>>>
 \`\`\`
-- Seed: ${seed} — lede [_], headline formula [# + why honest], FAQ position [_], deep-blocks [_,_]
+- Structure chosen for this topic and why (brief)
 - Sources consulted: [list]
 - Claims softened/omitted: [list — empty is suspicious, re-check]
-- Question labels: [N] verified PYQ + [N] practice-pattern
-- Visuals generated: [list]
+- Question labels used: [types + honest verified-vs-practice split]
+- Visuals used and why each earned its place: [list]
 - URLs needing manual verification: [list]
-- Body word count (prose only): [N]
-- Keyphrase count / density: [M occurrences / N words = X.X%]
+- Approx. body word count: [N]
 \`\`\`
 <<<END_PUBLISHER_NOTES>>>
 
 If you run out of space, stop cleanly at the end of a complete block's \`{* END *}\` — the user will send "continue" and you resume exactly where you stopped, inside a new code fence, no repetition, no fresh introduction.
 
-## FINAL CHECKS (verify by COUNT-BEFORE-PRINT numbers, not memory; fix any NO before ending)
+## FINAL CHECKS (qualitative — this is the SELF-EDIT pass above, confirm it was actually done)
 \`\`\`
-Word count 6,000–8,000 prose (state exact count) — THE GATE, fix this first if NO?                YES/NO + count
-Year ${year} + all 5 SEO fields byte-identical; Title ≤60 chars?                                 YES/NO + chars
-Headline formula per seed, keyphrase-first, number+power+sentiment present?                     YES/NO + formula #
-Keyphrase density 1.0–1.4% — state M/W/%?                                                        YES/NO + M/W/%
-Exact keyphrase in ≥3 h2 titles and ≥1 faq title (name them)?                                    YES/NO + list
-Keyphrase bolded in first 100 words of body?                                                     YES/NO
-img block alt STARTS with keyphrase; ≥3 svg aria-labels contain it (state count)?                YES/NO + count
-≥6 inline <sup> citations across ≥4 sections; zero orphan references?                            YES/NO + count
-Every block closed with a literal {* END *}?                                                     YES/NO
-No <p> over ~120 words (state longest)?                                                          YES/NO + longest
-Hinglish rules followed; no banned phrases; varied openers?                                      YES/NO
-Zero <script> tags; 3 [[AD]] placeholders at seed positions?                                     YES/NO + positions
-Zero locked/blurred/upsell content; premium-hint line appears once?                              YES/NO
-All questions honestly labeled; zero unsourced numbers; URLs whitelisted?                        YES/NO
-5–7 svg blocks with correct aria-labels (state count)?                                           YES/NO + count
-6–8 question blocks (types not repeated back-to-back) + 7–9 faq blocks (state counts)?           YES/NO + counts
-toc block + References + FAQ (keyphrase in h2 + ≥3 Qs) present?                                  YES/NO
-≥7 internal + ≥3 external links (state counts)?                                                  YES/NO + counts
-Publisher Notes copied field-for-field incl. density line?                                       YES/NO
+All 5 SEO fields byte-identical between panel and JSON; Title ≤60 chars, names the real topic?    YES/NO
+Every exam-specific claim (weightage/PYQ/prediction) evidence-based or honestly labeled/omitted?  YES/NO
+Every block closed with a literal {* END *}? Zero hand-written styled <div> outside a block?      YES/NO
+Structure adapted to this specific topic/subject, not a fixed generic template?                   YES/NO
+Every visual (svg/table) earns its place — none decorative or forced to fill a quota?             YES/NO
+Zero <script> tags; 3 [[AD]] markers placed, spread across the article, not bunched at the end?   YES/NO
+Zero locked/blurred/upsell content; premium-hint line appears once, naturally?                    YES/NO
+Reads like a teacher-created study resource, not a templated SEO article?                         YES/NO
+Publisher Notes copied field-for-field?                                                           YES/NO
 \`\`\`
 
 **>>> NOW GENERATE THE LONG POST <<<**`;
@@ -1824,19 +1818,24 @@ function vCountKeyphrase(text, keyphrase){
 }
 
 /* ---- individual checks: each returns {id,label,tier:'hard'|'soft',pass,detail} with a REAL number in detail ---- */
+/* Word count / density / heading-repetition are informational only, not
+   hard gates — the prompt deliberately no longer targets a fixed length,
+   density, or repetition count (see MASTER-PROMPT long-post rewrite:
+   "natural, not mechanical" SEO, topic-adaptive structure). A short,
+   well-taught topic and a long, rich one can both be genuinely good. */
 function vCheckWordCount(words){
-  return { id:'word-count', label:'Word count 6,000–8,000 (hard gate)', tier:'hard', pass: words>=6000 && words<=8500, detail: words.toLocaleString()+' words' };
+  return { id:'word-count', label:'Approx. word count (informational — no fixed target)', tier:'soft', pass: words>=1500, detail: words.toLocaleString()+' words' };
 }
 function vCheckDensity(words, kw){
   const pct = words ? (kw.total/words*100) : 0;
-  return { id:'density', label:'Keyphrase density 1.0–1.4%', tier:'hard', pass: pct>=1.0 && pct<=1.4,
+  return { id:'density', label:'Keyphrase density (informational — natural use, no target band)', tier:'soft', pass: pct>0,
     detail: `${kw.exact} exact + ${kw.variant} variant = ${kw.total} / ${words} words = ${pct.toFixed(2)}%` };
 }
 function vCheckHeadings(doc, keyphrase){
   const k = vNormalize(keyphrase);
   const h2s = k ? [...doc.querySelectorAll('h2')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
   const h3s = k ? [...doc.querySelectorAll('h3')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
-  return { id:'headings', label:'Keyphrase in ≥3 H2s and ≥1 H3', tier:'hard', pass: h2s.length>=3 && h3s.length>=1,
+  return { id:'headings', label:'Keyphrase appears in some headings (informational)', tier:'soft', pass: h2s.length>=1 || h3s.length>=1,
     detail: `${h2s.length} H2(s), ${h3s.length} H3(s) contain it` };
 }
 function vCheckImageAlt(doc, keyphrase){
@@ -1851,8 +1850,8 @@ function vCheckSvg(doc, keyphrase){
   const svgs = [...doc.querySelectorAll('svg')];
   const k = vNormalize(keyphrase);
   const withLabel = svgs.filter(s=>vNormalize(s.getAttribute('aria-label')||'').includes(k)).length;
-  return { id:'svg-count', label:'5–7 SVG visuals (informational — NOT counted as Rank Math "media", see media check)', tier:'soft',
-    pass: svgs.length>=5 && svgs.length<=7, detail: `${svgs.length} SVG(s), ${withLabel} with keyphrase in aria-label` };
+  return { id:'svg-count', label:'SVG visuals used (informational, no fixed target — quality over quantity; NOT counted as Rank Math "media", see media check)', tier:'soft',
+    pass: true, detail: `${svgs.length} SVG(s), ${withLabel} with keyphrase in aria-label` };
 }
 function vCheckMedia(doc){
   const count = doc.querySelectorAll('img, video').length; // Rank Math's real "Media in Posts" test: img/video only, not svg
@@ -1876,8 +1875,8 @@ function vCheckLinks(doc){
       else { external++; if(/nofollow/i.test(a.getAttribute('rel')||'')) externalNofollow++; }
     } else if(href.startsWith('/')) internal++;
   });
-  return { id:'links', label:'≥7 internal + ≥3 external link, zero href="#"', tier:'hard',
-    pass: internal>=7 && external>=3 && hashLinks===0,
+  return { id:'links', label:'Real internal/external links used, zero href="#" (no fixed count target)', tier:'hard',
+    pass: hashLinks===0,
     detail: `${internal} internal, ${external} external (${externalNofollow} nofollow), ${hashLinks} href="#"` };
 }
 function vCheckDuplicateIds(doc){
@@ -1904,8 +1903,8 @@ function vCheckCitations(doc){
   const refIds = new Set(refs.map(r=>r.id));
   const orphanCitations = [...supTargets].filter(t=>!refIds.has(t));
   const orphanRefs = [...refIds].filter(id=>!supTargets.has(id));
-  return { id:'citations', label:'≥6 inline citations, zero orphans either direction', tier:'hard',
-    pass: sups.length>=6 && orphanCitations.length===0 && orphanRefs.length===0,
+  return { id:'citations', label:'Zero orphan citations/references either direction (no fixed count target)', tier:'hard',
+    pass: orphanCitations.length===0 && orphanRefs.length===0,
     detail: `${sups.length} citation(s), ${refs.length} reference(s), ${orphanCitations.length} orphan citation(s), ${orphanRefs.length} orphan reference(s)` };
 }
 function vCheckToc(doc){
@@ -1932,10 +1931,13 @@ function vCheckTitle(seo){
   return { id:'title', label:'SEO Title starts with keyphrase, ≤60 chars', tier:'hard',
     pass: k.length>0 && vNormalize(t).startsWith(k) && t.length<=60, detail: `"${t}" (${t.length} chars)` };
 }
+/* The rigid "number + power word + sentiment word" headline formula was
+   dropped from the prompt (it produced formulaic clickbait-style titles) —
+   this check is now informational only, never blocks saving. */
 function vCheckTitleWords(seo){
   const t = seo.seoTitle||'';
   const hasNumber = /\d/.test(t), hasPower = APPROVED_POWER_WORDS.some(w=>t.includes(w)), hasSentiment = APPROVED_SENTIMENT_WORDS.some(w=>t.includes(w));
-  return { id:'title-words', label:'Title has a number + power word + sentiment word', tier:'hard',
+  return { id:'title-words', label:'Number/power/sentiment word in title (informational — not required)', tier:'soft',
     pass: hasNumber && hasPower && hasSentiment, detail: `number:${hasNumber} power:${hasPower} sentiment:${hasSentiment}` };
 }
 function vCheckMeta(seo){
@@ -1958,7 +1960,7 @@ function vCheckH1(seo){
 function vCheckFirst100Words(doc, seo){
   const words = vProseText(doc).split(/\s+/).filter(Boolean).slice(0,100).join(' ');
   const pass = vCountKeyphrase(words, seo.focusKeyword).total>=1;
-  return { id:'first-100', label:'Keyphrase in first 100 words of BODY text (not just the WP title)', tier:'hard',
+  return { id:'first-100', label:'Keyphrase early in body text (informational — natural placement, not forced)', tier:'soft',
     pass, detail: pass ? 'found' : 'not found in: "'+words.slice(0,120)+'…"' };
 }
 
