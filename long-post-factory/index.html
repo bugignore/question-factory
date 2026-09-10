@@ -1341,15 +1341,35 @@ const AD_SNIPPET_TEMPLATE = n => `<div style="background:#f8fafc;border:1px dash
 </div>`;
 
 function parseBlockHeader(header){
-  const idx = header.indexOf(':');
+  // Strip invisible characters (ZWSP/ZWJ/ZWNJ/BOM) an LLM occasionally
+  // slips into its own markup so they never leak into a comparison or a
+  // rendered title.
+  const clean = String(header||'').replace(/[\u200B-\u200D\uFEFF]/g, '');
+  // Accept ASCII ':' plus colon-shaped characters a model sometimes
+  // substitutes for it — fullwidth '：', modifier-letter colon U+A789, or
+  // ratio '∶'. Missing any of these used to make parseBlockHeader miss the
+  // type keyword entirely, so the WHOLE header (e.g. "chart: पाँच...")
+  // fell through as a literal "plain" title — silently discarding every
+  // card style, the chart renderer, and the h2/TOC structure for the
+  // article (a real production incident, not hypothetical).
+  const COLON_RE = /[:：꞉∶]/;
+  const m = COLON_RE.exec(clean);
   let type, title;
-  if(idx !== -1){
-    type = header.slice(0,idx).trim().toLowerCase();
-    title = header.slice(idx+1).trim();
+  if(m){
+    type = clean.slice(0,m.index).trim().toLowerCase();
+    title = clean.slice(m.index+1).trim();
   } else {
-    const key = header.trim().toLowerCase();
+    const key = clean.trim().toLowerCase();
     if(BLOCK_TYPES.has(key)){ type = key; title = ''; }
-    else { type = 'plain'; title = header.trim(); }
+    else {
+      // No separator at all, but the header still starts with a known
+      // type keyword followed by whitespace ("chart पाँच..." instead of
+      // "chart: पाँच..."). Recover the type instead of showing the
+      // keyword itself as a visible title.
+      const wm = /^([a-z0-9]+)\s+(.+)$/i.exec(clean.trim());
+      if(wm && BLOCK_TYPES.has(wm[1].toLowerCase())){ type = wm[1].toLowerCase(); title = wm[2].trim(); }
+      else { type = 'plain'; title = clean.trim(); }
+    }
   }
   if(!BLOCK_TYPES.has(type)) type = 'plain';
   return { type, title };
@@ -2423,6 +2443,14 @@ function vCheckPipelineArtifacts(bodyHtml, seo){
   // page's renderer didn't know — i.e. the fetched prompt and this loaded tool are
   // different versions. Hard-fail rather than publish a wall of raw JSON to readers.
   if(/"kind"\s*:\s*"(grid|flow|timeline|bars|comparison|tree)"/i.test(proseOnly)) offenders.push('raw chart JSON leaked into the body — the prompt and this tool are out of sync (this page does not know the {* chart *} block type; reload it)');
+  // A "plain" block whose visible title still starts with a known
+  // block-type keyword (h2, chart, def, ...) means parseBlockHeader
+  // failed to recognize the header's type/title separator -- the exact
+  // failure that turned post 534 into unstyled grey text with a leaked
+  // chart JSON blob (root cause: a non-ASCII colon in the AI's reply).
+  // Hard-fail instead of shipping a wall of unstyled text.
+  if(/<b>(?:h2|def|tip|exam|question|trick|mistake|summary|revision|insight|update|toc|faq|table|chart|svg|img)[:\uFF1A\uA789\u2236\s][^<]*<\/b>/i.test(html))
+    offenders.push('a block title still starts with a type keyword (e.g. "chart: ...") — parseBlockHeader failed to recognize the type separator; check for a non-ASCII colon or invisible character in the AI reply');
 
   return { id:'pipeline-artifacts', label:'No leaked AI-scaffolding / placeholder artifacts', tier:'hard',
     pass: offenders.length===0, detail: offenders.length ? offenders.join('; ') : 'clean' };
