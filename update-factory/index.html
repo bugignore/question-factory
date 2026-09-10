@@ -141,8 +141,8 @@
 <main>
 <!-- STEP 1 -->
 <section class="step show" id="step0">
-  <h2>1 · Pick a published post &amp; build the update prompt</h2>
-  <p class="hint">Every published note and long post lives here, from both factories, in one list. Pick one, review what's prefilled below, then build the update prompt — it hands the AI the existing SEO + body as ground truth and asks for a genuine rewrite, not a light edit. The URL/slug and the WordPress post never change; this always updates the SAME live post.</p>
+  <h2>1 · Pick a published post, review it, then patch it</h2>
+  <p class="hint">Every published note and long post lives here, from both factories, in one list. Pick one, then work through two prompts below: first a <b>review</b> that audits the article for real problems (never rewrites it), then an <b>update</b> that patches only the flags you approve — good content is never touched. The URL/slug and the WordPress post never change; this always updates the SAME live post.</p>
 
   <label>Search by title, or paste an exact WordPress post ID</label>
   <input type="text" id="pubSearch" placeholder="e.g. Algebra, or 200" oninput="renderPublishedList()">
@@ -189,16 +189,37 @@
     <textarea id="refSourceUrls" style="min-height:70px" placeholder="https://ncert.nic.in/...&#10;https://ctet.nic.in/..."></textarea>
   </fieldset>
 
-  <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build update prompt</button>
-  <button class="btn ghost" onclick="tryRun(copyWholePrompt,this)">🖥️ Copy whole prompt (PC only)</button>
-  <div class="msg" id="pMsg"></div>
-  <textarea id="promptOut" style="display:none"></textarea>
-  <div class="stats" id="pStats"></div>
+  <fieldset style="margin-top:14px">
+    <legend>🔍 1a · Review first — find what's actually wrong</legend>
+    <p class="hint" style="margin-top:0">Instead of rewriting the whole article, first ask the AI to audit it: fabricated stats, non-official sources, generic SEO, wrong teaching level, outdated info, thin sections. You approve which flags are real before anything gets rewritten.</p>
+    <button class="btn" onclick="tryRun(copyReviewPrompt,this)">🔍 Build REVIEW prompt</button>
+    <div class="msg" id="reviewPromptMsg"></div>
+    <textarea id="reviewPromptOut" style="display:none"></textarea>
+    <details id="reviewPartsWrap"><summary>📱 Copy the review prompt in parts (mobile)</summary><div>
+      <div id="reviewPartsButtons"></div>
+    </div></details>
 
-  <details id="partsWrap"><summary>📱 Copy the prompt in parts (opens automatically after building — use this on mobile)</summary><div>
-    <p class="hint" style="margin-top:8px">Mobile keyboards (Gboard/Samsung/SwiftKey clipboard) and mobile browsers silently truncate a single copy past roughly 8,000–10,000 characters, so the prompt is split into only as many parts as it actually needs to stay under that per-part. Tap "Build update prompt" above first, then use these buttons <b>in order</b> — paste each one as its own message in the SAME chat before sending the next. On a PC, skip this and use "Copy whole prompt" instead.</p>
-    <div id="partsButtons"></div>
-  </div></details>
+    <label style="margin-top:12px">Paste the AI's review reply here</label>
+    <textarea id="reviewRawIn" style="min-height:160px" placeholder="Paste the AI's <<<REVIEW_JSON>>> reply here…"></textarea>
+    <button class="btn ghost" onclick="tryRun(parseReviewReply,this)">✅ Parse review</button>
+    <div class="msg" id="reviewParseMsg"></div>
+    <div id="reviewFlagsWrap" style="margin-top:10px"></div>
+  </fieldset>
+
+  <fieldset id="updatePromptFieldset" style="margin-top:14px;display:none">
+    <legend>✍️ 1b · Build the update prompt — approved fixes only</legend>
+    <p class="hint" style="margin-top:0">This hands the AI the original article plus ONLY the flags you approved above, and tells it to make targeted fixes — not rewrite sections that weren't flagged.</p>
+    <button class="btn" onclick="tryRun(copyPrompt,this)">✍️ Build UPDATE prompt</button>
+    <button class="btn ghost" onclick="tryRun(copyWholePrompt,this)">🖥️ Copy whole prompt (PC only)</button>
+    <div class="msg" id="pMsg"></div>
+    <textarea id="promptOut" style="display:none"></textarea>
+    <div class="stats" id="pStats"></div>
+
+    <details id="partsWrap"><summary>📱 Copy the prompt in parts (opens automatically after building — use this on mobile)</summary><div>
+      <p class="hint" style="margin-top:8px">Mobile keyboards (Gboard/Samsung/SwiftKey clipboard) and mobile browsers silently truncate a single copy past roughly 8,000–10,000 characters, so the prompt is split into only as many parts as it actually needs to stay under that per-part. Tap "Build UPDATE prompt" above first, then use these buttons <b>in order</b> — paste each one as its own message in the SAME chat before sending the next. On a PC, skip this and use "Copy whole prompt" instead.</p>
+      <div id="partsButtons"></div>
+    </div></details>
+  </fieldset>
 
   <fieldset id="filePickWrap" style="display:none;margin-top:14px">
     <legend>Manual file picker (only needed if the automatic load above failed)</legend>
@@ -563,6 +584,13 @@ function selectPublishedItem(idx){
   state.oldBodyHtml = old.bodyHtml;
   state.wordpress = old.wordpress;
   state.sourceDir = it.dir; state.sourceName = it.name;
+  // a fresh post selection invalidates any review from a previous post
+  state.reviewFlags = []; state.reviewOverall = ''; state.reviewGenuinelyGood = [];
+  document.getElementById('reviewRawIn').value = '';
+  document.getElementById('reviewFlagsWrap').innerHTML = '';
+  document.getElementById('reviewPromptOut').value = '';
+  document.getElementById('updatePromptFieldset').style.display = 'none';
+  clearShareBlock('reviewPromptMsg'); clearShareBlock('reviewParseMsg');
 
   document.getElementById('topic').value = old.topic || '';
   document.getElementById('examType').value = old.examType || '';
@@ -708,7 +736,8 @@ var builtPromptText = null;
 var masterPromptText = null;
 function freshState(){
   return { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null,
-    contentType:null, isUpdate:false, oldSeo:null, oldBodyHtml:'', wordpress:null, sourceDir:'', sourceName:'' };
+    contentType:null, isUpdate:false, oldSeo:null, oldBodyHtml:'', wordpress:null, sourceDir:'', sourceName:'',
+    reviewFlags:[], reviewOverall:'', reviewGenuinelyGood:[] };
 }
 var state = freshState();
 
@@ -746,8 +775,9 @@ TARGET_YEAR: ${year} — the only year allowed in keyphrase/title/slug/meta/H1.
 SUBJECT SCOPE FOR THIS EXAM: ${profile.subjects}
 EXAM-SPECIFIC ANGLE: ${profile.angle}
 
+${buildTeachingLevelBlock(examType)}
 ## HARD BANS (never do these)
-1. No \`<script>\` tag anywhere. 2. No locked/blurred/paywalled content — everything visible. 3. **Never invent an exam-claim** — no invented PYQs, no "asked every year," no "most repeated," no predicted questions, no guaranteed marks, no percentage weightage without real evidence. Only state such a claim when evidence is actually available; when it is, distinguish **VERIFIED PYQ** (a real, sourced past question) from **PRACTICE QUESTION IN EXAM STYLE** (your own, honestly labeled as such) — never blur the two. 4. No unsourced numbers of any kind — cite it, soften it into an honest estimate, or delete it. 5. No keyword stuffing — but also no forcing the keyphrase in artificially; use it where it fits naturally (see SEO below). 6. No fabricated URLs — only the exam body's official domain, ncert.nic.in, cbseacademic.nic.in, indiacode.nic.in, education.gov.in, pib.gov.in, other .gov.in/.nic.in, or en.wikipedia.org. No \`href="#"\`. 7. **No hand-written styled HTML.** Every chunk of content is wrapped in a \`{* type: title *} ... {* END *}\` block per the BLOCK-TAG SYSTEM below — plain semantic tags (\`<p>\`, \`<strong>\`, \`<table>\`, \`<svg>\`, \`<ol>\`/\`<li>\`, \`<sup>\`/\`<a>\`) are fine *inside* a block, just never a styled \`<div>\` wrapper. 8. **No scaffolding from memory.** The SEO panel / Publisher Notes templates below are pipeline-parsed — copy field-for-field, line-for-line, never paraphrase or drop a field. 9. **No bare \`<h3>\`** anywhere you write one directly (e.g. the References heading) — always carry an inline style, exactly like every other raw tag you're allowed to write outside a block. 10. **Never merely summarize a source.** If NCERT/reference material is supplied (see RAG/SOURCES below), use it as evidence to extract facts from, then explain those facts in your own original, student-friendly language — copied-over source prose is a failure even if accurate.
+1. No \`<script>\` tag anywhere. 2. No locked/blurred/paywalled content — everything visible. 3. **Never invent an exam-claim** — no invented PYQs, no "asked every year," no "most repeated," no predicted questions, no guaranteed marks, no percentage weightage without real evidence. Only state such a claim when evidence is actually available; when it is, distinguish **VERIFIED PYQ** (a real, sourced past question) from **PRACTICE QUESTION IN EXAM STYLE** (your own, honestly labeled as such) — never blur the two. 4. No unsourced numbers of any kind — cite it, soften it into an honest estimate, or delete it. 5. No keyword stuffing — but also no forcing the keyphrase in artificially; use it where it fits naturally (see SEO below). 6. No fabricated URLs — only the exam body's official domain, ncert.nic.in, cbseacademic.nic.in, indiacode.nic.in, education.gov.in, pib.gov.in, other .gov.in/.nic.in, or en.wikipedia.org. No \`href="#"\`. 7. **No hand-written styled HTML.** Every chunk of content is wrapped in a \`{* type: title *} ... {* END *}\` block per the BLOCK-TAG SYSTEM below — plain semantic tags (\`<p>\`, \`<strong>\`, \`<table>\`, \`<ol>\`/\`<li>\`, \`<sup>\`/\`<a>\`) are fine *inside* a block. **Diagrams are never hand-drawn** — describe them as JSON in a \`chart\` block and the publisher's renderer draws the SVG (see VISUALS); writing raw \`<svg>\` markup is a failure are fine *inside* a block, just never a styled \`<div>\` wrapper. 8. **No scaffolding from memory.** The SEO panel / Publisher Notes templates below are pipeline-parsed — copy field-for-field, line-for-line, never paraphrase or drop a field. 9. **No bare \`<h3>\`** anywhere you write one directly (e.g. the References heading) — always carry an inline style, exactly like every other raw tag you're allowed to write outside a block. 10. **Never merely summarize a source.** If NCERT/reference material is supplied (see RAG/SOURCES below), use it as evidence to extract facts from, then explain those facts in your own original, student-friendly language — copied-over source prose is a failure even if accurate.
 
 ## LANGUAGE (Hinglish, Hindi ${hindiPercent}% + English ${100-hindiPercent}%)
 Apply this ratio to explanations/tricks/teacher-talk/connecting prose only — key terms, definitions, and technical labels stay in English regardless. Never force tatsam Hindi or awkward transliteration. Banned words: delve, tapestry, crucial/pivotal role, holistic, seamless, robust, comprehensive guide, game-changer, unlock, "it is important to note", moreover, furthermore, अत्यंत महत्वपूर्ण, यह ध्यान देने योग्य है, निष्कर्षतः, "इस लेख में हम", "आइए जानते हैं". Vary sentence length/openers, never repeat a section-opener pattern back-to-back.
@@ -798,10 +828,10 @@ Use the most effective representation for each idea — normal prose (\`plain\`)
 | \`revision\` | rapid-revision bullets near the end, if the topic suits quick recall | optional |
 | \`insight\` | a deeper theoretical connection is worth drawing out | required — name it |
 | \`update\` | a dated, sourced news brief is genuinely relevant | optional |
-| \`toc\` | once, after the opening, if the article has enough sections to warrant one | optional |
+| \`toc\` | once, after the opening. **Leave the block EMPTY** — write \`{* toc *}\` then \`{* END *}\` with nothing between them. The publisher builds the contents list from your actual \`h2\` headings, with working jump links. Never hand-write the list or its \`href="#..."\` anchors — you cannot know the ids the renderer generates, and hand-written ones have shipped broken (half the links dead in a real published article) | optional |
 | \`faq\` | a real question a student would ask — one block per question | required — the question text |
 | \`table\` | a comparison is genuinely easier to read as a table than in prose — raw \`<table>\` markup; 2–3 columns fine, 4+ columns split into several small 2-column \`table\`/\`def\` blocks instead, since a wide table breaks on the phone screens most readers use | optional |
-| \`svg\` | a visual relationship, process, hierarchy, timeline, cycle, flowchart, or concept map is genuinely easier to understand visually than in prose — see VISUALS below for how to design it | not used |
+| \`chart\` | a visual relationship — parallel categories, branching cases, a real chronology, or compared magnitudes — is genuinely easier to grasp than prose. Content is a small JSON spec, NOT drawing markup; see VISUALS below | yes — the diagram's title |
 | \`img\` | the article's one representative featured image — content is \`<img src="https://via.placeholder.com/700x350?text=Diagram" alt="[Focus Keyphrase] — concept overview" />\`, alt starts with the keyphrase | not used |
 | \`plain\` | ordinary prose that doesn't fit a card type — intro, connective paragraphs, References list | optional |
 
@@ -809,24 +839,51 @@ Ad slots: do not wrap in a block — leave a bare line \`[[AD]]\` at exactly 3 p
 
 **Vary block titles across sub-topics and across different articles** — don't let every \`def\` block default to the literal word "Definition" and every \`mistake\` block to "Mistake" throughout the whole piece; that reads templated. Pick titles that fit the specific content (e.g. "इसे ऐसे समझो", "Exam Point", "यहाँ गलती होती है", "Scoring Zone", "⚠️ ध्यान दें") and rotate naturally.
 
-## VISUALS — let the topic decide what deserves one
-Before creating any \`svg\`, ask internally: *"What relationship would be genuinely difficult to understand from prose alone?"* Only create a visual when it materially improves understanding — avoid decorative SVGs, giant text walls inside an SVG, or tiny unreadable labels. Design every SVG for a 360px-wide phone screen: \`viewBox="0 0 360 H"\`, \`width="100%"\`, \`role="img"\` with a real \`aria-label\`, node text short enough to stay legible at that width. Each visual should communicate one clear idea. Choose the visual form that actually fits: flowchart, concept map, timeline, process diagram, classification tree, cycle, comparison visual, cause→effect diagram, classroom process, or a worked-example visual — decide, then design it yourself as clean, responsive SVG before writing the markup.
+## VISUALS — you supply the DATA, the publisher draws the picture
+**You never write SVG, HTML or any styling for a visual.** You write a \`chart\` block whose
+content is a small JSON object describing what the diagram *means*, and the publisher's
+renderer draws it — same palette, same rounded cards, same spacing, every time, on every
+article. This is why visuals on this site look consistent: they aren't hand-drawn per run.
+Getting the geometry right is not your job and hand-drawn SVG is a hard failure.
 
-**Handwritten-note-style visuals — use selectively, not everywhere.** For a visual that's better as a student's own handwritten revision note — quick revision, a memory map, a formula summary, last-minute revision, a concept-relationship map, a mnemonic sheet — render it inside an \`svg\` block in a compact handwritten-note style: rough-but-clean pen-stroke paths, arrows, boxes, underlines, small annotations, natural uneven spacing, an exam-notebook feel — still fully legible on a phone. Never apply this styling to the main explanatory prose; it's for these specific revision-visual moments only.
-
-**Build visual moments in naturally, not on a schedule.** Across the article, look for genuine opportunities for a concept map, a comparison table, a process diagram, an exam-trap callout, a worked example, a handwritten revision visual, a real PYQ/practice question, or a quick-recall block — and place each one where the topic actually demands it, not on a fixed repeating pattern. Placing them mechanically is exactly what makes an article feel AI-generated.
-
-## SEO — natural, not mechanical
-Focus Keyphrase: build it FROM THE TOPIC, not from a template. Take the 2–4 most specific, exam-searchable nouns actually named in TOPIC (transliterate/translate Hindi terms to the Roman/English words students actually search — e.g. TOPIC "लिंग, वचन, पुरुष, काल और कारक" → keyphrase nouns "Ling Vachan Kaal Karak", not "Hindi Grammar"), then append \`${profile.label} Notes ${year}\`. **Never collapse a multi-concept topic down to just "[Subject] Notes [Exam] [Year]"** — that throws away the one thing that makes this article distinct from every other one on the same exam/subject. If TOPIC genuinely names only one broad concept, use that concept's specific name (not the subject category) as the keyphrase core. Plain English/Roman, "and" never "&", 2–4 word core.
-Print this panel:
 \`\`\`
-Focus Keyword:    [exact keyphrase]
-SEO Title:        [keyphrase FIRST, ≤60 chars, names the actual topic — not a generic exam+subject wrapper]
-Permalink/Slug:   [every keyphrase word in order, lowercase-hyphenated; <75 chars]
-Meta Description: [150–155 chars, keyphrase once, honest — this is a real technical constraint for how Google displays it, not a quota]
-H1 (Post Title):  [keyphrase FIRST] — [Hindi sub-line after]
+{* chart: The title shown above the diagram *}
+{"kind":"grid","items":[{"label":"...","detail":"...","color":"blue"}]}
+{* END *}
 \`\`\`
-Use the keyphrase where it fits naturally — in the H1, early in the body, in a couple of section/FAQ titles where genuinely relevant — never force it in with an artificial repetition target, and never let density concerns override natural writing. Include a handful of real internal links (to genuinely related topics, with honest reasons) and a couple of external links to whitelisted official sources, woven into prose where they add value. Inline citations: every sourced claim carries \`<sup id="cite-N"><a href="#ref-N">[N]</a></sup>\`, pointing to a real entry in the References list.
+
+Pick the \`kind\` that matches the relationship you're actually showing:
+
+**\`grid\`** — parallel categories/types/components (the most common case). 2–9 items; 3–6
+reads best. \`icon\` is optional (a single emoji), \`detail\` is an optional one-line gloss.
+\`{"kind":"grid","items":[{"icon":"🚗","label":"थल","detail":"सड़क + रेल","color":"blue"},{"icon":"⛵","label":"जल","detail":"जहाज़","color":"cyan"}]}\`
+Add \`"dense":true\` for a compact end-of-section recap strip (label only, no icon/detail).
+
+**\`flow\`** — one thing that branches into cases/outcomes. \`root\` plus 2–4 \`branches\`, each
+optionally with up to 3 \`children\`.
+\`{"kind":"flow","root":"विभेदक D","branches":[{"label":"D > 0","color":"green","children":[{"label":"वास्तविक"},{"label":"भिन्न"}]},{"label":"D = 0","color":"amber"}]}\`
+
+**\`timeline\`** — real chronology only (dates/stages in order). 2–6 \`points\`.
+\`{"kind":"timeline","points":[{"date":"1774","label":"पहला युद्ध"},{"date":"1856","label":"विलय"}]}\`
+
+**\`bars\`** — comparing a real magnitude across items. \`value\` is a number (any scale; bars
+are drawn relative to the largest), \`valueLabel\` is the human-readable amount.
+\`{"kind":"bars","bars":[{"label":"वायु","value":100,"valueLabel":"उच्च CO₂","color":"rose"},{"label":"रेल","value":25,"valueLabel":"कम","color":"green"}]}\`
+
+\`color\` is one of \`blue green amber purple rose cyan gray\` — chosen for **meaning**
+(green = positive/correct, rose = warning/wrong, amber = caution/partial, blue = neutral
+default). Omit it and colours are assigned automatically. Never invent hex codes.
+
+**Rules that actually matter:**
+- Keep \`label\` short — roughly 14 characters for grid/flow, fewer for a 4+ item row. Long
+  labels are truncated with an ellipsis by the renderer, so write them short yourself.
+- A chart must carry information prose can't. Never chart a single item, never restate a
+  sentence as a chart, never add one just to break up text.
+- Where a real comparison is better as a \`table\` block, use \`table\` — charts aren't a
+  substitute for a proper data table with more than two columns of detail.
+- Use several across a long article where the content genuinely has this shape (real
+  classifications, real branches, real chronology, real magnitudes) — a long post that
+  earns four or five is normal; one that has nothing to show should have none.
 
 ## QUESTION TYPE DIVERSITY
 Where practice questions genuinely help learning, use a mix of types appropriate to SUBJECT rather than repeating one style — direct-recall / scenario / comparison / assertion-reason / data-interpretation / error-spotting (or subject-appropriate equivalents: calculation/word-problem/diagram/error-spotting/data-table for Maths; fact-recall/match-the-following/assertion-reason/scenario/picture-ID for EVS; pattern/coding-decoding/analogy/blood-relation/statement-conclusion for Reasoning; classroom-scenario/definition/assertion-reason/case-study/comparison for CDP/Pedagogy). Use as many as genuinely help teach the topic — never a fixed count, never merely to hit a number. State the real mix used in Publisher Notes.
@@ -956,32 +1013,198 @@ ADDITIVE FIELDS — two extra fields in SEO_JSON beyond what's specified above:
 If you run out of space and cannot finish, stop cleanly at the end of a complete HTML element — the user will send "continue" and you must resume EXACTLY where you stopped (same block, inside a new code fence, no repetition of anything already written, no fresh introduction).
 `;
 }
-// Feeds the AI the existing published note (old SEO + old body) and demands a
-// genuine rewrite, not a light edit — same master-prompt rules apply
-// unchanged below, so depth/grounding/HARD BANS match a fresh run exactly.
+/* ================= REVIEW-THEN-PATCH WORKFLOW =================
+   Replaces the old "rewrite everything end-to-end" approach: a full rewrite
+   risks losing genuinely good content and re-introduces the exact
+   template-sameness problem this update tool exists to fix. Instead:
+   1. buildReviewPrompt() asks the AI to AUDIT the article — output a
+      structured list of specific problems, no rewriting.
+   2. parseReviewReply()/renderReviewFlags() show that list as an
+      approve/reject checklist — the human decides which flags are real.
+   3. notesUpdateConfig()/buildLongPostRevisionPrompt() then build a SECOND
+      prompt containing ONLY the approved flags, instructing a targeted patch
+      — preserve everything else, including structure and wording,
+      byte-for-byte. */
+
+function getTeachingLevel(examTypeRaw){
+  const s = String(examTypeRaw||'').toLowerCase();
+  const hasAny = (...words) => words.some(w => s.includes(w));
+  if (hasAny('class 1-5','class 1–5','classes 1-5','class i-v','primary teacher','primary (class','prt')) return 'Primary (Class 1–5)';
+  if (hasAny('class 6-8','class 6–8','class 9-10','class 6-10','upper primary','tgt')) return 'Upper Primary/Secondary (Class 6–10)';
+  if (hasAny('class 11','class 12','senior secondary','pgt')) return 'Senior Secondary (Class 11–12)';
+  if (hasAny('paper i','paper 1') && !hasAny('paper ii','paper 2')) return 'Primary (Class 1–5)';
+  if (hasAny('paper ii','paper 2')) return 'Upper Primary/Secondary (Class 6–10)';
+  return 'Not explicitly stated — infer the most likely level from TOPIC/SUBJECT/EXAM TYPE context and state your inference once';
+}
+// Used by the embedded buildLongPostPrompt() copy below (long-post-factory's
+// own file has an identical function — keep both in lockstep if this changes).
+function buildTeachingLevelBlock(examType){
+  const level = getTeachingLevel(examType);
+  return `## TEACHING LEVEL — ${level}
+This exam certifies a teacher for **${level}**. Every example, classroom scenario,
+pedagogy angle, and practice-question difficulty must be realistic for a teacher who
+will actually stand in front of students at THIS level — not a generic "exam prep"
+register that could apply to any grade.
+- **Primary (Class 1–5):** examples feature 6–10-year-olds specifically (learning to
+  read, basic number sense, concrete/tangible activities); CDP content draws on
+  Piaget's early-childhood/concrete-operational stage, foundational literacy/numeracy
+  (NIPUN Bharat/FLN), and NEP 2020's Foundational Stage — never reference secondary-level
+  abstract reasoning or adolescent-specific theory as if it applied here.
+- **Upper Primary/Secondary (Class 6–10):** examples suit early-to-mid adolescents; CDP
+  content draws on Piaget's formal-operational transition and adolescent identity
+  (Erikson); subject content pitched at actual NCERT Class 6–10 depth.
+- **Senior Secondary (Class 11–12) / PGT:** subject depth matches NCERT Class 11–12
+  rigor; pedagogy examples suit older adolescents capable of abstract reasoning.
+- If a topic is genuinely level-agnostic (a policy fact like NEP 2020's structure),
+  state it plainly — the level constraint governs *how you teach/exemplify* it, not
+  invented grade-specific framing where none exists.
+`;
+}
+
+function buildReviewPrompt(topic, examType, subject, hindiPercent){
+  const oldSeo = state.oldSeo || {};
+  const level = getTeachingLevel(examType);
+  const kind = state.contentType === 'note' ? 'note' : 'long post';
+  return `=== THIS IS AN EDITORIAL REVIEW — NOT A REWRITE. DO NOT REWRITE ANYTHING. ===
+You are auditing an already-published exam-prep ${kind} for real, specific
+problems. Your entire output is a structured audit — do not produce any
+replacement article text.
+
+TOPIC: ${topic}
+EXAM TYPE: ${examType}
+TEACHING LEVEL: ${level} — flag anything pitched at the wrong level for a teacher of this level (e.g. Class 9-12 abstraction in a Primary-teacher article, or overly simplistic content in a PGT article).
+SUBJECT: ${subject}
+${referenceSourcesBlock()}
+CHECK FOR EVERY ONE OF THESE (this site's own known, previously-shipped failure patterns — check all of them, not just the obvious ones):
+1. Fabricated/unsourced numbers — any exam-frequency stat, weightage %, or "guaranteed" claim with no real, nameable source behind it.
+2. A "VERIFIED PYQ" that isn't actually sourced to the exam body's own official material — a coaching-site (Testbook/Adda247/PW/EduRev/FreeJobAlert/etc.) repost does NOT count as verified, even if the question is real.
+3. Any citation/reference pointing to a non-whitelisted domain — only the exam body's own official domain, .gov.in/.nic.in pages, or en.wikipedia.org count. Flag every other source.
+4. A generic, template-shaped SEO title/keyphrase that could apply to any topic on this exam instead of naming the actual specific concepts.
+5. Thin or shallow sections that don't actually teach the concept.
+6. Content pitched at the wrong TEACHING LEVEL (see above).
+7. Outdated information — an exam-pattern detail, policy reference, or fact that may have changed since publication.
+8. A placeholder image URL (via.placeholder.com) or unresolved [bracket] template text.
+9. Anything that's simply factually wrong.
+Also cross-check every factual claim in the article against the reference sources above (if any were supplied) — flag anything unsupported or contradicted.
+
+ARTICLE UNDER REVIEW:
+--- OLD SEO PANEL ---
+${JSON.stringify(oldSeo, null, 2)}
+--- OLD BODY ---
+${state.oldBodyHtml}
+--- END ARTICLE ---
+
+OUTPUT — exactly this, nothing else, no commentary before or after:
+<<<REVIEW_JSON>>>
+\`\`\`json
+{
+  "overallAssessment": "one honest sentence on the article's overall state",
+  "flags": [
+    {"id": "F1", "location": "e.g. Section 2 intro, or FAQ Q3", "issue": "one of: fabricated-stat, non-whitelisted-source, generic-seo, thin-content, wrong-level, outdated, placeholder-artifact, factual-error, other", "detail": "quote or precisely describe the exact problem", "suggestedFix": "what should change"}
+  ],
+  "genuinelyGood": ["short bullet list of things that are accurate/well-written and must be preserved exactly as-is"]
+}
+\`\`\`
+<<<END_REVIEW_JSON>>>
+If the article is genuinely clean on some point, don't invent a problem for it just to look thorough — an empty "flags" array is a valid, honest result.`;
+}
+
+/* Parses the <<<REVIEW_JSON>>> reply into state.reviewFlags (each flag gets
+   approved:true by default — human unchecks any they disagree with) and
+   renders the checklist UI. */
+function parseReviewReply(btn){
+  const raw = document.getElementById('reviewRawIn').value;
+  if(!raw.trim()){ show(msg('reviewParseMsg'),'bad',"Paste the AI's review reply first."); return; }
+  const m = raw.match(/<<<REVIEW_JSON>>>([\s\S]*?)<<<END_REVIEW_JSON>>>/);
+  if(!m){ show(msg('reviewParseMsg'),'bad',"Could not find a <<<REVIEW_JSON>>> block in that reply — paste the AI's full review response."); return; }
+  let parsed;
+  try{
+    const jsonText = m[1].replace(/```(?:json)?/g,'').trim();
+    parsed = JSON.parse(jsonText);
+  }catch(e){
+    show(msg('reviewParseMsg'),'bad','Found the review block but could not parse its JSON: '+e.message);
+    return;
+  }
+  state.reviewFlags = (parsed.flags||[]).map((f,i)=>({ ...f, id: f.id||('F'+(i+1)), approved: true }));
+  state.reviewOverall = parsed.overallAssessment || '';
+  state.reviewGenuinelyGood = parsed.genuinelyGood || [];
+  renderReviewFlags();
+  if(state.reviewFlags.length === 0){
+    show(msg('reviewParseMsg'),'ok','Review parsed — the AI found no flags. You can still build an update prompt (e.g. to add fresh content), or skip updating this article entirely.');
+  } else {
+    show(msg('reviewParseMsg'),'ok',`Review parsed — ${state.reviewFlags.length} flag(s) found. Review each below, uncheck any you disagree with, then build the update prompt.`);
+  }
+  document.getElementById('updatePromptFieldset').style.display = '';
+}
+function toggleFlag(id, checked){
+  const f = state.reviewFlags.find(x=>x.id===id);
+  if(f) f.approved = checked;
+}
+function renderReviewFlags(){
+  const wrap = document.getElementById('reviewFlagsWrap');
+  if(!state.reviewFlags.length && !state.reviewOverall){ wrap.innerHTML=''; return; }
+  const overall = state.reviewOverall ? `<p class="hint" style="margin-top:0"><b>Overall:</b> ${escBlockTitle(state.reviewOverall)}</p>` : '';
+  const flagsHtml = state.reviewFlags.map(f => `
+    <label style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line-soft)">
+      <input type="checkbox" checked onchange="toggleFlag('${f.id}', this.checked)" style="width:auto;margin-top:3px">
+      <span>
+        <b>[${escBlockTitle(f.issue||'issue')}]</b> ${escBlockTitle(f.location||'')}<br>
+        <span style="color:var(--ink-soft)">${escBlockTitle(f.detail||'')}</span><br>
+        <span style="font-style:italic">Suggested: ${escBlockTitle(f.suggestedFix||'')}</span>
+      </span>
+    </label>`).join('');
+  const goodHtml = state.reviewGenuinelyGood.length
+    ? `<p class="hint" style="margin-top:10px"><b>Confirmed good (will be preserved):</b> ${state.reviewGenuinelyGood.map(escBlockTitle).join(' · ')}</p>`
+    : '';
+  wrap.innerHTML = overall + flagsHtml + goodHtml;
+}
+async function copyReviewPrompt(btn){
+  const topic = document.getElementById('topic').value;
+  const examType = document.getElementById('examType').value.trim();
+  const subject = document.getElementById('subject').value;
+  const hindiPercent = parseInt(document.getElementById('hindiPercent').value, 10);
+  if(!state.contentType){ show(msg('reviewPromptMsg'),'bad','Pick a published post from the list above first.'); return; }
+  const full = buildReviewPrompt(topic, examType, subject, hindiPercent);
+  const out = document.getElementById('reviewPromptOut');
+  out.value = full;
+  const words = full.trim().split(/\s+/).length;
+  const parts = splitForCopy(full);
+  renderCopyParts('reviewPartsButtons', full, 'reviewPromptMsg');
+  if(parts.length > 1){
+    document.getElementById('reviewPartsWrap').open = true;
+    show(msg('reviewPromptMsg'),'ok',`Review prompt built (${words.toLocaleString()} words) — use the ${parts.length} "Copy part" buttons below in order on mobile.`);
+  } else {
+    doCopy(full, btn, msg('reviewPromptMsg'), `Review prompt copied (${words.toLocaleString()} words) — paste it into DeepSeek/ChatGPT/Claude, then paste the reply below.`);
+  }
+}
+
+// Feeds the AI the existing published note + ONLY the approved review flags,
+// and demands a targeted patch — preserve everything else byte-for-byte.
+// Same master-prompt HARD BANS/BLOCK-TAG rules still apply below for any
+// new/replaced content, so a patch never re-introduces a banned pattern.
 function notesUpdateConfig(topic, examType, subject, hindiPercent){
   const oldSeo = state.oldSeo || {};
-  return `=== THIS IS A REVISION RUN, NOT A FRESH ARTICLE — READ CAREFULLY ===
-The note below is ALREADY PUBLISHED on WordPress and needs updating — either
-Google flagged the site for thin/low-quality content, or this specific note
-has known problems. Your job is to REWRITE it end-to-end against the FULL
-master prompt rules that follow (length target, HARD BANS, SEO panel,
-everything) — not to patch a sentence here or there.
+  const level = getTeachingLevel(examType);
+  const approved = state.reviewFlags.filter(f=>f.approved);
+  const flagsList = approved.length
+    ? approved.map(f=>`- [${f.issue}] ${f.location}: ${f.detail} → ${f.suggestedFix}`).join('\n')
+    : '(none approved — the review found no flags, or you unchecked them all; in this case make no content changes beyond anything explicitly requested separately, and simply reconfirm the article is sound in Publisher Notes)';
+  const goodList = state.reviewGenuinelyGood.length ? state.reviewGenuinelyGood.map(g=>'- '+g).join('\n') : '(none listed)';
+  return `=== THIS IS A TARGETED UPDATE, NOT A FULL REWRITE — READ CAREFULLY ===
+An editorial review already identified SPECIFIC problems in this
+already-published note. Fix ONLY the approved flags below, making the
+smallest change that genuinely fixes each one. Do NOT rewrite, restructure,
+re-voice, or "improve" any section that isn't flagged — preserve the rest of
+the article exactly as it is, including its structure, block layout, and
+wording. This is a patch, not a fresh article.
 
-KNOWN FAILURE PATTERNS TO ACTIVELY CHECK FOR AND FIX (found across this
-site's existing notes — assume this note may have any of them until you've
-verified otherwise):
-1. A fabricated specific stat with no real source. If you cannot name the
-   real questions/figures, delete the claim — do not soften it into a vaguer
-   version of the same fabrication.
-2. A generic, template-shaped SEO title/keyphrase that could apply to any
-   topic on this exam instead of naming the actual specific concepts.
-3. Thin word count and shallow, single-layer explanations.
-4. A placeholder image URL (via.placeholder.com) or any unresolved [bracket]
-   template text left in the body — replace with a real described image /
-   real content, never leave a placeholder.
-5. The exact same section skeleton/opening-line shape as every other note on
-   the site — vary structure and voice per the master prompt's variety rules.
+TEACHING LEVEL: ${level} — any new/replaced content must match this level, same as everything else in the master prompt below.
+
+APPROVED FLAGS TO FIX:
+${flagsList}
+
+CONFIRMED GOOD — DO NOT TOUCH:
+${goodList}
 
 OLD TOPIC: ${topic}
 OLD EXAM TYPE: ${examType}
@@ -989,55 +1212,64 @@ OLD SUBJECT: ${subject}
 TARGET_YEAR: 2026 (locked, same as before)
 LANGUAGE MIX: Hindi ${hindiPercent}% + English ${100-hindiPercent}% — applies to explanations/tricks/teacher-talk prose only, same rule as the master prompt below.
 
-OLD SEO PANEL (for reference only — do not just copy this, fix anything generic per point 2 above, but KEEP THE SAME SLUG so this republishes over the same WordPress post rather than creating a new one):
+OLD SEO PANEL (keep the same slug so this republishes over the same WordPress post — only change SEO fields if a flag above specifically calls for it):
 ${JSON.stringify(oldSeo, null, 2)}
 
-OLD BODY (the actual published HTML — this is what's getting updated; read it, decide what's fabricated/generic/thin, and do not just lightly edit it — write the replacement fresh against the rules below, reusing only what's genuinely accurate and worth keeping):
+OLD BODY (patch this — do not regenerate sections unrelated to the approved flags above):
 ${state.oldBodyHtml}
 
-=== END OLD NOTE — THE FULL MASTER PROMPT RULES YOU MUST FOLLOW FOR THE REWRITE ARE BELOW, UNCHANGED ===
-REMINDER: the slug in your new SEO panel MUST be exactly "${oldSeo.slug || ''}" — do not change it even if you'd naturally pick a different one for a fresh article.
+=== END OLD NOTE — output the COMPLETE article (patched sections + everything preserved) using the full pipeline output format below. The master prompt rules below still govern any new/replaced content. ===
+REMINDER: the slug in your new SEO panel MUST be exactly "${oldSeo.slug || ''}" — do not change it even if a flag suggests a different one.
 
 `;
 }
 async function buildNoteRevisionPrompt(topic, examType, subject, hindiPercent){
-  const master = await loadMasterPrompt();
+  let master = await loadMasterPrompt();
+  // v13.md's {{REFERENCE_SOURCES_BLOCK}} slot is left empty here — update-factory
+  // already prepends its own reference-sources block separately (see buildPrompt()
+  // below, `refs + base`), so filling both would duplicate the section.
+  master = master.replace('{{REFERENCE_SOURCES_BLOCK}}', '');
+  master = master.replaceAll('{{TEACHING_LEVEL}}', getTeachingLevel(examType));
   return notesUpdateConfig(topic, examType, subject, hindiPercent) + master + notesOutputContract();
 }
 
 /* Long-post revision: buildLongPostPrompt() above is left completely
    untouched (it's the exact prompt long-post-factory/index.html uses to
-   create a fresh post) — this just wraps it with the same "this is a
-   revision" framing notesUpdateConfig() uses for notes, so both content
-   types get equivalent update-quality treatment. */
+   create a fresh post) — this wraps it with the same approved-flags-only
+   patch framing notesUpdateConfig() uses for notes, so both content types
+   get equivalent, non-destructive update treatment. */
 function buildLongPostRevisionPrompt(topic, examType, subject, hindiPercent, year){
   const oldSeo = state.oldSeo || {};
-  const preamble = `=== THIS IS A REVISION RUN, NOT A FRESH ARTICLE — READ CAREFULLY ===
-The long post below is ALREADY PUBLISHED on WordPress and needs updating.
-Your job is to REWRITE it end-to-end against the FULL prompt rules that
-follow (topic-adaptive structure, HARD BANS, SEO panel, block-tag system,
-the four internal roles — everything) — not to patch a sentence here or
-there.
+  const level = getTeachingLevel(examType);
+  const approved = state.reviewFlags.filter(f=>f.approved);
+  const flagsList = approved.length
+    ? approved.map(f=>`- [${f.issue}] ${f.location}: ${f.detail} → ${f.suggestedFix}`).join('\n')
+    : '(none approved — the review found no flags, or you unchecked them all; make no content changes beyond anything explicitly requested separately, and reconfirm the article is sound in Publisher Notes)';
+  const goodList = state.reviewGenuinelyGood.length ? state.reviewGenuinelyGood.map(g=>'- '+g).join('\n') : '(none listed)';
+  const preamble = `=== THIS IS A TARGETED UPDATE, NOT A FULL REWRITE — READ CAREFULLY ===
+An editorial review already identified SPECIFIC problems in this
+already-published long post. Fix ONLY the approved flags below, making the
+smallest change that genuinely fixes each one. Do NOT rewrite, restructure,
+re-voice, or "improve" any section that isn't flagged — preserve the rest of
+the article exactly as it is, including its structure, block layout, and
+wording. This is a patch, not a fresh article.
 
-KNOWN FAILURE PATTERNS TO ACTIVELY CHECK FOR AND FIX:
-1. A fabricated specific stat/PYQ with no real source — delete rather than
-   soften if you cannot verify it.
-2. A generic, template-shaped SEO title/keyphrase.
-3. Shallow sections that don't actually teach the topic, or a placeholder
-   image URL (via.placeholder.com) / unresolved [bracket] template text
-   left in the body.
-4. The exact same section skeleton as every other post on the site — this
-   revision should use whatever structure THIS topic genuinely earns, not
-   copy the old post's shape just because it was there before.
+TEACHING LEVEL: ${level} — any new/replaced content must match this level, same as everything else in the prompt below.
 
-OLD SEO PANEL (reference only — fix anything generic, but KEEP THE SAME SLUG so this republishes over the same WordPress post rather than creating a new one):
+APPROVED FLAGS TO FIX:
+${flagsList}
+
+CONFIRMED GOOD — DO NOT TOUCH:
+${goodList}
+
+OLD SEO PANEL (keep the same slug so this republishes over the same WordPress post — only change SEO fields if a flag above specifically calls for it):
 ${JSON.stringify(oldSeo, null, 2)}
 
-OLD BODY (the actual published HTML/block content — read it, decide what's fabricated/generic/thin, and write the replacement fresh against the rules below, reusing only what's genuinely accurate and worth keeping):
+OLD BODY (patch this — do not regenerate sections unrelated to the approved flags above):
 ${state.oldBodyHtml}
 
-=== END OLD POST — THE FULL PROMPT RULES YOU MUST FOLLOW FOR THE REWRITE ARE BELOW, UNCHANGED ===
-REMINDER: the slug in your new SEO panel MUST be exactly "${oldSeo.slug || ''}" — do not change it even if you'd naturally pick a different one for a fresh article.
+=== END OLD POST — output the COMPLETE post (patched sections + everything preserved) using the full pipeline output format below. The prompt rules below still govern any new/replaced content. ===
+REMINDER: the slug in your new SEO panel MUST be exactly "${oldSeo.slug || ''}" — do not change it even if a flag suggests a different one.
 
 `;
   return preamble + buildLongPostPrompt(topic, examType, subject, hindiPercent, year);
@@ -1242,7 +1474,187 @@ function stripHtmlComments(html){
    block's open tag or a literal {* END *}) — so a dropped END never loses or
    corrupts content, it just means the next open tag silently closes the
    previous block, exactly as if the END had been there. */
-const BLOCK_TYPES = new Set(['h2','def','tip','exam','question','trick','mistake','summary','revision','insight','update','toc','faq','table','svg','img','plain']);
+/* ================= CHART ENGINE =================
+   The AI never writes SVG markup. It writes a {* chart: Title *} block whose
+   content is a small JSON spec (kind + data), and this renderer draws the
+   actual SVG — so every visual lands on the exact same house style no matter
+   which model generated it, and a malformed hand-drawn SVG can never ship.
+
+   Every constant below was derived by auditing this site's own 30 published
+   SVGs (see the visual audit): background #f8fafc, rounded cards rx=8 with
+   stroke-width 2, ~30px card height, the six fill+stroke pairs actually used,
+   and per-colour dark label text. Keep all three factory files in lockstep. */
+const CHART_COLORS = {
+  blue:   { fill:'#eff6ff', stroke:'#2563eb', text:'#1e3a8a' },
+  green:  { fill:'#dcfce7', stroke:'#16a34a', text:'#14532d' },
+  amber:  { fill:'#fef3c7', stroke:'#f59e0b', text:'#78350f' },
+  purple: { fill:'#f5f3ff', stroke:'#7c3aed', text:'#5b21b6' },
+  rose:   { fill:'#fee2e2', stroke:'#e11d48', text:'#9f1239' },
+  cyan:   { fill:'#ecfeff', stroke:'#0ea5e9', text:'#0c4a6e' },
+  gray:   { fill:'#f1f5f9', stroke:'#64748b', text:'#334155' }
+};
+const CHART_CYCLE = ['blue','green','amber','purple','rose','cyan'];
+function chartColor(name, i){
+  return CHART_COLORS[name] || CHART_COLORS[CHART_CYCLE[(i||0) % CHART_CYCLE.length]];
+}
+function escChart(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+/* Rough width-aware truncation: SVG can't wrap text, so an over-long label
+   silently overflows its card. ~1.9px per char at 8px, ~2.4px at 10px. */
+function fitChartText(s, maxPx, fontPx){
+  const str = String(s == null ? '' : s);
+  const perChar = fontPx * 0.58;
+  const max = Math.max(3, Math.floor(maxPx / perChar));
+  return str.length > max ? str.slice(0, max - 1) + '…' : str;
+}
+
+function chartGrid(spec){
+  const items = (spec.items || []).slice(0, 9);
+  const n = items.length || 1;
+  const perRow = n <= 3 ? n : (n === 4 ? 2 : 3);
+  const rows = Math.ceil(n / perRow);
+  const marginX = 15, gap = 8;
+  const cardW = (360 - marginX * 2 - gap * (perRow - 1)) / perRow;
+  const hasDetail = items.some(it => it && it.detail);
+  const cardH = spec.dense ? 30 : (hasDetail ? 52 : 34);
+  const top = 34;
+  let inner = '';
+  items.forEach((it, i) => {
+    const col = i % perRow, row = Math.floor(i / perRow);
+    const x = marginX + col * (cardW + gap);
+    const y = top + row * (cardH + gap);
+    const c = chartColor(it.color, i);
+    const cx = x + cardW / 2;
+    inner += `<rect x="${x.toFixed(1)}" y="${y}" width="${cardW.toFixed(1)}" height="${cardH}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="2" rx="8"></rect>`;
+    let ty = y + 18;
+    if (it.icon && !spec.dense) {
+      inner += `<text x="${cx.toFixed(1)}" y="${ty}" font-size="13" text-anchor="middle">${escChart(it.icon)}</text>`;
+      ty += 15;
+    }
+    inner += `<text x="${cx.toFixed(1)}" y="${ty}" font-size="10" fill="${c.text}" text-anchor="middle" font-weight="bold">${escChart(fitChartText(it.label, cardW - 8, 10))}</text>`;
+    if (it.detail && !spec.dense) {
+      inner += `<text x="${cx.toFixed(1)}" y="${ty + 13}" font-size="8" fill="#475569" text-anchor="middle">${escChart(fitChartText(it.detail, cardW - 6, 8))}</text>`;
+    }
+  });
+  return { inner, height: top + rows * (cardH + gap) + 8 };
+}
+
+function chartTimeline(spec){
+  const pts = (spec.points || []).slice(0, 6);
+  const n = pts.length || 1;
+  const marginX = 32;
+  const usable = 360 - marginX * 2;
+  const lineY = 58;
+  let inner = `<line x1="${marginX}" y1="${lineY}" x2="${360 - marginX}" y2="${lineY}" stroke="#2563eb" stroke-width="2"></line>`;
+  const slot = n === 1 ? usable : usable / (n - 1);
+  pts.forEach((p, i) => {
+    const x = n === 1 ? 180 : marginX + slot * i;
+    const c = chartColor(p.color, i);
+    inner += `<circle cx="${x.toFixed(1)}" cy="${lineY}" r="4.5" fill="${c.stroke}"></circle>`;
+    inner += `<text x="${x.toFixed(1)}" y="${lineY - 12}" font-size="8" fill="#1e293b" text-anchor="middle" font-weight="bold">${escChart(fitChartText(p.date, slot + 10, 8))}</text>`;
+    inner += `<text x="${x.toFixed(1)}" y="${lineY + 18}" font-size="8" fill="#475569" text-anchor="middle">${escChart(fitChartText(p.label, slot + 10, 8))}</text>`;
+    if (p.detail) {
+      inner += `<text x="${x.toFixed(1)}" y="${lineY + 30}" font-size="7" fill="#64748b" text-anchor="middle">${escChart(fitChartText(p.detail, slot + 14, 7))}</text>`;
+    }
+  });
+  const extra = pts.some(p => p.detail) ? 12 : 0;
+  return { inner, height: lineY + 40 + extra };
+}
+
+function chartBars(spec){
+  const bars = (spec.bars || []).slice(0, 7);
+  const vals = bars.map(b => Number(b.value) || 0);
+  const max = Math.max(...vals, 1);
+  const top = 38, rowH = 26, labelW = 78;
+  const maxBarW = 360 - labelW - 18;
+  let inner = '';
+  bars.forEach((b, i) => {
+    const y = top + i * rowH;
+    const w = Math.max(8, ((Number(b.value) || 0) / max) * maxBarW);
+    const c = chartColor(b.color, i);
+    inner += `<text x="${labelW - 6}" y="${y + 11}" font-size="8" fill="#475569" text-anchor="end">${escChart(fitChartText(b.label, labelW - 8, 8))}</text>`;
+    inner += `<rect x="${labelW}" y="${y}" width="${w.toFixed(1)}" height="14" fill="${c.stroke}" rx="4"></rect>`;
+    if (b.valueLabel) {
+      // put the value inside the bar when it fits, otherwise just after it
+      const inside = w > 52;
+      inner += `<text x="${(inside ? labelW + w - 6 : labelW + w + 5).toFixed(1)}" y="${y + 11}" font-size="7" fill="${inside ? '#ffffff' : '#475569'}" text-anchor="${inside ? 'end' : 'start'}">${escChart(fitChartText(b.valueLabel, inside ? w - 10 : 60, 7))}</text>`;
+    }
+  });
+  return { inner, height: top + bars.length * rowH + 10 };
+}
+
+function chartFlow(spec){
+  const branches = (spec.branches || []).slice(0, 4);
+  const top = 36;
+  const rootW = 118, rootH = 30;
+  const rootX = 180 - rootW / 2;
+  const rc = chartColor(spec.rootColor || 'blue', 0);
+  let inner = `<rect x="${rootX}" y="${top}" width="${rootW}" height="${rootH}" fill="${rc.fill}" stroke="${rc.stroke}" stroke-width="2" rx="8"></rect>`;
+  inner += `<text x="180" y="${top + 19}" font-size="10" fill="${rc.text}" text-anchor="middle" font-weight="bold">${escChart(fitChartText(spec.root, rootW - 8, 10))}</text>`;
+  const n = branches.length || 1;
+  const slice = 360 / n;
+  const branchY = top + rootH + 26;
+  const branchH = 28;
+  let maxY = branchY + branchH;
+  branches.forEach((b, i) => {
+    const cx = slice * i + slice / 2;
+    const bw = Math.min(112, slice - 10);
+    const bx = cx - bw / 2;
+    const c = chartColor(b.color, i);
+    inner += `<line x1="180" y1="${top + rootH}" x2="${cx.toFixed(1)}" y2="${branchY}" stroke="#94a3b8" stroke-width="1.5"></line>`;
+    inner += `<rect x="${bx.toFixed(1)}" y="${branchY}" width="${bw.toFixed(1)}" height="${branchH}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="2" rx="8"></rect>`;
+    inner += `<text x="${cx.toFixed(1)}" y="${branchY + 18}" font-size="9" fill="${c.text}" text-anchor="middle" font-weight="bold">${escChart(fitChartText(b.label, bw - 6, 9))}</text>`;
+    const kids = (b.children || []).slice(0, 3);
+    if (kids.length) {
+      const kSlice = bw / kids.length;
+      const kY = branchY + branchH + 22;
+      kids.forEach((k, j) => {
+        const kcx = bx + kSlice * j + kSlice / 2;
+        const kw = Math.max(34, Math.min(kSlice - 4, 74));
+        const kc = chartColor(k.color || b.color, i);
+        inner += `<line x1="${cx.toFixed(1)}" y1="${branchY + branchH}" x2="${kcx.toFixed(1)}" y2="${kY}" stroke="#cbd5e1" stroke-width="1"></line>`;
+        inner += `<rect x="${(kcx - kw / 2).toFixed(1)}" y="${kY}" width="${kw.toFixed(1)}" height="24" fill="${kc.fill}" stroke="${kc.stroke}" stroke-width="1.5" rx="6"></rect>`;
+        inner += `<text x="${kcx.toFixed(1)}" y="${kY + 15}" font-size="7" fill="${kc.text}" text-anchor="middle" font-weight="bold">${escChart(fitChartText(k.label, kw - 4, 7))}</text>`;
+      });
+      maxY = Math.max(maxY, kY + 24);
+    }
+  });
+  return { inner, height: maxY + 14 };
+}
+
+/* Renders a {* chart: Title *} block's JSON content into on-brand SVG.
+   Falls back gracefully: raw <svg> passes through untouched (older articles
+   and the deprecated `svg` block type still render), and unparseable JSON
+   shows a visible editor-facing warning rather than silently shipping blank. */
+function renderChartBlock(rawContent, blockTitle){
+  const raw = String(rawContent || '').trim();
+  if (/^<svg[\s>]/i.test(raw)) return raw;
+  let spec;
+  try {
+    spec = JSON.parse(raw.replace(/^```(?:json)?/i, '').replace(/```$/,'').trim());
+  } catch (e) {
+    return `<div style="background:#fff7ed;border:1px solid #ea580c;border-radius:8px;padding:10px;font-size:12px;color:#9a3412;">⚠ Chart block could not be parsed as JSON (${escChart(e.message)}). Fix the {* chart *} block content before publishing.</div>`;
+  }
+  const title = spec.title || blockTitle || '';
+  let out;
+  switch (String(spec.kind || 'grid').toLowerCase()) {
+    case 'timeline': out = chartTimeline(spec); break;
+    case 'bars': case 'comparison': out = chartBars(spec); break;
+    case 'flow': case 'tree': out = chartFlow(spec); break;
+    default: out = chartGrid(spec); break;
+  }
+  const h = Math.round(out.height);
+  const aria = escChart(spec.ariaLabel || title || 'diagram');
+  return `<svg viewBox="0 0 360 ${h}" width="100%" style="display:block" role="img" aria-label="${aria}">`
+    + `<rect x="0" y="0" width="360" height="${h}" fill="#f8fafc" rx="8"></rect>`
+    + (title ? `<text x="180" y="22" font-size="12" fill="#1e293b" text-anchor="middle" font-weight="bold">${escChart(fitChartText(title, 330, 12))}</text>` : '')
+    + out.inner
+    + `</svg>`;
+}
+
+const BLOCK_TYPES = new Set(['h2','def','tip','exam','question','trick','mistake','summary','revision','insight','update','toc','faq','table','chart','svg','img','plain']);
 
 function escBlockTitle(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -1251,7 +1663,7 @@ function cardBlockHtml(bg, accent, label, body){
   return `<div style="background:${bg};border-left:6px solid ${accent};padding:16px;border-radius:12px;margin:14px 0;box-sizing:border-box;max-width:100%;">${label?`<b>${escBlockTitle(label)}</b><div style="margin-top:6px;line-height:1.6">${body}</div>`:`<div style="line-height:1.6">${body}</div>`}</div>`;
 }
 const BLOCK_RENDERERS = {
-  h2:       (t,b)=>`<h2 id="${slugify(t)||'section'}" style="background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:22px;font-weight:700;margin:14px 0;box-sizing:border-box;max-width:100%;">${escBlockTitle(t)}</h2>\n${b}`,
+  h2:       (t,b,id)=>`<h2 id="${id||headingSlug(t)}" style="background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:22px;font-weight:700;margin:14px 0;box-sizing:border-box;max-width:100%;">${escBlockTitle(t)}</h2>\n${b}`,
   def:      (t,b)=>cardBlockHtml('#f8fbff','#2563eb', t||'Definition', b),
   tip:      (t,b)=>cardBlockHtml('#fff8e6','#f59e0b', t||'Tip', b),
   exam:     (t,b)=>cardBlockHtml('#ecfeff','#06b6d4', t||'Exam Point', b),
@@ -1265,6 +1677,7 @@ const BLOCK_RENDERERS = {
   toc:      (t,b)=>`<div style="background:#eff6ff;border:2px solid #2563eb;border-radius:12px;padding:16px;margin:14px 0;box-sizing:border-box;max-width:100%;"><b>${escBlockTitle(t||'Table of Contents')}</b><div style="margin-top:6px;line-height:1.6">${b}</div></div>`,
   faq:      (t,b)=>`<div style="margin:14px 0"><h3 style="font-size:15px;font-weight:700;color:#1e293b;margin:14px 0 6px;">${escBlockTitle(t)}</h3><div style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#334155;">${b}</div></div>`,
   table:    (t,b)=>`<div style="overflow-x:auto;margin:14px 0"><div style="min-width:480px">${t?`<div style="font-weight:600;margin-bottom:6px">${escBlockTitle(t)}</div>`:''}${b}</div></div>`,
+  chart:    (t,b)=>`<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin:14px 0;box-sizing:border-box;max-width:100%;">${renderChartBlock(b,t)}</div>`,
   svg:      (t,b)=>`<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin:14px 0;box-sizing:border-box;max-width:100%;">${b}</div>`,
   img:      (t,b)=>`<div style="margin:14px 0">${b}</div>`,
   plain:    (t,b)=>t ? `<div style="margin:14px 0"><b>${escBlockTitle(t)}</b><div style="margin-top:6px">${b}</div></div>` : `<div style="margin:14px 0">${b}</div>`
@@ -1292,6 +1705,39 @@ function parseBlockHeader(header){
 /* returns {html, blockCount, unclosedCount} — unclosedCount is informational
    only (shown as a parse warning), never blocks publishing since every block
    auto-closes at the next marker regardless */
+
+/* Builds the Table of Contents from the headings actually present in this
+   article, using the same slugify() the h2 renderer uses — so every jump link
+   resolves by construction. Falls back to whatever the AI supplied only when
+   the article genuinely has no h2 headings to list. */
+/* Heading ids for the h2 renderer AND the Table of Contents — both must agree
+   exactly or every jump link breaks. slugify() strips everything outside
+   [a-z0-9], so a Devanagari heading collapses to '' and every Hindi h2 in an
+   article would land on the same 'section' id (duplicate ids, dead TOC links,
+   and a hard validation failure). HTML5 ids allow any character except
+   whitespace, so non-Latin headings keep their own characters instead. */
+function headingSlug(title){
+  const base = slugify(title);
+  if(base) return base;
+  const uni = String(title || '').trim().toLowerCase()
+    .replace(/["'<>#?&\/\\]/g, '')
+    .replace(/\s+/g, '-');
+  return uni || 'section';
+}
+
+function renderTocBlock(title, headings, aiContent){
+  const label = escBlockTitle(title || 'Table of Contents');
+  const shell = inner => '<div style="background:#eff6ff;border:2px solid #2563eb;border-radius:12px;padding:16px;margin:14px 0;box-sizing:border-box;max-width:100%;"><b>' + label + '</b>' + inner + '</div>';
+  if(!headings || !headings.length){
+    return shell('<div style="margin-top:6px;line-height:1.6">' + (aiContent || '') + '</div>');
+  }
+  const items = headings.map(function(h){
+    return '<li style="margin:6px 0"><a href="#' + h.id + '" style="color:#1d4ed8;text-decoration:none">' + escBlockTitle(h.title) + '</a></li>';
+  }).join('');
+  return shell('<ol style="margin:8px 0 0;padding-left:20px;line-height:1.6">' + items + '</ol>');
+}
+
+
 function expandLongPostBlocks(raw){
   const text = String(raw||'');
   const OPEN_RE = /\{\*\s*([^*}]+?)\s*\*\}/g;
@@ -1302,8 +1748,26 @@ function expandLongPostBlocks(raw){
   }
   if(!markers.length) return { html: text, blockCount: 0, unclosedCount: 0 }; // no block tags found — pass through untouched (back-compat with plain-HTML replies)
 
+  // PRE-PASS: collect every h2 heading and the EXACT id its renderer will
+  // generate, so the Table of Contents can be built from real headings with
+  // anchors guaranteed to resolve. Previously the AI hand-wrote TOC links;
+  // because ids come from slugify(title) the model cannot predict them, and an
+  // audit of published articles found 16% of note TOC links and 50% of
+  // long-post TOC links pointed at headings that did not exist.
+  const tocHeadings = [];
+  const tocSeen = Object.create(null);
+  for(const mk0 of markers){
+    if(/^end$/i.test(mk0.header)) continue;
+    const p0 = parseBlockHeader(mk0.header);
+    if(p0.type === 'h2' && p0.title){
+      let hid = headingSlug(p0.title);
+      if(tocSeen[hid]){ tocSeen[hid] += 1; hid = hid + '-' + tocSeen[hid]; } else { tocSeen[hid] = 1; }
+      tocHeadings.push({ id: hid, title: p0.title });
+    }
+  }
+
   let out = text.slice(0, markers[0].start);
-  let blockCount = 0, unclosedCount = 0, adIdx = 0;
+  let blockCount = 0, unclosedCount = 0, adIdx = 0, h2Idx = 0;
   // [[WC: N]] checkpoint markers are a self-check device for the AI (see the
   // LENGTH prompt section) — never reader-facing, strip them entirely rather
   // than rendering them.
@@ -1324,7 +1788,9 @@ function expandLongPostBlocks(raw){
     if(!explicitEnd) unclosedCount++;
     const content = subAds(gap.trim());
     const { type, title } = parseBlockHeader(mk.header);
-    out += BLOCK_RENDERERS[type](title, content) + '\n';
+    // The TOC is generated from the headings collected above, never from
+    // whatever the AI wrote inside the block — that is what kept breaking.
+    out += (type === 'toc' ? renderTocBlock(title, tocHeadings, content) : BLOCK_RENDERERS[type](title, content, type === 'h2' ? (tocHeadings[h2Idx++] || {}).id : undefined)) + '\n';
     blockCount++;
   }
   return { html: out, blockCount, unclosedCount };
@@ -2281,8 +2747,16 @@ function vCheckSlug(seo){
   const pass = slug.length>0 && slug.length<75 && /^[a-z0-9-]+$/.test(slug) && kwWords.every(w=>slugWords.includes(w));
   return { id:'slug', label:'Slug has every keyphrase word, <75 chars', tier:'hard', pass, detail: `"${slug}" (${slug.length} chars)` };
 }
+// At a high Hindi %, H1 is expected to be a genuine Hindi heading (see the
+// prompt's SEO section) — it would never legitimately start with the Roman
+// keyphrase, so the strict prefix check only applies to mostly-English runs.
 function vCheckH1(seo){
   const k = vNormalize(seo.focusKeyword), h1 = seo.h1||'';
+  const hindiPercent = (typeof state !== 'undefined' && typeof state.hindiPercent === 'number') ? state.hindiPercent : 70;
+  if (hindiPercent >= 50) {
+    const hasDevanagari = /[ऀ-ॿ]/.test(h1);
+    return { id:'h1', label:'H1 is a real Hindi-language heading (language-mix aware)', tier:'hard', pass: h1.trim().length>=10 && hasDevanagari, detail: `"${h1}"` };
+  }
   return { id:'h1', label:'H1 starts with keyphrase', tier:'hard', pass: k.length>0 && vNormalize(h1).startsWith(k), detail: `"${h1}"` };
 }
 function vCheckFirst100Words(doc, seo){
@@ -2320,6 +2794,11 @@ function vCheckPipelineArtifacts(bodyHtml, seo){
   if(/lorem ipsum/i.test(html)) offenders.push('Lorem ipsum filler text');
   if(proseOnly === 'undefined' || proseOnly === 'null') offenders.push(`body is literally "${proseOnly}"`);
   if(/^\s*(?:html|htm)\s*\n/i.test(html)) offenders.push('leaked markdown fence language word ("html") before the first tag');
+  // A chart block's JSON spec must be consumed by the chart renderer, never shipped
+  // as visible text. Seeing it in the body means the AI wrote a {* chart *} block this
+  // page's renderer didn't know — i.e. the fetched prompt and this loaded tool are
+  // different versions. Hard-fail rather than publish a wall of raw JSON to readers.
+  if(/"kind"\s*:\s*"(grid|flow|timeline|bars|comparison|tree)"/i.test(proseOnly)) offenders.push('raw chart JSON leaked into the body — the prompt and this tool are out of sync (this page does not know the {* chart *} block type; reload it)');
 
   return { id:'pipeline-artifacts', label:'No leaked AI-scaffolding / placeholder artifacts', tier:'hard',
     pass: offenders.length===0, detail: offenders.length ? offenders.join('; ') : 'clean' };

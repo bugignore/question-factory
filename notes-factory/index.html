@@ -159,7 +159,7 @@
   <div id="examTypes"></div>
 
   <label>Subject</label>
-  <select id="subject">
+  <select id="subject" onchange="renderRefUrlList()">
     <option>Auto-detect</option>
     <option>CDP</option>
     <option>Geography</option>
@@ -174,6 +174,16 @@
   <label>Hindi / English mix — <span id="langMixLabel">Hindi 70% + English 30%</span></label>
   <input type="range" id="hindiPercent" min="0" max="100" step="5" value="70" oninput="updateLangMixLabel()">
   <p class="hint" style="margin-top:2px">Key terms, definitions, and technical labels always stay in English regardless of this split — this only controls the explanations/tricks/teacher-talk prose.</p>
+
+  <details style="margin-top:10px">
+    <summary>📚 Reference sources for this run</summary>
+    <div>
+      <p class="hint" style="margin-top:8px">Auto-picked from Subject (above) + a general list — always official/whitelisted sources. The AI is told to use these as supporting material only: never copy source text, never invent claims beyond them.</p>
+      <div id="refUrlList" style="margin-top:6px"></div>
+      <label style="margin-top:10px">Extra source URLs (optional, one per line — must be an official/whitelisted domain per HARD BAN 6)</label>
+      <textarea id="extraSourceUrls" style="min-height:70px" placeholder="https://ncert.nic.in/...&#10;https://education.gov.in/..."></textarea>
+    </div>
+  </details>
 
   <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Build prompt</button>
   <button class="btn ghost" onclick="tryRun(copyWholePrompt,this)">🖥️ Copy whole prompt (PC only)</button>
@@ -365,8 +375,74 @@ function initSelectors(){
   topicList.innerHTML = CDP_TOPICS.map(t=>`<option value="${t}"></option>`).join('');
   const wrap = document.getElementById('examTypes');
   wrap.innerHTML = EXAM_TYPES.map((e,i)=>`<label style="font-weight:500"><input type="checkbox" class="examChk" value="${e}" ${i===0?'checked':''} style="width:auto;margin-right:6px">${e}</label>`).join('');
+  renderRefUrlList();
 }
 initSelectors();
+
+/* ---------- reference-source URL registry (master prompt's RAG/SOURCES slot) ----------
+   Curated, whitelisted (HARD BAN 6 domains only) official reference URLs, picked at
+   runtime by Subject — no RAG engine, no API, just a static list injected into the
+   prompt as supporting material the AI may cite from, never copy verbatim. Ported
+   verbatim from long-post-factory/index.html so both tools stay in lockstep. */
+const REFERENCE_SOURCES_GENERAL = [
+  { label: 'NCF 2005 (National Curriculum Framework)', url: 'https://ncert.nic.in/pdf/nc-framework/nf2005-english.pdf' },
+  { label: 'NCF 2023 (School Education)', url: 'https://ncert.nic.in/pdf/NCF-2023-Enlish.pdf' },
+  { label: 'NEP 2020', url: 'https://www.education.gov.in/sites/upload_files/mhrd/files/NEP_Final_English_0.pdf' },
+  { label: 'RTE Act 2009', url: 'https://www.indiacode.nic.in/handle/123456789/1359' },
+];
+const REFERENCE_SOURCES_BY_SUBJECT = {
+  'CDP': [
+    { label: 'Piaget (Wikipedia)', url: 'https://en.wikipedia.org/wiki/Jean_Piaget' },
+    { label: 'Vygotsky (Wikipedia)', url: 'https://en.wikipedia.org/wiki/Lev_Vygotsky' },
+    { label: 'Kohlberg (Wikipedia)', url: 'https://en.wikipedia.org/wiki/Lawrence_Kohlberg' },
+  ],
+  'Geography': [ { label: 'NCERT Geography textbooks (eBooks portal)', url: 'https://ncert.nic.in/textbook.php' } ],
+  'History': [ { label: 'NCERT History textbooks', url: 'https://ncert.nic.in/textbook.php' } ],
+  'Science': [ { label: 'NCERT Science textbooks', url: 'https://ncert.nic.in/textbook.php' } ],
+  'Maths': [ { label: 'NCERT Maths textbooks', url: 'https://ncert.nic.in/textbook.php' } ],
+  'EVS': [ { label: 'NCERT EVS textbooks', url: 'https://ncert.nic.in/textbook.php' } ],
+  'Hindi': [ { label: 'NCERT Hindi textbooks', url: 'https://ncert.nic.in/textbook.php' } ],
+  'English': [ { label: 'CBSE Academic (curriculum/syllabus)', url: 'https://cbseacademic.nic.in/' } ],
+};
+function getReferenceSources(subject){
+  return [...REFERENCE_SOURCES_GENERAL, ...(REFERENCE_SOURCES_BY_SUBJECT[subject] || [])];
+}
+
+/* Teaching-level detection for the master prompt's {{TEACHING_LEVEL}} slot —
+   explicit class-range mentions win over exam-name guesses, since free-text
+   exam fields (long-post-factory, update-factory) often spell the level out
+   directly (e.g. "BPSC TRE 4.0 Primary Teacher (Class 1-5)"). Ported
+   identically into long-post-factory/index.html and update-factory/index.html
+   — keep all three in lockstep if this logic changes. */
+function getTeachingLevel(examTypeRaw){
+  const s = String(examTypeRaw||'').toLowerCase();
+  const hasAny = (...words) => words.some(w => s.includes(w));
+  if (hasAny('class 1-5','class 1–5','classes 1-5','class i-v','primary teacher','primary (class','prt')) return 'Primary (Class 1–5)';
+  if (hasAny('class 6-8','class 6–8','class 9-10','class 6-10','upper primary','tgt')) return 'Upper Primary/Secondary (Class 6–10)';
+  if (hasAny('class 11','class 12','senior secondary','pgt')) return 'Senior Secondary (Class 11–12)';
+  if (hasAny('paper i','paper 1') && !hasAny('paper ii','paper 2')) return 'Primary (Class 1–5)';
+  if (hasAny('paper ii','paper 2')) return 'Upper Primary/Secondary (Class 6–10)';
+  return 'Not explicitly stated in EXAM TYPE — infer the most likely level from TOPIC/SUBJECT/EXAM TYPE context and state your inference once in Publisher Notes';
+}
+function renderRefUrlList(){
+  const el = document.getElementById('subject');
+  if(!el) return;
+  const sources = getReferenceSources(el.value);
+  document.getElementById('refUrlList').innerHTML = sources.map(s =>
+    `<span class="chip" title="${s.url}">${s.label}</span>`
+  ).join('');
+}
+function buildReferenceSourcesBlock(subject){
+  const sources = getReferenceSources(subject);
+  const extraEl = document.getElementById('extraSourceUrls');
+  const extra = (extraEl ? extraEl.value : '').split('\n').map(s=>s.trim()).filter(Boolean);
+  const lines = sources.map(s => `- ${s.label}: ${s.url}`);
+  extra.forEach(u => lines.push(`- (manually added): ${u}`));
+  if(!lines.length) return '';
+  return `## REFERENCE SOURCES FOR THIS RUN
+Use these as supporting material where genuinely relevant to TOPIC — same whitelist rules as HARD BAN 6 still apply for any URL you cite. Use only the parts that are actually relevant to this specific topic, not all of them. Never copy source text verbatim — synthesize into your own teacher-voice prose. Never invent a claim beyond what these (or your own verified knowledge) actually support.
+${lines.join('\n')}`;
+}
 
 /* ---------- navigation ---------- */
 var cur = 0;
@@ -627,7 +703,9 @@ async function buildPrompt(){
   state.topic = topic; state.examType = examType; state.subject = subject; state.hindiPercent = hindiPercent;
   saveDraft();
 
-  const master = await loadMasterPrompt();
+  let master = await loadMasterPrompt();
+  master = master.replace('{{REFERENCE_SOURCES_BLOCK}}', buildReferenceSourcesBlock(subject));
+  master = master.replaceAll('{{TEACHING_LEVEL}}', getTeachingLevel(examType));
 
   const config = state.isUpdate ? updateConfig(topic, examType, subject, hindiPercent) : `=== RUN THIS GENERATION WITH THESE EXACT INPUT VARIABLES ===
 TOPIC: ${topic}
@@ -843,7 +921,187 @@ function stripHtmlComments(html){
    block's open tag or a literal {* END *}) — so a dropped END never loses or
    corrupts content, it just means the next open tag silently closes the
    previous block, exactly as if the END had been there. */
-const BLOCK_TYPES = new Set(['h2','def','tip','exam','question','trick','mistake','summary','revision','insight','update','toc','faq','table','svg','img','plain']);
+/* ================= CHART ENGINE =================
+   The AI never writes SVG markup. It writes a {* chart: Title *} block whose
+   content is a small JSON spec (kind + data), and this renderer draws the
+   actual SVG — so every visual lands on the exact same house style no matter
+   which model generated it, and a malformed hand-drawn SVG can never ship.
+
+   Every constant below was derived by auditing this site's own 30 published
+   SVGs (see the visual audit): background #f8fafc, rounded cards rx=8 with
+   stroke-width 2, ~30px card height, the six fill+stroke pairs actually used,
+   and per-colour dark label text. Keep all three factory files in lockstep. */
+const CHART_COLORS = {
+  blue:   { fill:'#eff6ff', stroke:'#2563eb', text:'#1e3a8a' },
+  green:  { fill:'#dcfce7', stroke:'#16a34a', text:'#14532d' },
+  amber:  { fill:'#fef3c7', stroke:'#f59e0b', text:'#78350f' },
+  purple: { fill:'#f5f3ff', stroke:'#7c3aed', text:'#5b21b6' },
+  rose:   { fill:'#fee2e2', stroke:'#e11d48', text:'#9f1239' },
+  cyan:   { fill:'#ecfeff', stroke:'#0ea5e9', text:'#0c4a6e' },
+  gray:   { fill:'#f1f5f9', stroke:'#64748b', text:'#334155' }
+};
+const CHART_CYCLE = ['blue','green','amber','purple','rose','cyan'];
+function chartColor(name, i){
+  return CHART_COLORS[name] || CHART_COLORS[CHART_CYCLE[(i||0) % CHART_CYCLE.length]];
+}
+function escChart(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+/* Rough width-aware truncation: SVG can't wrap text, so an over-long label
+   silently overflows its card. ~1.9px per char at 8px, ~2.4px at 10px. */
+function fitChartText(s, maxPx, fontPx){
+  const str = String(s == null ? '' : s);
+  const perChar = fontPx * 0.58;
+  const max = Math.max(3, Math.floor(maxPx / perChar));
+  return str.length > max ? str.slice(0, max - 1) + '…' : str;
+}
+
+function chartGrid(spec){
+  const items = (spec.items || []).slice(0, 9);
+  const n = items.length || 1;
+  const perRow = n <= 3 ? n : (n === 4 ? 2 : 3);
+  const rows = Math.ceil(n / perRow);
+  const marginX = 15, gap = 8;
+  const cardW = (360 - marginX * 2 - gap * (perRow - 1)) / perRow;
+  const hasDetail = items.some(it => it && it.detail);
+  const cardH = spec.dense ? 30 : (hasDetail ? 52 : 34);
+  const top = 34;
+  let inner = '';
+  items.forEach((it, i) => {
+    const col = i % perRow, row = Math.floor(i / perRow);
+    const x = marginX + col * (cardW + gap);
+    const y = top + row * (cardH + gap);
+    const c = chartColor(it.color, i);
+    const cx = x + cardW / 2;
+    inner += `<rect x="${x.toFixed(1)}" y="${y}" width="${cardW.toFixed(1)}" height="${cardH}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="2" rx="8"></rect>`;
+    let ty = y + 18;
+    if (it.icon && !spec.dense) {
+      inner += `<text x="${cx.toFixed(1)}" y="${ty}" font-size="13" text-anchor="middle">${escChart(it.icon)}</text>`;
+      ty += 15;
+    }
+    inner += `<text x="${cx.toFixed(1)}" y="${ty}" font-size="10" fill="${c.text}" text-anchor="middle" font-weight="bold">${escChart(fitChartText(it.label, cardW - 8, 10))}</text>`;
+    if (it.detail && !spec.dense) {
+      inner += `<text x="${cx.toFixed(1)}" y="${ty + 13}" font-size="8" fill="#475569" text-anchor="middle">${escChart(fitChartText(it.detail, cardW - 6, 8))}</text>`;
+    }
+  });
+  return { inner, height: top + rows * (cardH + gap) + 8 };
+}
+
+function chartTimeline(spec){
+  const pts = (spec.points || []).slice(0, 6);
+  const n = pts.length || 1;
+  const marginX = 32;
+  const usable = 360 - marginX * 2;
+  const lineY = 58;
+  let inner = `<line x1="${marginX}" y1="${lineY}" x2="${360 - marginX}" y2="${lineY}" stroke="#2563eb" stroke-width="2"></line>`;
+  const slot = n === 1 ? usable : usable / (n - 1);
+  pts.forEach((p, i) => {
+    const x = n === 1 ? 180 : marginX + slot * i;
+    const c = chartColor(p.color, i);
+    inner += `<circle cx="${x.toFixed(1)}" cy="${lineY}" r="4.5" fill="${c.stroke}"></circle>`;
+    inner += `<text x="${x.toFixed(1)}" y="${lineY - 12}" font-size="8" fill="#1e293b" text-anchor="middle" font-weight="bold">${escChart(fitChartText(p.date, slot + 10, 8))}</text>`;
+    inner += `<text x="${x.toFixed(1)}" y="${lineY + 18}" font-size="8" fill="#475569" text-anchor="middle">${escChart(fitChartText(p.label, slot + 10, 8))}</text>`;
+    if (p.detail) {
+      inner += `<text x="${x.toFixed(1)}" y="${lineY + 30}" font-size="7" fill="#64748b" text-anchor="middle">${escChart(fitChartText(p.detail, slot + 14, 7))}</text>`;
+    }
+  });
+  const extra = pts.some(p => p.detail) ? 12 : 0;
+  return { inner, height: lineY + 40 + extra };
+}
+
+function chartBars(spec){
+  const bars = (spec.bars || []).slice(0, 7);
+  const vals = bars.map(b => Number(b.value) || 0);
+  const max = Math.max(...vals, 1);
+  const top = 38, rowH = 26, labelW = 78;
+  const maxBarW = 360 - labelW - 18;
+  let inner = '';
+  bars.forEach((b, i) => {
+    const y = top + i * rowH;
+    const w = Math.max(8, ((Number(b.value) || 0) / max) * maxBarW);
+    const c = chartColor(b.color, i);
+    inner += `<text x="${labelW - 6}" y="${y + 11}" font-size="8" fill="#475569" text-anchor="end">${escChart(fitChartText(b.label, labelW - 8, 8))}</text>`;
+    inner += `<rect x="${labelW}" y="${y}" width="${w.toFixed(1)}" height="14" fill="${c.stroke}" rx="4"></rect>`;
+    if (b.valueLabel) {
+      // put the value inside the bar when it fits, otherwise just after it
+      const inside = w > 52;
+      inner += `<text x="${(inside ? labelW + w - 6 : labelW + w + 5).toFixed(1)}" y="${y + 11}" font-size="7" fill="${inside ? '#ffffff' : '#475569'}" text-anchor="${inside ? 'end' : 'start'}">${escChart(fitChartText(b.valueLabel, inside ? w - 10 : 60, 7))}</text>`;
+    }
+  });
+  return { inner, height: top + bars.length * rowH + 10 };
+}
+
+function chartFlow(spec){
+  const branches = (spec.branches || []).slice(0, 4);
+  const top = 36;
+  const rootW = 118, rootH = 30;
+  const rootX = 180 - rootW / 2;
+  const rc = chartColor(spec.rootColor || 'blue', 0);
+  let inner = `<rect x="${rootX}" y="${top}" width="${rootW}" height="${rootH}" fill="${rc.fill}" stroke="${rc.stroke}" stroke-width="2" rx="8"></rect>`;
+  inner += `<text x="180" y="${top + 19}" font-size="10" fill="${rc.text}" text-anchor="middle" font-weight="bold">${escChart(fitChartText(spec.root, rootW - 8, 10))}</text>`;
+  const n = branches.length || 1;
+  const slice = 360 / n;
+  const branchY = top + rootH + 26;
+  const branchH = 28;
+  let maxY = branchY + branchH;
+  branches.forEach((b, i) => {
+    const cx = slice * i + slice / 2;
+    const bw = Math.min(112, slice - 10);
+    const bx = cx - bw / 2;
+    const c = chartColor(b.color, i);
+    inner += `<line x1="180" y1="${top + rootH}" x2="${cx.toFixed(1)}" y2="${branchY}" stroke="#94a3b8" stroke-width="1.5"></line>`;
+    inner += `<rect x="${bx.toFixed(1)}" y="${branchY}" width="${bw.toFixed(1)}" height="${branchH}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="2" rx="8"></rect>`;
+    inner += `<text x="${cx.toFixed(1)}" y="${branchY + 18}" font-size="9" fill="${c.text}" text-anchor="middle" font-weight="bold">${escChart(fitChartText(b.label, bw - 6, 9))}</text>`;
+    const kids = (b.children || []).slice(0, 3);
+    if (kids.length) {
+      const kSlice = bw / kids.length;
+      const kY = branchY + branchH + 22;
+      kids.forEach((k, j) => {
+        const kcx = bx + kSlice * j + kSlice / 2;
+        const kw = Math.max(34, Math.min(kSlice - 4, 74));
+        const kc = chartColor(k.color || b.color, i);
+        inner += `<line x1="${cx.toFixed(1)}" y1="${branchY + branchH}" x2="${kcx.toFixed(1)}" y2="${kY}" stroke="#cbd5e1" stroke-width="1"></line>`;
+        inner += `<rect x="${(kcx - kw / 2).toFixed(1)}" y="${kY}" width="${kw.toFixed(1)}" height="24" fill="${kc.fill}" stroke="${kc.stroke}" stroke-width="1.5" rx="6"></rect>`;
+        inner += `<text x="${kcx.toFixed(1)}" y="${kY + 15}" font-size="7" fill="${kc.text}" text-anchor="middle" font-weight="bold">${escChart(fitChartText(k.label, kw - 4, 7))}</text>`;
+      });
+      maxY = Math.max(maxY, kY + 24);
+    }
+  });
+  return { inner, height: maxY + 14 };
+}
+
+/* Renders a {* chart: Title *} block's JSON content into on-brand SVG.
+   Falls back gracefully: raw <svg> passes through untouched (older articles
+   and the deprecated `svg` block type still render), and unparseable JSON
+   shows a visible editor-facing warning rather than silently shipping blank. */
+function renderChartBlock(rawContent, blockTitle){
+  const raw = String(rawContent || '').trim();
+  if (/^<svg[\s>]/i.test(raw)) return raw;
+  let spec;
+  try {
+    spec = JSON.parse(raw.replace(/^```(?:json)?/i, '').replace(/```$/,'').trim());
+  } catch (e) {
+    return `<div style="background:#fff7ed;border:1px solid #ea580c;border-radius:8px;padding:10px;font-size:12px;color:#9a3412;">⚠ Chart block could not be parsed as JSON (${escChart(e.message)}). Fix the {* chart *} block content before publishing.</div>`;
+  }
+  const title = spec.title || blockTitle || '';
+  let out;
+  switch (String(spec.kind || 'grid').toLowerCase()) {
+    case 'timeline': out = chartTimeline(spec); break;
+    case 'bars': case 'comparison': out = chartBars(spec); break;
+    case 'flow': case 'tree': out = chartFlow(spec); break;
+    default: out = chartGrid(spec); break;
+  }
+  const h = Math.round(out.height);
+  const aria = escChart(spec.ariaLabel || title || 'diagram');
+  return `<svg viewBox="0 0 360 ${h}" width="100%" style="display:block" role="img" aria-label="${aria}">`
+    + `<rect x="0" y="0" width="360" height="${h}" fill="#f8fafc" rx="8"></rect>`
+    + (title ? `<text x="180" y="22" font-size="12" fill="#1e293b" text-anchor="middle" font-weight="bold">${escChart(fitChartText(title, 330, 12))}</text>` : '')
+    + out.inner
+    + `</svg>`;
+}
+
+const BLOCK_TYPES = new Set(['h2','def','tip','exam','question','trick','mistake','summary','revision','insight','update','toc','faq','table','chart','svg','img','plain']);
 
 function escBlockTitle(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -852,7 +1110,7 @@ function cardBlockHtml(bg, accent, label, body){
   return `<div style="background:${bg};border-left:6px solid ${accent};padding:16px;border-radius:12px;margin:14px 0;box-sizing:border-box;max-width:100%;">${label?`<b>${escBlockTitle(label)}</b><div style="margin-top:6px;line-height:1.6">${body}</div>`:`<div style="line-height:1.6">${body}</div>`}</div>`;
 }
 const BLOCK_RENDERERS = {
-  h2:       (t,b)=>`<h2 id="${slugify(t)||'section'}" style="background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:22px;font-weight:700;margin:14px 0;box-sizing:border-box;max-width:100%;">${escBlockTitle(t)}</h2>\n${b}`,
+  h2:       (t,b,id)=>`<h2 id="${id||headingSlug(t)}" style="background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:22px;font-weight:700;margin:14px 0;box-sizing:border-box;max-width:100%;">${escBlockTitle(t)}</h2>\n${b}`,
   def:      (t,b)=>cardBlockHtml('#f8fbff','#2563eb', t||'Definition', b),
   tip:      (t,b)=>cardBlockHtml('#fff8e6','#f59e0b', t||'Tip', b),
   exam:     (t,b)=>cardBlockHtml('#ecfeff','#06b6d4', t||'Exam Point', b),
@@ -866,6 +1124,7 @@ const BLOCK_RENDERERS = {
   toc:      (t,b)=>`<div style="background:#eff6ff;border:2px solid #2563eb;border-radius:12px;padding:16px;margin:14px 0;box-sizing:border-box;max-width:100%;"><b>${escBlockTitle(t||'Table of Contents')}</b><div style="margin-top:6px;line-height:1.6">${b}</div></div>`,
   faq:      (t,b)=>`<div style="margin:14px 0"><h3 style="font-size:15px;font-weight:700;color:#1e293b;margin:14px 0 6px;">${escBlockTitle(t)}</h3><div style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#334155;">${b}</div></div>`,
   table:    (t,b)=>`<div style="overflow-x:auto;margin:14px 0"><div style="min-width:480px">${t?`<div style="font-weight:600;margin-bottom:6px">${escBlockTitle(t)}</div>`:''}${b}</div></div>`,
+  chart:    (t,b)=>`<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin:14px 0;box-sizing:border-box;max-width:100%;">${renderChartBlock(b,t)}</div>`,
   svg:      (t,b)=>`<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin:14px 0;box-sizing:border-box;max-width:100%;">${b}</div>`,
   img:      (t,b)=>`<div style="margin:14px 0">${b}</div>`,
   plain:    (t,b)=>t ? `<div style="margin:14px 0"><b>${escBlockTitle(t)}</b><div style="margin-top:6px">${b}</div></div>` : `<div style="margin:14px 0">${b}</div>`
@@ -894,6 +1153,39 @@ function parseBlockHeader(header){
    only (shown as a parse warning), never blocks publishing since every block
    auto-closes at the next marker regardless. No block tags found = pass
    through untouched, so pre-v13 replies (hand-written HTML) still work. */
+
+/* Builds the Table of Contents from the headings actually present in this
+   article, using the same slugify() the h2 renderer uses — so every jump link
+   resolves by construction. Falls back to whatever the AI supplied only when
+   the article genuinely has no h2 headings to list. */
+/* Heading ids for the h2 renderer AND the Table of Contents — both must agree
+   exactly or every jump link breaks. slugify() strips everything outside
+   [a-z0-9], so a Devanagari heading collapses to '' and every Hindi h2 in an
+   article would land on the same 'section' id (duplicate ids, dead TOC links,
+   and a hard validation failure). HTML5 ids allow any character except
+   whitespace, so non-Latin headings keep their own characters instead. */
+function headingSlug(title){
+  const base = slugify(title);
+  if(base) return base;
+  const uni = String(title || '').trim().toLowerCase()
+    .replace(/["'<>#?&\/\\]/g, '')
+    .replace(/\s+/g, '-');
+  return uni || 'section';
+}
+
+function renderTocBlock(title, headings, aiContent){
+  const label = escBlockTitle(title || 'Table of Contents');
+  const shell = inner => '<div style="background:#eff6ff;border:2px solid #2563eb;border-radius:12px;padding:16px;margin:14px 0;box-sizing:border-box;max-width:100%;"><b>' + label + '</b>' + inner + '</div>';
+  if(!headings || !headings.length){
+    return shell('<div style="margin-top:6px;line-height:1.6">' + (aiContent || '') + '</div>');
+  }
+  const items = headings.map(function(h){
+    return '<li style="margin:6px 0"><a href="#' + h.id + '" style="color:#1d4ed8;text-decoration:none">' + escBlockTitle(h.title) + '</a></li>';
+  }).join('');
+  return shell('<ol style="margin:8px 0 0;padding-left:20px;line-height:1.6">' + items + '</ol>');
+}
+
+
 function expandLongPostBlocks(raw){
   const text = String(raw||'');
   const OPEN_RE = /\{\*\s*([^*}]+?)\s*\*\}/g;
@@ -904,8 +1196,26 @@ function expandLongPostBlocks(raw){
   }
   if(!markers.length) return { html: text, blockCount: 0, unclosedCount: 0 };
 
+  // PRE-PASS: collect every h2 heading and the EXACT id its renderer will
+  // generate, so the Table of Contents can be built from real headings with
+  // anchors guaranteed to resolve. Previously the AI hand-wrote TOC links;
+  // because ids come from slugify(title) the model cannot predict them, and an
+  // audit of published articles found 16% of note TOC links and 50% of
+  // long-post TOC links pointed at headings that did not exist.
+  const tocHeadings = [];
+  const tocSeen = Object.create(null);
+  for(const mk0 of markers){
+    if(/^end$/i.test(mk0.header)) continue;
+    const p0 = parseBlockHeader(mk0.header);
+    if(p0.type === 'h2' && p0.title){
+      let hid = headingSlug(p0.title);
+      if(tocSeen[hid]){ tocSeen[hid] += 1; hid = hid + '-' + tocSeen[hid]; } else { tocSeen[hid] = 1; }
+      tocHeadings.push({ id: hid, title: p0.title });
+    }
+  }
+
   let out = text.slice(0, markers[0].start);
-  let blockCount = 0, unclosedCount = 0, adIdx = 0;
+  let blockCount = 0, unclosedCount = 0, adIdx = 0, h2Idx = 0;
   const subAds = s => s.replace(/\[\[AD\]\]/g, ()=>AD_SNIPPET_TEMPLATE(++adIdx)).replace(/\[\[WC:\s*\d+\s*\]\]/gi, '');
   for(let i=0;i<markers.length;i++){
     const mk = markers[i];
@@ -920,7 +1230,9 @@ function expandLongPostBlocks(raw){
     if(!explicitEnd) unclosedCount++;
     const content = subAds(gap.trim());
     const { type, title } = parseBlockHeader(mk.header);
-    out += BLOCK_RENDERERS[type](title, content) + '\n';
+    // The TOC is generated from the headings collected above, never from
+    // whatever the AI wrote inside the block — that is what kept breaking.
+    out += (type === 'toc' ? renderTocBlock(title, tocHeadings, content) : BLOCK_RENDERERS[type](title, content, type === 'h2' ? (tocHeadings[h2Idx++] || {}).id : undefined)) + '\n';
     blockCount++;
   }
   return { html: out, blockCount, unclosedCount };
@@ -1696,8 +2008,16 @@ function vCheckSlug(seo){
   const pass = slug.length>0 && slug.length<75 && /^[a-z0-9-]+$/.test(slug) && kwWords.every(w=>slugWords.includes(w));
   return { id:'slug', label:'Slug has every keyphrase word, <75 chars', tier:'hard', pass, detail: `"${slug}" (${slug.length} chars)` };
 }
+// At a high Hindi %, H1 is expected to be a genuine Hindi heading (see the
+// prompt's SEO section) — it would never legitimately start with the Roman
+// keyphrase, so the strict prefix check only applies to mostly-English runs.
 function vCheckH1(seo){
   const k = vNormalize(seo.focusKeyword), h1 = seo.h1||'';
+  const hindiPercent = (typeof state !== 'undefined' && typeof state.hindiPercent === 'number') ? state.hindiPercent : 70;
+  if (hindiPercent >= 50) {
+    const hasDevanagari = /[ऀ-ॿ]/.test(h1);
+    return { id:'h1', label:'H1 is a real Hindi-language heading (language-mix aware)', tier:'hard', pass: h1.trim().length>=10 && hasDevanagari, detail: `"${h1}"` };
+  }
   return { id:'h1', label:'H1 starts with keyphrase', tier:'hard', pass: k.length>0 && vNormalize(h1).startsWith(k), detail: `"${h1}"` };
 }
 function vCheckFirst100Words(doc, seo){
@@ -1707,6 +2027,44 @@ function vCheckFirst100Words(doc, seo){
     pass, detail: pass ? 'found' : 'not found in: "'+words.slice(0,120)+'…"' };
 }
 
+/* Catches AI-scaffolding/placeholder artifacts that have reached production
+   before — unresolved prompt-template brackets, a via.placeholder.com image,
+   Lorem ipsum, a body that's literally "undefined"/"null", or a leaked
+   markdown-fence language word ("html") before the first tag. Ported from
+   long-post-factory/index.html's vCheckPipelineArtifacts — this was found
+   missing here during a cross-tool audit even though notes-factory is the
+   canonical tool and the one that actually shipped these failures. A hard
+   fail here means the reply almost certainly wasn't generated against real
+   inputs — no soft-warning escape hatch beyond the existing manual override. */
+function vCheckPipelineArtifacts(bodyHtml, seo){
+  seo = seo || {};
+  const html = String(bodyHtml||'');
+  const hay = html + ' ' + JSON.stringify(seo);
+  const offenders = [];
+
+  const bracketPatterns = [
+    /\[exact keyphrase\]/i, /\[insert[^\]]*\]/i, /\[write here\]/i,
+    /\[entire notes body html\]/i, /\[per formula above[^\]]*\]/i,
+    /\[\s*n\s*\]/i, /\[\s*list[^\]]*\]/i
+  ];
+  for(const re of bracketPatterns){ if(re.test(hay)){ offenders.push(`unresolved template placeholder matching ${re}`); break; } }
+  const proseOnly = html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  if(proseOnly && /^\[[^\]]{1,120}\]$/.test(proseOnly)){ offenders.push('body is nothing but a single bracketed placeholder'); }
+
+  if(/via\.placeholder\.com/i.test(html)) offenders.push('via.placeholder.com placeholder image');
+  if(/lorem ipsum/i.test(html)) offenders.push('Lorem ipsum filler text');
+  if(proseOnly === 'undefined' || proseOnly === 'null') offenders.push(`body is literally "${proseOnly}"`);
+  if(/^\s*(?:html|htm)\s*\n/i.test(html)) offenders.push('leaked markdown fence language word ("html") before the first tag');
+  // A chart block's JSON spec must be consumed by the chart renderer, never shipped
+  // as visible text. Seeing it in the body means the AI wrote a {* chart *} block this
+  // page's renderer didn't know — i.e. the fetched prompt and this loaded tool are
+  // different versions. Hard-fail rather than publish a wall of raw JSON to readers.
+  if(/"kind"\s*:\s*"(grid|flow|timeline|bars|comparison|tree)"/i.test(proseOnly)) offenders.push('raw chart JSON leaked into the body — the prompt and this tool are out of sync (this page does not know the {* chart *} block type; reload it)');
+
+  return { id:'pipeline-artifacts', label:'No leaked AI-scaffolding / placeholder artifacts', tier:'hard',
+    pass: offenders.length===0, detail: offenders.length ? offenders.join('; ') : 'clean' };
+}
+
 function vRunChecks(seo, bodyHtml){
   seo = seo || {};
   const doc = vParseBody(bodyHtml);
@@ -1714,6 +2072,7 @@ function vRunChecks(seo, bodyHtml){
   const words = vWordCount(proseText);
   const kw = vCountKeyphrase(proseText, seo.focusKeyword);
   const checks = [
+    vCheckPipelineArtifacts(bodyHtml, seo),
     vCheckWordCount(words), vCheckDensity(words, kw), vCheckHeadings(doc, seo.focusKeyword),
     vCheckImageAlt(doc, seo.focusKeyword), vCheckSvg(doc, seo.focusKeyword), vCheckMedia(doc),
     vCheckParagraphs(doc), vCheckLinks(doc), vCheckDuplicateIds(doc), vCheckBareH3(doc),
