@@ -3,33 +3,67 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#F2F4F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0C0F" media="(prefers-color-scheme: dark)">
 <title>Long Post Factory — Reporting</title>
 <style>
-  :root{ color-scheme: light; }
-  body{ margin:0; background:#F2F4F8; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#1e293b; }
-  header{ background:#2A4D9B; color:#fff; padding:20px 24px; }
+  /* Colours are tokenised so the dark block below only has to restate the
+     tokens — previously every colour here was hardcoded and the page was
+     pinned to `color-scheme: light`, so it stayed bright white while every
+     other page in this repo followed the OS theme. */
+  :root{
+    color-scheme: light dark;
+    --paper:#F2F4F8; --card:#FFFFFF; --card-2:#f8fafc;
+    --ink:#1e293b; --ink-soft:#64748b; --ink-faint:#94a3b8; --th-ink:#475569;
+    --line:#cbd5e1; --line-soft:#eef1f5;
+    --accent:#2A4D9B; --accent-ink:#ffffff; --link:#2A4D9B;
+    --shadow:0 1px 3px rgba(0,0,0,.08);
+    --done-bg:#dcfce7; --done-ink:#166534;
+    --pending-bg:#fef9c3; --pending-ink:#854d0e;
+    --running-bg:#dbeafe; --running-ink:#1e40af;
+    --failed-bg:#fee2e2; --failed-ink:#991b1b;
+    --flagged-bg:#ffedd5; --flagged-ink:#9a3412;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#0B0C0F; --card:#16171C; --card-2:#1B1C22;
+      --ink:#F2F2F5; --ink-soft:#93959E; --ink-faint:#6B6E76; --th-ink:#B6B8C0;
+      --line:#26272E; --line-soft:#1E1F25;
+      --accent:#1E2A4A; --accent-ink:#E8EAF2; --link:#9A9BFF;
+      --shadow:0 1px 3px rgba(0,0,0,.5);
+      /* status badges keep their hue but drop to dark-surface tints so the
+         text stays legible instead of dark-on-bright */
+      --done-bg:#0F2A20; --done-ink:#4ADE80;
+      --pending-bg:#2C2107; --pending-ink:#FCD34D;
+      --running-bg:#152449; --running-ink:#93B4FF;
+      --failed-bg:#2E1613; --failed-ink:#FCA5A5;
+      --flagged-bg:#2B1A0B; --flagged-ink:#FDBA74;
+    }
+  }
+  body{ margin:0; background:var(--paper); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); }
+  header{ background:var(--accent); color:var(--accent-ink); padding:20px 24px; }
   header h1{ margin:0; font-size:20px; }
   header p{ margin:6px 0 0; font-size:13px; opacity:.85; }
   main{ max-width:1100px; margin:0 auto; padding:20px; }
   .stats{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
-  .stat{ background:#fff; border-radius:12px; padding:14px 18px; box-shadow:0 1px 3px rgba(0,0,0,.08); min-width:120px; }
+  .stat{ background:var(--card); border-radius:12px; padding:14px 18px; box-shadow:var(--shadow); min-width:120px; }
   .stat b{ display:block; font-size:22px; }
-  .stat span{ font-size:12px; color:#64748b; }
+  .stat span{ font-size:12px; color:var(--ink-soft); }
   .controls{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
-  .controls input, .controls select{ padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; }
-  table{ width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
-  th,td{ text-align:left; padding:10px 12px; font-size:13px; border-bottom:1px solid #eef1f5; vertical-align:top; }
-  th{ background:#f8fafc; font-weight:700; color:#475569; position:sticky; top:0; }
+  .controls input, .controls select{ padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:var(--card); color:var(--ink); }
+  table{ width:100%; border-collapse:collapse; background:var(--card); border-radius:12px; overflow:hidden; box-shadow:var(--shadow); }
+  th,td{ text-align:left; padding:10px 12px; font-size:13px; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+  th{ background:var(--card-2); font-weight:700; color:var(--th-ink); position:sticky; top:0; }
   tr:last-child td{ border-bottom:none; }
   .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
-  .badge.done{ background:#dcfce7; color:#166534; }
-  .badge.pending{ background:#fef9c3; color:#854d0e; }
-  .badge.running{ background:#dbeafe; color:#1e40af; }
-  .badge.failed{ background:#fee2e2; color:#991b1b; }
-  .badge.flagged{ background:#ffedd5; color:#9a3412; }
-  a{ color:#2A4D9B; }
-  .msg{ padding:12px; color:#64748b; font-size:13px; }
-  .small{ font-size:11px; color:#94a3b8; }
+  .badge.done{ background:var(--done-bg); color:var(--done-ink); }
+  .badge.pending{ background:var(--pending-bg); color:var(--pending-ink); }
+  .badge.running{ background:var(--running-bg); color:var(--running-ink); }
+  .badge.failed{ background:var(--failed-bg); color:var(--failed-ink); }
+  .badge.flagged{ background:var(--flagged-bg); color:var(--flagged-ink); }
+  a{ color:var(--link); }
+  .msg{ padding:12px; color:var(--ink-soft); font-size:13px; }
+  .small{ font-size:11px; color:var(--ink-faint); }
 </style>
 </head>
 <body>

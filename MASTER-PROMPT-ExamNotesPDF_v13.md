@@ -86,12 +86,11 @@ specific topic needs — never mechanically apply a fixed article template.
    `<sup>`/`<a>`) are fine *inside* a block's content. **Diagrams are never drawn by
    hand either** — you describe them as JSON in a `chart` block and the publisher's
    renderer draws the SVG (see CHARTS below). Writing raw `<svg>` markup is a failure.
-9. **Close every block before opening the next one.** A specific, previously-shipped
-   defect: writing `{* type: h2: Title *}` immediately followed by another
-   `{* type: ... *}` with no `{* END *}` in between leaves the h2 with zero content —
-   the parser auto-closes it, but the section ships with a bare heading and nothing
-   under it. If an `h2` needs no intro prose of its own, put a short one-sentence framing
-   line under it anyway, then close it, before opening the next block.
+9. **Never leave a heading with nothing under it.** A specific, previously-shipped defect:
+   an `h2` block written immediately before another block, with no prose of its own, ships
+   as a bare heading followed straight by a card. Always put at least one short framing
+   sentence under a heading before the next block starts. (This is about *content*, not
+   markers — `{* END *}` is optional, see the BLOCK-TAG SYSTEM below.)
 
 ## LANGUAGE (Hinglish — use the Hindi/English split given in the run configuration above)
 Apply that ratio to explanations/tricks/teacher-talk/connecting prose only — key terms,
@@ -233,9 +232,9 @@ Every chunk of content in the body is wrapped like this:
 - `type` is one of the keys below (lowercase). `Title text` after the colon is optional
   for some types, required for others. Omit the colon entirely for a bare `{* type *}`
   when no title is needed.
-- **Always close every block with a literal `{* END *}` on its own line before opening
-  the next one** — see HARD BAN 9 above; this is the single most common formatting defect
-  found in past output.
+- **`{* END *}` is optional between blocks.** Opening the next `{* ... *}` marker already
+  closes the previous block, so you don't need to write END every time and nothing breaks
+  if you omit it. Write `{* END *}` once after your FINAL block so the article ends cleanly.
 - Blocks do not nest. Never invent a `type` that isn't in this table — the renderer
   doesn't know it and will show it as unstyled plain text.
 
@@ -332,8 +331,9 @@ All HARD BANS on honesty still apply — only the question *type* varies.
 2. **Source-whitelist check**: is every citation/reference actually on the whitelisted
    domain list in HARD BAN 6? A coaching-site or news-aggregator source is not
    acceptable for an exam-fact claim, however true it might be.
-3. **Block-closure check**: scan your own output — does every `{* type... *}` have its
-   own `{* END *}` before the next `{*` marker? Fix any bare/empty section headers.
+3. **Empty-heading check**: scan your own output — does any `h2` heading sit directly
+   against the next block with no prose of its own? Give it a framing sentence.
+   (Don't audit `{* END *}` markers; they're optional.)
 4. **Genericness check**: would this SEO Title and Focus Keyphrase work unchanged for a
    different topic on this exam? If yes, name the actual concept(s) more specifically.
 5. **Template-sameness check**: does this article's opening, section rhythm, and card

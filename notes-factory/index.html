@@ -6,9 +6,10 @@
 <title>Notes Factory</title>
 <style>
   :root{
+    color-scheme: light dark;
     --paper:#F7F7F9; --card:#FFFFFF; --card-2:#FBFBFD; --ink:#15161A; --ink-soft:#6B6E76;
     --line:#E7E7EC; --line-soft:#F0F0F3;
-    --accent:#4B4CE8; --accent-ink:#3937C4; --accent-bg:#EEEEFD;
+    --accent:#4B4CE8; --accent-ink:#3937C4; --accent-bg:#EEEEFD; --on-accent:#FFFFFF;
     --ok:#0E9F6E; --ok-bg:#E7F9F1;
     --bad:#E1483B; --bad-bg:#FDECEA;
     --warn:#B5790A; --warn-bg:#FFF4DF;
@@ -19,7 +20,7 @@
     :root{
       --paper:#0B0C0F; --card:#16171C; --card-2:#1B1C22; --ink:#F2F2F5; --ink-soft:#93959E;
       --line:#26272E; --line-soft:#1E1F25;
-      --accent:#7677F4; --accent-ink:#9A9BFF; --accent-bg:#1E1E3A;
+      --accent:#7677F4; --accent-ink:#9A9BFF; --accent-bg:#1E1E3A; --on-accent:#0B0C0F;
       --ok:#33C288; --ok-bg:#0F2A20;
       --bad:#FF6B5E; --bad-bg:#2E1613;
       --warn:#E3A733; --warn-bg:#2C2107;
@@ -46,7 +47,7 @@
   textarea{min-height:110px;resize:vertical;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px}
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .btn{display:flex;width:100%;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:var(--radius-sm);border:1px solid transparent;background:var(--accent);color:#fff;font:inherit;font-weight:650;font-size:14.5px;cursor:pointer;margin-top:12px;transition:transform .1s ease, opacity .15s ease, background .15s ease}
+  .btn{display:flex;width:100%;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:var(--radius-sm);border:1px solid transparent;background:var(--accent);color:var(--on-accent);font:inherit;font-weight:650;font-size:14.5px;cursor:pointer;margin-top:12px;transition:transform .1s ease, opacity .15s ease, background .15s ease}
   .btn:active{transform:scale(.98)}
   .btn:hover{background:var(--accent-ink)}
   .btn.ghost{background:var(--card);color:var(--accent);border-color:var(--line)}
@@ -123,14 +124,15 @@
   .pstep .dot{width:20px;height:20px;flex:none;border-radius:99px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;background:var(--card);transition:all .2s ease}
   .pstep.wait .dot{animation:pulse 1.2s infinite ease-in-out;border-color:var(--accent);color:var(--accent)}
   .pstep.done{color:var(--ink);font-weight:500}
-  .pstep.done .dot{background:var(--ok);border-color:var(--ok);color:#fff}
-  .pstep.bad .dot{background:var(--bad);border-color:var(--bad);color:#fff}
+  .pstep.done .dot{background:var(--ok);border-color:var(--ok);color:var(--on-accent)}
+  .pstep.bad .dot{background:var(--bad);border-color:var(--bad);color:var(--on-accent)}
   .pstep a{color:var(--accent);font-weight:600;text-decoration:none}
   .pstep a:hover{text-decoration:underline}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 </style>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#2A4D9B">
+<meta name="theme-color" content="#F7F7F9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0C0F" media="(prefers-color-scheme: dark)">
 </head>
 <body>
 <div class="top">
@@ -1224,6 +1226,7 @@ function expandLongPostBlocks(raw){
   let out = text.slice(0, markers[0].start);
   let blockCount = 0, unclosedCount = 0, adIdx = 0, h2Idx = 0;
   const subAds = s => s.replace(/\[\[AD\]\]/g, ()=>AD_SNIPPET_TEMPLATE(++adIdx)).replace(/\[\[WC:\s*\d+\s*\]\]/gi, '');
+  const stripWc = s => s.replace(/\[\[WC:\s*\d+\s*\]\]/gi, '');
   for(let i=0;i<markers.length;i++){
     const mk = markers[i];
     const next = markers[i+1];
@@ -1235,11 +1238,22 @@ function expandLongPostBlocks(raw){
     }
     const explicitEnd = next && /^end$/i.test(next.header);
     if(!explicitEnd) unclosedCount++;
-    const content = subAds(gap.trim());
+    // {* END *} is optional between consecutive blocks — the next block's
+    // opening marker already closes the previous one. The single thing a
+    // missing END used to break was ad placement: an [[AD]] written after a
+    // block would be absorbed INTO that block and render inside the card.
+    // Ads are therefore hoisted out of block content and emitted after the
+    // rendered block, so placement is correct with or without an END.
+    let inner = stripWc(gap.trim());
+    const adHits = (inner.match(/\[\[AD\]\]/g) || []).length;
+    if(adHits) inner = inner.replace(/\[\[AD\]\]/g, '').trim();
+    const trailingAds = Array.from({length: adHits}, () => AD_SNIPPET_TEMPLATE(++adIdx)).join('\n');
+    const content = inner;
     const { type, title } = parseBlockHeader(mk.header);
     // The TOC is generated from the headings collected above, never from
     // whatever the AI wrote inside the block — that is what kept breaking.
     out += (type === 'toc' ? renderTocBlock(title, tocHeadings, content) : BLOCK_RENDERERS[type](title, content, type === 'h2' ? (tocHeadings[h2Idx++] || {}).id : undefined)) + '\n';
+    if(trailingAds) out += trailingAds + '\n';
     blockCount++;
   }
   return { html: out, blockCount, unclosedCount };
@@ -1271,7 +1285,6 @@ function parseResponse(raw){
   if(seoResult.method==='label-text') warnings.push('SEO fields: no JSON block found — read from the plain labeled panel instead. Double-check every field.');
   if(bodyResult.method==='h2-scan') warnings.push('Notes body: no marker comments found — guessed the body by scanning from the first <h2> to the next recognizable end-of-notes marker. Double-check the body did not get cut short or include trailing text.');
   if(blockResult.blockCount === 0) warnings.push('No {* type: title *} block tags were found in the body — it was passed through as-is (fine for a pre-v13 hand-written-HTML reply; re-check if you expected block tags).');
-  if(blockResult.unclosedCount > 0) warnings.push(`${blockResult.unclosedCount} block(s) were missing an explicit {* END *} — auto-closed at the next marker (or end of body). Double-check no content got merged into the wrong block.`);
   result.warnings = warnings;
   return result;
 }

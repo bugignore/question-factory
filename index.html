@@ -3,11 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#F2F4F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0C0F" media="(prefers-color-scheme: dark)">
 <title>Content Factory</title>
 <style>
   :root{
+    color-scheme: light dark;
     --paper:#F2F4F8; --card:#FFFFFF; --ink:#1B2A4A; --ink-soft:#51617F;
     --line:#D8DEE9; --accent:#2A4D9B; --ok:#0E7C56;
+  }
+  /* Dark palette matches the three factory tools so moving between the hub
+     and a factory doesn't flash a different theme. */
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#0B0C0F; --card:#16171C; --ink:#F2F2F5; --ink-soft:#93959E;
+      --line:#26272E; --accent:#7677F4; --ok:#33C288;
+    }
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
