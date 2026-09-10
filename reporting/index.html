@@ -6,6 +6,11 @@
 <meta name="theme-color" content="#F2F4F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0B0C0F" media="(prefers-color-scheme: dark)">
 <title>Long Post Factory — Reporting</title>
+<script>
+/* Applied before paint so a saved theme never flashes the wrong colours. */
+(function(){try{var t=localStorage.getItem('enp-theme');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
 <style>
   /* Colours are tokenised so the dark block below only has to restate the
      tokens — previously every colour here was hardcoded and the page was
@@ -25,7 +30,7 @@
     --flagged-bg:#ffedd5; --flagged-ink:#9a3412;
   }
   @media (prefers-color-scheme:dark){
-    :root{
+    :root:not([data-theme="light"]){
       --paper:#0B0C0F; --card:#16171C; --card-2:#1B1C22;
       --ink:#F2F2F5; --ink-soft:#93959E; --ink-faint:#6B6E76; --th-ink:#B6B8C0;
       --line:#26272E; --line-soft:#1E1F25;
@@ -39,6 +44,21 @@
       --failed-bg:#2E1613; --failed-ink:#FCA5A5;
       --flagged-bg:#2B1A0B; --flagged-ink:#FDBA74;
     }
+  }
+  /* explicit choice from the theme switch wins over the OS setting */
+  :root[data-theme="dark"]{
+      --paper:#0B0C0F; --card:#16171C; --card-2:#1B1C22;
+      --ink:#F2F2F5; --ink-soft:#93959E; --ink-faint:#6B6E76; --th-ink:#B6B8C0;
+      --line:#26272E; --line-soft:#1E1F25;
+      --accent:#1E2A4A; --accent-ink:#E8EAF2; --link:#9A9BFF;
+      --shadow:0 1px 3px rgba(0,0,0,.5);
+      /* status badges keep their hue but drop to dark-surface tints so the
+         text stays legible instead of dark-on-bright */
+      --done-bg:#0F2A20; --done-ink:#4ADE80;
+      --pending-bg:#2C2107; --pending-ink:#FCD34D;
+      --running-bg:#152449; --running-ink:#93B4FF;
+      --failed-bg:#2E1613; --failed-ink:#FCA5A5;
+      --flagged-bg:#2B1A0B; --flagged-ink:#FDBA74;
   }
   body{ margin:0; background:var(--paper); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); }
   header{ background:var(--accent); color:var(--accent-ink); padding:20px 24px; }
@@ -64,6 +84,13 @@
   a{ color:var(--link); }
   .msg{ padding:12px; color:var(--ink-soft); font-size:13px; }
   .small{ font-size:11px; color:var(--ink-faint); }
+
+  /* three-state theme switch — floats clear of each page's own header */
+  #themeToggle{position:fixed;top:10px;right:10px;z-index:9999;display:flex;align-items:center;gap:6px;
+    padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    font:inherit;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);opacity:.92}
+  #themeToggle:hover{opacity:1}
+  @media (max-width:420px){ #themeToggle{top:6px;right:6px;padding:5px 8px;font-size:11px} }
 </style>
 </head>
 <body>
@@ -166,6 +193,33 @@ async function load(){
   render();
 }
 load();
+</script>
+<script>
+/* Three-state theme switch: system -> light -> dark -> system.
+   "system" removes the attribute so the prefers-color-scheme media query
+   takes over again; the other two pin it explicitly. */
+(function(){
+  var KEY='enp-theme';
+  var order=['system','light','dark'];
+  var faces={system:'🖥️ System',light:'☀️ Light',dark:'🌙 Dark'};
+  function current(){ try{ return localStorage.getItem(KEY)||'system'; }catch(e){ return 'system'; } }
+  function apply(mode){
+    if(mode==='system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme',mode);
+    try{ mode==='system' ? localStorage.removeItem(KEY) : localStorage.setItem(KEY,mode); }catch(e){}
+    var b=document.getElementById('themeToggle');
+    if(b){ b.textContent=faces[mode]; b.setAttribute('aria-label','Theme: '+mode+' (click to change)'); }
+  }
+  function mount(){
+    if(document.getElementById('themeToggle')) return;
+    var b=document.createElement('button');
+    b.id='themeToggle'; b.type='button'; b.title='Switch theme';
+    b.onclick=function(){ apply(order[(order.indexOf(current())+1)%order.length]); };
+    document.body.appendChild(b);
+    apply(current());
+  }
+  document.readyState==='loading' ? document.addEventListener('DOMContentLoaded',mount) : mount();
+})();
 </script>
 </body>
 </html>

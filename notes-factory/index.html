@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Notes Factory</title>
+<script>
+/* Applied before paint so a saved theme never flashes the wrong colours. */
+(function(){try{var t=localStorage.getItem('enp-theme');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
 <style>
   :root{
     color-scheme: light dark;
@@ -17,7 +22,7 @@
     --radius:16px; --radius-sm:11px;
   }
   @media (prefers-color-scheme:dark){
-    :root{
+    :root:not([data-theme="light"]){
       --paper:#0B0C0F; --card:#16171C; --card-2:#1B1C22; --ink:#F2F2F5; --ink-soft:#93959E;
       --line:#26272E; --line-soft:#1E1F25;
       --accent:#7677F4; --accent-ink:#9A9BFF; --accent-bg:#1E1E3A; --on-accent:#0B0C0F;
@@ -26,6 +31,16 @@
       --warn:#E3A733; --warn-bg:#2C2107;
       --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
     }
+  }
+  /* explicit choice from the theme switch wins over the OS setting */
+  :root[data-theme="dark"]{
+      --paper:#0B0C0F; --card:#16171C; --card-2:#1B1C22; --ink:#F2F2F5; --ink-soft:#93959E;
+      --line:#26272E; --line-soft:#1E1F25;
+      --accent:#7677F4; --accent-ink:#9A9BFF; --accent-bg:#1E1E3A; --on-accent:#0B0C0F;
+      --ok:#33C288; --ok-bg:#0F2A20;
+      --bad:#FF6B5E; --bad-bg:#2E1613;
+      --warn:#E3A733; --warn-bg:#2C2107;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
@@ -129,6 +144,13 @@
   .pstep a{color:var(--accent);font-weight:600;text-decoration:none}
   .pstep a:hover{text-decoration:underline}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* three-state theme switch — floats clear of each page's own header */
+  #themeToggle{position:fixed;top:10px;right:10px;z-index:9999;display:flex;align-items:center;gap:6px;
+    padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    font:inherit;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);opacity:.92}
+  #themeToggle:hover{opacity:1}
+  @media (max-width:420px){ #themeToggle{top:6px;right:6px;padding:5px 8px;font-size:11px} }
 </style>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#F7F7F9" media="(prefers-color-scheme: light)">
@@ -2239,6 +2261,33 @@ function renderBacklogResults(rows){
 
 restoreDraftIfAny();
 render();
+</script>
+<script>
+/* Three-state theme switch: system -> light -> dark -> system.
+   "system" removes the attribute so the prefers-color-scheme media query
+   takes over again; the other two pin it explicitly. */
+(function(){
+  var KEY='enp-theme';
+  var order=['system','light','dark'];
+  var faces={system:'🖥️ System',light:'☀️ Light',dark:'🌙 Dark'};
+  function current(){ try{ return localStorage.getItem(KEY)||'system'; }catch(e){ return 'system'; } }
+  function apply(mode){
+    if(mode==='system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme',mode);
+    try{ mode==='system' ? localStorage.removeItem(KEY) : localStorage.setItem(KEY,mode); }catch(e){}
+    var b=document.getElementById('themeToggle');
+    if(b){ b.textContent=faces[mode]; b.setAttribute('aria-label','Theme: '+mode+' (click to change)'); }
+  }
+  function mount(){
+    if(document.getElementById('themeToggle')) return;
+    var b=document.createElement('button');
+    b.id='themeToggle'; b.type='button'; b.title='Switch theme';
+    b.onclick=function(){ apply(order[(order.indexOf(current())+1)%order.length]); };
+    document.body.appendChild(b);
+    apply(current());
+  }
+  document.readyState==='loading' ? document.addEventListener('DOMContentLoaded',mount) : mount();
+})();
 </script>
 </body>
 </html>
