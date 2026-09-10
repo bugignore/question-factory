@@ -202,7 +202,7 @@
 
   <fieldset id="filePickWrap" style="display:none;margin-top:14px">
     <legend>Manual file picker (only needed if the automatic load above failed)</legend>
-    <p class="hint" style="margin-top:0">Pick <code>MASTER-PROMPT-ExamNotesPDF_v12.md</code> from the repo root — only needed when updating a Note (Long Posts don't use a separate master-prompt file).</p>
+    <p class="hint" style="margin-top:0">Pick <code>MASTER-PROMPT-ExamNotesPDF_v13.md</code> from the repo root — only needed when updating a Note (Long Posts don't use a separate master-prompt file).</p>
     <input type="file" id="masterPromptFile" accept=".md">
   </fieldset>
 </section>
@@ -904,7 +904,7 @@ Publisher Notes copied field-for-field incl. density line?                      
    never edited, this is a copy) ================= */
 async function loadMasterPrompt(){
   if(masterPromptText) return masterPromptText;
-  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v12.md'];
+  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v13.md'];
   let lastErr;
   for(const url of candidates){
     try{
@@ -917,7 +917,7 @@ async function loadMasterPrompt(){
   const hint = location.protocol === 'file:'
     ? 'This page was opened straight from the folder (file://), where browsers block reading other files automatically.'
     : 'Could not load the master prompt file from the repo root ('+(lastErr?lastErr.message:'')+').';
-  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v12.md manually — then tap "Build update prompt" again.');
+  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v13.md manually — then tap "Build update prompt" again.');
 }
 function notesOutputContract(){
   return `
@@ -1337,10 +1337,11 @@ function parseResponse(raw, contentType){
   const bodyResult = extractBody(raw);
   const pubResult = extractPublisherNotes(raw, bodyResult.endIdx);
   const cleanedBody = stripHtmlComments(bodyResult.bodyHtml);
-  // Notes are hand-written styled HTML (no {* type *} block tags) — only
-  // long posts use the block-tag system, so only expand blocks for those.
-  const isNote = contentType === 'note';
-  const blockResult = isNote ? { html: cleanedBody, blockCount: 0, unclosedCount: 0 } : expandLongPostBlocks(cleanedBody);
+  // As of MASTER-PROMPT-ExamNotesPDF_v13, notes use the same {* type: title *}
+  // block-tag system long posts already used — expandLongPostBlocks() passes
+  // plain HTML through untouched when it finds no block tags, so this also
+  // stays back-compatible with pre-v13 notes (hand-written HTML).
+  const blockResult = expandLongPostBlocks(cleanedBody);
   const result = {
     seo: seoResult.seo,
     bodyHtml: blockResult.html,
@@ -1358,8 +1359,8 @@ function parseResponse(raw, contentType){
   if(!result.seo.imagePrompt) warnings.push('Image generation prompt missing — fill in manually if you want one.');
   if(!result.bodyHtml || result.bodyHtml.length < 500) warnings.push('Notes body looks too short or missing — re-check the paste, or edit it manually on the next step.');
   if(result.truncated) warnings.push('The reply looks CUT OFF midway (no closing marker found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
-  if(!isNote && blockResult.blockCount === 0) warnings.push('No {* type: title *} block tags were found in the body — it was passed through as-is. If the AI wrote plain HTML instead of block tags, either re-run with the block-tag reminder or edit the body manually on the next step.');
-  if(!isNote && blockResult.unclosedCount > 0) warnings.push(`${blockResult.unclosedCount} block(s) were missing an explicit {* END *} — auto-closed at the next marker (or end of body). Double-check no content got merged into the wrong block.`);
+  if(blockResult.blockCount === 0) warnings.push('No {* type: title *} block tags were found in the body — it was passed through as-is (fine for a pre-v13 note reply written as plain HTML; re-check if you expected block tags).');
+  if(blockResult.unclosedCount > 0) warnings.push(`${blockResult.unclosedCount} block(s) were missing an explicit {* END *} — auto-closed at the next marker (or end of body). Double-check no content got merged into the wrong block.`);
   if(seoResult.method==='label-text') warnings.push('SEO fields: no JSON block found — read from the plain labeled panel instead. Double-check every field.');
   if(bodyResult.method==='h2-scan') warnings.push('Notes body: no marker comments found — guessed the body by scanning from the first <h2> to the next recognizable end-of-notes marker. Double-check the body did not get cut short or include trailing text.');
   result.warnings = warnings;
