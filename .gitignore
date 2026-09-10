@@ -1,4 +1,6 @@
 node_modules/
+Notes-Automate/debug-replies/
+Notes-Automate/__pycache__/
 
 # Retired/superseded local working data (old download-tool test runs, a raw
 # text backup) — never commit. The active book-input folder is

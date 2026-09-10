@@ -1,8 +1,9 @@
 // Ported from long-post-factory/index.html (slugify, extractSEO, extractBody,
 // extractPublisherNotes, stripHtmlComments, expandLongPostBlocks,
 // parseResponse). Keep byte-for-byte in sync with that file — this is what
-// makes an AI reply produced by generate-long-post.mjs parse into the exact
-// same pending-long-posts/<slug>.json shape the manual tool produces.
+// makes an AI reply captured by Notes-Automate/run_pipeline.py (via
+// validate-bundle.mjs) parse into the exact same pending-long-posts/<slug>.json
+// shape the manual browser tool produces.
 
 export function slugify(s) {
   return String(s || '').toLowerCase().trim()
@@ -15,14 +16,21 @@ function stripFences(s) {
 }
 
 export function extractSEO(raw) {
-  let m = raw.match(/<<<SEO_JSON>>>([\s\S]*?)<<<END_SEO_JSON>>>/);
-  if (m) {
+  // Use the LAST sentinel occurrence, not the first: when this reply was
+  // captured from a full chat page (automation), the user's own pasted
+  // prompt - including its OUTPUT FORMAT section, which shows these same
+  // sentinels around placeholder/example text - is often echoed back
+  // (file-attachment preview, quote, etc.) before the real reply. The
+  // actual answer is always the last occurrence in document order.
+  const sentinelMatches = [...raw.matchAll(/<<<SEO_JSON>>>([\s\S]*?)<<<END_SEO_JSON>>>/g)];
+  if (sentinelMatches.length) {
+    const m = sentinelMatches[sentinelMatches.length - 1];
     try { return { seo: JSON.parse(stripFences(m[1])), method: 'sentinel-json' }; } catch (e) { /* fall through */ }
   }
-  const jsonFenceRe = /```json([\s\S]*?)```/gi;
-  while ((m = jsonFenceRe.exec(raw))) {
+  const jsonFenceMatches = [...raw.matchAll(/```json([\s\S]*?)```/gi)];
+  for (let i = jsonFenceMatches.length - 1; i >= 0; i--) {
     try {
-      const obj = JSON.parse(m[1].trim());
+      const obj = JSON.parse(jsonFenceMatches[i][1].trim());
       if (obj && typeof obj === 'object' && (obj.focusKeyword || obj.seoTitle || obj.slug)) {
         return { seo: obj, method: 'json-fence' };
       }
@@ -47,12 +55,19 @@ export function extractSEO(raw) {
 }
 
 export function extractBody(raw) {
-  let m = raw.match(/<<<NOTES_BODY_HTML>>>([\s\S]*?)(?:<<<END_NOTES_BODY_HTML>>>|$)/);
-  if (m) {
+  // Last occurrence wins - see the note in extractSEO() above.
+  const sentinelMatches = [...raw.matchAll(/<<<NOTES_BODY_HTML>>>([\s\S]*?)<<<END_NOTES_BODY_HTML>>>/g)];
+  if (sentinelMatches.length) {
+    const m = sentinelMatches[sentinelMatches.length - 1];
     const html = stripFences(m[1]).trim();
-    if (html) return { bodyHtml: html, method: 'sentinel-html', cutOff: raw.indexOf('<<<END_NOTES_BODY_HTML>>>') === -1, endIdx: m.index + m[0].length };
+    if (html) return { bodyHtml: html, method: 'sentinel-html', cutOff: false, endIdx: m.index + m[0].length };
   }
-  m = raw.match(/<!--\s*NOTES BODY START\s*-->([\s\S]*?)<!--\s*NOTES BODY END\s*-->/i);
+  const lastOpenIdx = raw.lastIndexOf('<<<NOTES_BODY_HTML>>>');
+  if (lastOpenIdx !== -1) {
+    const html = stripFences(raw.slice(lastOpenIdx + '<<<NOTES_BODY_HTML>>>'.length)).trim();
+    if (html) return { bodyHtml: html, method: 'sentinel-html', cutOff: true, endIdx: raw.length };
+  }
+  let m = raw.match(/<!--\s*NOTES BODY START\s*-->([\s\S]*?)<!--\s*NOTES BODY END\s*-->/i);
   if (m) {
     const html = stripFences(m[1]).trim();
     if (html) return { bodyHtml: html, method: 'body-comments', cutOff: false, endIdx: m.index + m[0].length };
@@ -69,9 +84,16 @@ export function extractBody(raw) {
 }
 
 export function extractPublisherNotes(raw, bodyEndIdx) {
-  let m = raw.match(/<<<PUBLISHER_NOTES>>>([\s\S]*?)(?:<<<END_PUBLISHER_NOTES>>>|$)/);
-  if (m) return { publisherNotes: stripFences(m[1]).trim(), found: true };
-  m = raw.match(/===\s*PUBLISHER NOTES\s*===([\s\S]*?)(?:```|$)/i);
+  // Last occurrence wins - see the note in extractSEO() above.
+  const sentinelMatches = [...raw.matchAll(/<<<PUBLISHER_NOTES>>>([\s\S]*?)<<<END_PUBLISHER_NOTES>>>/g)];
+  if (sentinelMatches.length) {
+    return { publisherNotes: stripFences(sentinelMatches[sentinelMatches.length - 1][1]).trim(), found: true };
+  }
+  const lastOpenIdx = raw.lastIndexOf('<<<PUBLISHER_NOTES>>>');
+  if (lastOpenIdx !== -1) {
+    return { publisherNotes: stripFences(raw.slice(lastOpenIdx + '<<<PUBLISHER_NOTES>>>'.length)).trim(), found: true };
+  }
+  let m = raw.match(/===\s*PUBLISHER NOTES\s*===([\s\S]*?)(?:```|$)/i);
   if (m) return { publisherNotes: ('=== PUBLISHER NOTES ===' + m[1]).trim(), found: true };
   const tail = bodyEndIdx < raw.length ? raw.slice(bodyEndIdx).trim() : '';
   return { publisherNotes: tail, found: tail.length > 0 };

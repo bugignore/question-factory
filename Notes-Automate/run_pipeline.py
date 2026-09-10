@@ -38,14 +38,17 @@ from patchright.sync_api import sync_playwright, Page
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AUTOMATION_DIR = REPO_ROOT / "automation"
+AUTOMATION_SRC_DIR = AUTOMATION_DIR / "src"
 PENDING_DIR = REPO_ROOT / "pending-long-posts"
 PUBLISHED_INDEX = REPO_ROOT / "published-long-posts" / "index.json"
 
 CSV_PATH = Path(__file__).parent / "input sylabuss" / "BPSC-TRE-4-Primary-Teacher-SEO-Topics-Hindi-v2.csv"
+DEBUG_REPLIES_DIR = Path(__file__).parent / "debug-replies"
 
 SOURCE_USER_DATA_ROOT = Path.home() / "AppData" / "Local" / "Google" / "Chrome" / "User Data"
 CLONE_ROOT = Path.home() / "AppData" / "Local" / "NotesAutomateChromeProfile"
 PROFILE_DIR = os.environ.get("CHROME_PROFILE_DIR", "Profile 14")  # missku35@gmail.com
+DEEPSEEK_ACCOUNT_EMAIL = os.environ.get("DEEPSEEK_ACCOUNT_EMAIL", "missku35@gmail.com")
 FORCE_RECLONE = os.environ.get("FORCE_RECLONE") == "1"
 IGNORE_PATTERNS = shutil.ignore_patterns("Singleton*", "lockfile", "*.lock", "LOCK")
 
@@ -139,7 +142,7 @@ def is_duplicate(topic, exam, published_slugs, pending_pairs) -> bool:
 
 def run_node(script: str, args: list, stdin_text: str = None) -> str:
     result = subprocess.run(
-        ["node", str(AUTOMATION_DIR / script), *args],
+        ["node", str(AUTOMATION_SRC_DIR / script), *args],
         input=stdin_text, capture_output=True, text=True, encoding="utf-8",
         cwd=str(AUTOMATION_DIR),
     )
@@ -165,9 +168,9 @@ def validate_and_bundle(raw_reply, topic, exam, subject, hindi_pct) -> dict:
 
 # ---------------------------------------------------------------- chrome --
 
-def ensure_clone() -> Path:
+def ensure_clone(force: bool = False) -> Path:
     clone_profile_dir = CLONE_ROOT / PROFILE_DIR
-    if clone_profile_dir.exists() and not FORCE_RECLONE:
+    if clone_profile_dir.exists() and not FORCE_RECLONE and not force:
         print(f"Using existing profile clone: {clone_profile_dir}")
         return CLONE_ROOT
     print(f"Cloning profile '{PROFILE_DIR}' into {CLONE_ROOT} ...")
@@ -177,6 +180,28 @@ def ensure_clone() -> Path:
                      ignore=IGNORE_PATTERNS, dirs_exist_ok=True)
     print("Clone ready.")
     return CLONE_ROOT
+
+
+def detect_profile_email(user_data_root: Path) -> str:
+    """Reads the Chrome profile's own account metadata (Local State ->
+    profile.info_cache[<profile dir>].user_name) - no browser needed."""
+    local_state_path = user_data_root / "Local State"
+    try:
+        data = json.loads(local_state_path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    entry = data.get("profile", {}).get("info_cache", {}).get(PROFILE_DIR, {})
+    return (entry.get("user_name") or "").strip()
+
+
+def ensure_correct_chrome_profile(user_data_root: Path) -> bool:
+    found_email = detect_profile_email(user_data_root)
+    if found_email.lower() == DEEPSEEK_ACCOUNT_EMAIL.lower():
+        print(f"Chrome profile confirmed: {PROFILE_DIR} = {found_email}")
+        return True
+    print(f"  Expected Chrome profile '{PROFILE_DIR}' signed in as "
+          f"'{DEEPSEEK_ACCOUNT_EMAIL}', found '{found_email or '(no account info found)'}'.")
+    return False
 
 
 def jitter(a, b):
@@ -322,6 +347,18 @@ def main():
         return
 
     user_data_root = ensure_clone()
+    if not ensure_correct_chrome_profile(user_data_root):
+        print("  Re-cloning Chrome profile from the source and rechecking...")
+        user_data_root = ensure_clone(force=True)
+        if not ensure_correct_chrome_profile(user_data_root):
+            raise SystemExit(
+                f"Chrome profile '{PROFILE_DIR}' is not signed into the Google account "
+                f"{DEEPSEEK_ACCOUNT_EMAIL}, even after re-cloning. Open the REAL Chrome "
+                f"profile '{PROFILE_DIR}' (not the clone under {CLONE_ROOT}), sign into "
+                f"that Google account (and make sure DeepSeek is logged in there too), "
+                f"then re-run."
+            )
+
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             str(user_data_root), channel="chrome", headless=False,
@@ -357,6 +394,10 @@ def run_topics(topics, published_slugs, pending_pairs, context, dry_run: bool):
             print(f"  HARD FAIL — skipping this topic:")
             for f in result["hardFails"]:
                 print(f"    - {f}")
+            debug_path = DEBUG_REPLIES_DIR / f"{i:03d}-{slugify(topic)[:60]}.txt"
+            DEBUG_REPLIES_DIR.mkdir(parents=True, exist_ok=True)
+            debug_path.write_text(raw_reply, encoding="utf-8")
+            print(f"  Raw reply saved for debugging: {debug_path}")
             failed += 1
             continue
 
