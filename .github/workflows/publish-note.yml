@@ -115,8 +115,15 @@ jobs:
           mkdir -p published-notes
           failed=0
 
-          for f in "${files[@]}"; do
-            [ -f "$f" ] || { echo "::warning::$f not found, skipping"; continue; }
+          # Everything that touches one file lives in this function, called as
+          # an `if` condition below. This is deliberate, not cosmetic: bash's
+          # `set -e` explicitly exempts a command used as an if/while condition
+          # from aborting the script on failure — so ANY internal failure here
+          # (a jq error, an unexpected WordPress response, a future bug nobody
+          # anticipated) makes ONLY this one file fail; it can never take down
+          # the whole batch or leave later files unprocessed.
+          process_one(){
+            local f="$1" slug
             slug="$(basename "$f" .json)"
             echo "── Processing $slug ──"
 
@@ -133,14 +140,13 @@ jobs:
             if [ -z "$update_post_id" ] && [ -f "published-notes/$slug.json" ]; then
               echo "::warning::$slug already published earlier (published-notes/$slug.json exists) — skipping to avoid a duplicate draft. Delete that file first if you really want to publish again, or use notes-factory's update flow to carry the postId forward."
               git rm -q "$f"
-              continue
+              return 0
             fi
 
             # validate the JSON before touching WordPress
             if ! jq -e '.seo.seoTitle and .seo.slug and .bodyHtml' "$f" >/dev/null 2>&1; then
               echo "::error::$f is not valid — needs seo.seoTitle, seo.slug and bodyHtml. Leaving it in pending-notes/."
-              failed=1
-              continue
+              return 1
             fi
 
             # Resolve exam/subject taxonomy term IDs for this note (see the maps above).
@@ -290,16 +296,35 @@ jobs:
             else
               echo "::error::WordPress rejected $slug (HTTP $http_code, method $wp_method). Response follows. File stays in pending-notes/ — fix the cause and re-run this workflow from the Actions tab."
               cat /tmp/wp-response.json || true
+              return 1
+            fi
+          }
+
+          for f in "${files[@]}"; do
+            [ -f "$f" ] || { echo "::warning::$f not found, skipping"; continue; }
+            if ! process_one "$f"; then
+              slug="$(basename "$f" .json)"
+              echo "::error::Unexpected failure while processing $slug — see log above. Continuing with the remaining files rather than aborting the whole batch."
               failed=1
             fi
           done
 
-          # commit whatever succeeded, even if something else failed
+          # commit whatever succeeded, even if something else failed. A push
+          # can fail on a real race (another workflow run pushed in between) —
+          # retry once with a rebase-pull before giving up, since losing an
+          # otherwise-successful publish to a transient push race would be
+          # exactly the kind of failure this refactor exists to eliminate.
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "Publish note(s) to WordPress as draft [skip ci]"
-            git push
+            if ! git push; then
+              echo "::warning::git push rejected (likely a concurrent run) — retrying once after a rebase pull."
+              if ! git pull --rebase origin main || ! git push; then
+                echo "::error::git push still failed after retry. The WordPress posts above ARE already live/drafted — only the repo's published-notes/ bookkeeping failed to commit. Re-run this workflow, or commit manually, to fix the bookkeeping; do not re-publish."
+                failed=1
+              fi
+            fi
           fi
 
           exit $failed
