@@ -479,7 +479,11 @@ function initSelectors(){
   examList.innerHTML = EXAM_SUGGESTIONS.map(e=>`<option value="${e}"></option>`).join('');
   renderRefUrlList();
 }
-initSelectors();
+// NOTE: initSelectors() is invoked *below* the reference-source registry, not
+// here — it calls renderRefUrlList(), which reads the REFERENCE_SOURCES_*
+// consts. Calling it before those declarations throws a temporal-dead-zone
+// ReferenceError that aborts the rest of this script, leaving `state`
+// undefined while the hoisted handlers stay clickable.
 
 /* ---------- reference-source URL registry (§6 RAG prompt slot) ----------
    Curated, whitelisted (HARD BAN 6 domains only) official reference URLs,
@@ -582,6 +586,9 @@ Use these as supporting material where genuinely relevant to TOPIC — same whit
 ${lines.join('\n')}
 `;
 }
+
+// Safe to run now that the REFERENCE_SOURCES_* consts above are initialised.
+initSelectors();
 
 /* ---------- navigation ---------- */
 var cur = 0;
