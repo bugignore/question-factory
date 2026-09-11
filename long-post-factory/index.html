@@ -225,8 +225,11 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 <!-- STEP 2 -->
 <section class="step" id="step1">
   <h2>2 · Paste the AI's reply</h2>
-  <p class="hint">Paste the whole reply from DeepSeek/ChatGPT/Claude. The parser reads the machine-readable markers first, and falls back to reading the visible SEO panel + HTML if a model ignored them — nothing is ever a dead end. This prompt asks the AI to teach the topic as thoroughly as it genuinely needs, which can run long, so on a phone the AI app itself may split its answer across several messages — that's expected, not an error. Paste each chunk here as it arrives, tick "This is a continuation," and tap Parse again after every chunk; the last chunk should end with the <code>&lt;&lt;&lt;END_PUBLISHER_NOTES&gt;&gt;&gt;</code> marker.</p>
+  <p class="hint">Paste the whole reply from DeepSeek/ChatGPT/Claude — it should be plain Markdown (frontmatter + <code>##</code> headings + fenced <code>```type</code> blocks, no HTML, no <code>{* *}</code> tags). The parser reads that format first, and falls back to the older machine-readable markers or a plain labeled panel if a model used those instead — nothing is ever a dead end. This prompt asks the AI to teach the topic as thoroughly as it genuinely needs, which can run long, so on a phone the AI app itself may split its answer across several messages — that's expected, not an error. Paste each chunk here as it arrives, tick "This is a continuation," and tap Parse again after every chunk; the last chunk should end with the <code>&lt;!-- PUBLISHER NOTES --&gt;</code> section.</p>
   <textarea id="rawIn" style="min-height:220px" placeholder="Paste the full AI reply here…"></textarea>
+  <label class="btn ghost" style="display:inline-block;cursor:pointer;margin-top:8px">📁 Upload a .md file instead
+    <input type="file" id="rawInFile" accept=".md,.markdown,.txt" style="display:none" onchange="loadRawInFromFile(this)">
+  </label>
   <label style="font-weight:500"><input type="checkbox" id="appendMode" style="width:auto;margin-right:6px">This is a continuation — add it to what I already pasted (AI stopped midway)</label>
   <button class="btn" onclick="tryRun(parseAndGo,this)">🔎 Parse</button>
   <button class="btn ghost" onclick="tryRun(copyContinue,this)">📋 Copy "continue" prompt (AI stopped midway)</button>
@@ -1733,6 +1736,24 @@ function copyContinue(btn){
 - Resume mid-paragraph or mid-fenced-block exactly where you stopped, inside a new \`\`\`markdown code fence — same rules as before (plain Markdown, no HTML, fenced \`\`\`type blocks for cards).
 - When the body (through FAQ) is complete, append the <!-- PUBLISHER NOTES --> sentinel and the publisher notes, same as a normal single-pass reply.`;
   doCopy(t, btn, msg('parseMsg'), '"Continue" prompt copied — paste it in the SAME chat, then paste the new reply here with the continuation checkbox ticked.');
+}
+// Reads a locally saved .md/.txt reply straight into the textarea — an
+// alternative to pasting, not a replacement for it. Appends instead of
+// replacing when "This is a continuation" is already ticked, so uploading a
+// second chunk file behaves the same as pasting a second chunk would.
+function loadRawInFromFile(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const ta = document.getElementById('rawIn');
+    const append = document.getElementById('appendMode').checked && ta.value.trim();
+    ta.value = append ? (ta.value + '\n' + reader.result) : reader.result;
+    show(msg('parseMsg'), 'ok', `Loaded "${file.name}" (${(file.size/1024).toFixed(1)} KB) into the paste box — review it, then tap Parse.`);
+  };
+  reader.onerror = () => show(msg('parseMsg'), 'bad', `Could not read "${file.name}" — try pasting the content instead.`);
+  reader.readAsText(file, 'utf-8');
+  input.value = ''; // allow re-selecting the same filename later (e.g. after re-saving it)
 }
 function parseAndGo(){
   let raw = document.getElementById('rawIn').value;
