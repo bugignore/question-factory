@@ -62,7 +62,7 @@ AUTOMATION_SRC_DIR = AUTOMATION_DIR / "src"
 PENDING_DIR = REPO_ROOT / "pending-long-posts"
 PUBLISHED_INDEX = REPO_ROOT / "published-long-posts" / "index.json"
 
-CSV_PATH = Path(__file__).parent / "input sylabuss" / "BPSC-TRE-4-Primary-Teacher-SEO-Topics-Hindi-v2.csv"
+CSV_PATH = REPO_ROOT / "Automation" / "input sylabuss" / "BPSC-TRE-4-Primary-Teacher-SEO-Topics-Hindi-v2.csv"
 DEBUG_REPLIES_DIR = Path(__file__).parent / "debug-replies"
 
 SOURCE_USER_DATA_ROOT = Path.home() / "AppData" / "Local" / "Google" / "Chrome" / "User Data"

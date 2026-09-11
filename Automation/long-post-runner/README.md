@@ -9,7 +9,7 @@ via [`patchright`](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python)
 fingerprint gets flagged by DeepSeek's bot detection).
 
 ```
-CSV topic list (input sylabuss/*.csv)
+CSV topic list (Automation/input sylabuss/*.csv)
         │
         ▼
 Automation/core/src/build-automation-prompt.mjs   ← Node, builds the exact same
@@ -68,7 +68,7 @@ python run_pipeline.py --dry-run --limit 3   # build prompts only, nothing sent
 python run_pipeline.py --start 0 --limit 5   # the real thing, 5 topics starting at row 0
 ```
 
-- `--start N` / `--limit N` — slice into the CSV (`input sylabuss/*.csv`;
+- `--start N` / `--limit N` — slice into the CSV (`Automation/input sylabuss/*.csv`;
   columns: क्रमांक, subject, topic, exam, post/class, content type).
 - Skips a topic outright if it's already in `published-long-posts/` or
   already sitting in `pending-long-posts/` (see `is_duplicate()`).

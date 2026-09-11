@@ -750,10 +750,11 @@ function updateLangMixLabel(){
 /* Builds the entire prompt in-page — no master-prompt file is fetched for
    this pipeline. A short exam-persona intro (see EXAM_PROFILES above)
    replaces the Notes Factory prompt's generic "senior SUBJECT expert" role
-   line, and the visual-styling rules are replaced by the BLOCK-TAG SYSTEM
-   since this pipeline's own parser (expandLongPostBlocks, below) does the
-   HTML styling instead of the AI — that's most of what keeps this prompt
-   shorter than the sibling notes-factory master prompt. */
+   line, and the visual-styling rules are replaced by the MARKDOWN OUTPUT
+   SYSTEM since this pipeline's own parser (renderLongPostMarkdown, below)
+   does the HTML styling instead of the AI — plain Markdown, no hand-written
+   HTML, no custom block-tag syntax, so any model (ChatGPT/Claude/DeepSeek)
+   or a human copy-pasting by hand produces the same reliable input. */
 function buildLongPostPrompt(topic, examType, subject, hindiPercent, year){
   const profile = getExamProfile(examType);
   const seed = Array.from(topic+examType).reduce((a,c)=>a+c.charCodeAt(0),0) % 999 + 1;
@@ -778,7 +779,7 @@ EXAM-SPECIFIC ANGLE: ${profile.angle}
 
 ${buildTeachingLevelBlock(examType)}
 ## HARD BANS (never do these)
-1. No \`<script>\` tag anywhere. 2. No locked/blurred/paywalled content — everything visible. 3. **Never invent an exam-claim** — no invented PYQs, no "asked every year," no "most repeated," no predicted questions, no guaranteed marks, no percentage weightage without real evidence. Only state such a claim when evidence is actually available; when it is, distinguish **VERIFIED PYQ** (a real, sourced past question) from **PRACTICE QUESTION IN EXAM STYLE** (your own, honestly labeled as such) — never blur the two. 4. No unsourced numbers of any kind — cite it, soften it into an honest estimate, or delete it. 5. No keyword stuffing — but also no forcing the keyphrase in artificially; use it where it fits naturally (see SEO below). 6. No fabricated URLs — only the exam body's official domain, ncert.nic.in, cbseacademic.nic.in, indiacode.nic.in, education.gov.in, pib.gov.in, other .gov.in/.nic.in, or en.wikipedia.org. No \`href="#"\`. 7. **No hand-written styled HTML.** Every chunk of content is wrapped in a \`{* type: title *} ... {* END *}\` block per the BLOCK-TAG SYSTEM below — plain semantic tags (\`<p>\`, \`<strong>\`, \`<table>\`, \`<ol>\`/\`<li>\`, \`<sup>\`/\`<a>\`) are fine *inside* a block. **Diagrams are never hand-drawn** — describe them as JSON in a \`chart\` block and the publisher's renderer draws the SVG (see VISUALS); writing raw \`<svg>\` markup is a failure are fine *inside* a block, just never a styled \`<div>\` wrapper. 8. **No scaffolding from memory.** The SEO panel / Publisher Notes templates below are pipeline-parsed — copy field-for-field, line-for-line, never paraphrase or drop a field. 9. **No bare \`<h3>\`** anywhere you write one directly (e.g. the References heading) — always carry an inline style, exactly like every other raw tag you're allowed to write outside a block. 10. **Never merely summarize a source.** If NCERT/reference material is supplied (see RAG/SOURCES below), use it as evidence to extract facts from, then explain those facts in your own original, student-friendly language — copied-over source prose is a failure even if accurate.
+1. No \`<script>\` tag anywhere. 2. No locked/blurred/paywalled content — everything visible. 3. **Never invent an exam-claim** — no invented PYQs, no "asked every year," no "most repeated," no predicted questions, no guaranteed marks, no percentage weightage without real evidence. Only state such a claim when evidence is actually available; when it is, distinguish **VERIFIED PYQ** (a real, sourced past question) from **PRACTICE QUESTION IN EXAM STYLE** (your own, honestly labeled as such) — never blur the two. 4. No unsourced numbers of any kind — cite it, soften it into an honest estimate, or delete it. 5. No keyword stuffing — but also no forcing the keyphrase in artificially; use it where it fits naturally (see SEO below). 6. No fabricated URLs — only the exam body's official domain, ncert.nic.in, cbseacademic.nic.in, indiacode.nic.in, education.gov.in, pib.gov.in, other .gov.in/.nic.in, or en.wikipedia.org. No \`href="#"\`. 7. **No HTML at all, ever — plain Markdown only.** Every chunk of content is either plain Markdown (prose, \`##\` headings, lists, tables) or a fenced \`\`\`type code block per the MARKDOWN OUTPUT SYSTEM below. Never write \`<div>\`, \`<h2>\`, \`<table>\`, \`<p>\`, or any other tag. **Diagrams are never hand-drawn** — describe them as JSON in a \`\`\`chart block and the publisher's renderer draws the SVG (see VISUALS); writing raw \`<svg>\` markup is a failure. 8. **No scaffolding from memory.** The frontmatter / Publisher Notes templates below are pipeline-parsed — copy field-for-field, line-for-line, never paraphrase or drop a field. 9. **No hand-authored References heading styling or Table of Contents** — write \`## References\` as a plain Markdown heading like any other section; never hand-build a contents list or its links. 10. **Never merely summarize a source.** If NCERT/reference material is supplied (see RAG/SOURCES below), use it as evidence to extract facts from, then explain those facts in your own original, student-friendly language — copied-over source prose is a failure even if accurate.
 
 ## LANGUAGE (Hinglish, Hindi ${hindiPercent}% + English ${100-hindiPercent}%)
 Apply this ratio to explanations/tricks/teacher-talk/connecting prose only — key terms, definitions, and technical labels stay in English regardless. Never force tatsam Hindi or awkward transliteration. Banned words: delve, tapestry, crucial/pivotal role, holistic, seamless, robust, comprehensive guide, game-changer, unlock, "it is important to note", moreover, furthermore, अत्यंत महत्वपूर्ण, यह ध्यान देने योग्य है, निष्कर्षतः, "इस लेख में हम", "आइए जानते हैं". Vary sentence length/openers, never repeat a section-opener pattern back-to-back.
@@ -788,7 +789,7 @@ If NCERT corpus material or source URLs are supplied for this run, use them as e
 ${buildReferenceSourcesBlock(subject)}
 
 ## LENGTH AND DEPTH — no fixed target, no padding
-This is the **deep** version of the same educational design language as the site's shorter Notes — meaningfully longer and more thorough than a quick note, because it earns that length through real teaching value, not because a word count demands it. Write however long it genuinely takes to teach TOPIC properly for a ${profile.label} candidate — covering it shallowly to hit a page-length feel is a failure; padding with repetition, filler transitions, or restating a point in different words to hit a number is an equal and opposite failure. If you are genuinely running low on room mid-article, stop cleanly at the end of a complete block's \`{* END *}\` — the user will say "continue" and you resume exactly where you left off. Never cite token limits or "conciseness" as a reason to under-teach a topic; never cite a word-count target as a reason to over-write one.
+This is the **deep** version of the same educational design language as the site's shorter Notes — meaningfully longer and more thorough than a quick note, because it earns that length through real teaching value, not because a word count demands it. Write however long it genuinely takes to teach TOPIC properly for a ${profile.label} candidate — covering it shallowly to hit a page-length feel is a failure; padding with repetition, filler transitions, or restating a point in different words to hit a number is an equal and opposite failure. If you are genuinely running low on room mid-article, stop cleanly at the end of a complete paragraph or fenced block — the user will say "continue" and you resume exactly where you left off. Never cite token limits or "conciseness" as a reason to under-teach a topic; never cite a word-count target as a reason to over-write one.
 
 ## STRUCTURE — adapt it to the topic and subject, don't force a template
 Do not mechanically apply a fixed section architecture. Decide the best structure for THIS topic by asking, for each major concept: **Understand → Example → Confusion → Exam application → Remember** — not every concept needs all five lenses, and the order/weight should follow what the topic actually demands.
@@ -806,52 +807,54 @@ A typical run will still cover, in whatever order/weight the topic earns: why th
 
 **Self-check before finishing a section:** could this section be removed without reducing what the reader actually learns? If yes, cut it or fold it into something that earns its place.
 
-## BLOCK-TAG SYSTEM — choose the right block for each idea, never to fill a quota
-Wrap every chunk of content like this:
-\`\`\`
-{* type: Title text *}
-...plain content (prose, <p>, <table>, <svg>, <ol>, whatever the type needs)...
-{* END *}
-\`\`\`
-Lowercase \`type\`. Title after the colon is optional for most types (see below), required for \`h2\`/\`insight\`/\`faq\`. Omit the colon entirely for a bare \`{* type *}\` when no title is needed. **\`{* END *}\` is optional between blocks** — opening the next \`{* ... *}\` marker already closes the previous block, so you do not need to write END every time and nothing breaks if you omit it. Write \`{* END *}\` after your FINAL block so the article has a clean end. Blocks never nest. Never invent a type outside this list — unknown types render as unstyled plain text.
+## MARKDOWN OUTPUT SYSTEM — choose the right construct for each idea, never to fill a quota
+Most of the article is just Markdown, no wrapper needed:
+- \`##\` starts a genuinely new section — this is your only section-heading level. The publisher builds the Table of Contents from these automatically, with working jump links — **never hand-write a TOC or a heading anchor**; you cannot know the ids the renderer generates, and hand-written ones have shipped broken (half the links dead in a real published article).
+- Ordinary paragraphs, \`**bold**\`, \`-\`/\`1.\` lists are just themselves.
+- A comparison that's genuinely easier as a table is a standard Markdown table (\`| col | col |\` / \`|---|---|\`) — auto-styled by the renderer. 2–3 columns read best; 4+ columns split into several small tables instead, since a wide table breaks on the phone screens most readers use.
+- A citation is \`[^N]\` inline, matched by a numbered entry under \`## References\`.
+- The article's featured image is handled entirely by the pipeline — never mention or embed one.
 
-Use the most effective representation for each idea — normal prose (\`plain\`) when explanation genuinely is the best format. Do not use a block merely to satisfy a quota, and do not force every block type into every article — a short, focused topic might genuinely need only a handful of blocks; a rich, comparison-heavy topic might need many. Let the content decide.
+For everything else, use a fenced code block whose language tag is the type, with an optional \`title="..."\` on the opening line:
+\`\`\`
+\`\`\`def title="Optional title text"
+...plain-text content...
+\`\`\`
+\`\`\`
+Lowercase language tag. Title is optional for most types (see below), required for \`insight\`/\`faq\`/\`chart\`. Blocks never nest. Never invent a type outside this list — unknown types render as unstyled plain text.
 
-| type | use it when | title |
+Use the most effective representation for each idea — a normal paragraph when explanation genuinely is the best format. Do not use a fenced block merely to satisfy a quota, and do not force every type into every article — a short, focused topic might genuinely need only a handful; a rich, comparison-heavy topic might need many. Let the content decide.
+
+| language tag | use it when | title |
 |---|---|---|
-| \`h2\` | starting a genuinely new section of the article | required |
 | \`def\` | a key definition needs its own space | optional (default "Definition") |
 | \`tip\` | a real study tip adds value | optional (default "Tip") |
 | \`exam\` | there's a genuine, specific exam-relevance point to flag | optional (default "Exam Point") |
-| \`question\` | practice genuinely helps learning here — PYQ or practice question + answer, labeled per HARD BAN 3 | optional (default "Question") |
+| \`question\` | practice genuinely helps learning here — inside, write plain labeled lines: \`Q:\`, \`Options:\` (numbered), \`Answer:\`, \`Explanation:\`, labeled per HARD BAN 3 | optional (default "Question") |
 | \`trick\` | a real mnemonic adds value — never invent a forced one just to fill this slot | optional (default "Memory Trick") |
 | \`mistake\` | a misconception is important enough to call out explicitly | optional (default "Mistake") |
 | \`summary\` | a section genuinely benefits from a closing recap | optional (default "Section Summary") |
-| \`revision\` | rapid-revision bullets near the end, if the topic suits quick recall | optional |
+| \`revision\` | rapid-revision bullets near the end, if the topic suits quick recall (plain \`-\` list inside) | optional |
 | \`insight\` | a deeper theoretical connection is worth drawing out | required — name it |
 | \`update\` | a dated, sourced news brief is genuinely relevant | optional |
-| \`toc\` | once, after the opening. **Leave the block EMPTY** — write \`{* toc *}\` then \`{* END *}\` with nothing between them. The publisher builds the contents list from your actual \`h2\` headings, with working jump links. Never hand-write the list or its \`href="#..."\` anchors — you cannot know the ids the renderer generates, and hand-written ones have shipped broken (half the links dead in a real published article) | optional |
 | \`faq\` | a real question a student would ask — one block per question | required — the question text |
-| \`table\` | a comparison is genuinely easier to read as a table than in prose — raw \`<table>\` markup; 2–3 columns fine, 4+ columns split into several small 2-column \`table\`/\`def\` blocks instead, since a wide table breaks on the phone screens most readers use | optional |
-| \`chart\` | a visual relationship — parallel categories, branching cases, a real chronology, or compared magnitudes — is genuinely easier to grasp than prose. Content is a small JSON spec, NOT drawing markup; see VISUALS below | yes — the diagram's title |
-| \`img\` | the article's one representative featured image — content is \`<img src="https://via.placeholder.com/700x350?text=Diagram" alt="[Focus Keyphrase] — concept overview" />\`, alt starts with the keyphrase | not used |
-| \`plain\` | ordinary prose that doesn't fit a card type — intro, connective paragraphs, References list | optional |
+| \`chart\` | a visual relationship — parallel categories, branching cases, a real chronology, or compared magnitudes — is genuinely easier to grasp than prose. Content is a small JSON spec, NOT drawing markup; see VISUALS below | required — the diagram's title |
 
-Ad slots: do not wrap in a block — leave a bare line \`[[AD]]\` at exactly 3 points spread across the article (early / middle / late, never bunched near the end, never the same trio of positions twice across different articles) — the publisher inserts the ad markup automatically. This is a placement/monetization requirement, unrelated to content quality.
+Ad slots: do not wrap in a fenced block — leave a bare line \`[[AD]]\` at exactly 3 points spread across the article (early / middle / late, never bunched near the end, never the same trio of positions twice across different articles) — the publisher inserts the ad markup automatically. This is a placement/monetization requirement, unrelated to content quality.
 
 **Vary block titles across sub-topics and across different articles** — don't let every \`def\` block default to the literal word "Definition" and every \`mistake\` block to "Mistake" throughout the whole piece; that reads templated. Pick titles that fit the specific content (e.g. "इसे ऐसे समझो", "Exam Point", "यहाँ गलती होती है", "Scoring Zone", "⚠️ ध्यान दें") and rotate naturally.
 
 ## VISUALS — you supply the DATA, the publisher draws the picture
-**You never write SVG, HTML or any styling for a visual.** You write a \`chart\` block whose
-content is a small JSON object describing what the diagram *means*, and the publisher's
+**You never write SVG, HTML or any styling for a visual.** You write a \`\`\`chart fenced block
+whose content is a small JSON object describing what the diagram *means*, and the publisher's
 renderer draws it — same palette, same rounded cards, same spacing, every time, on every
 article. This is why visuals on this site look consistent: they aren't hand-drawn per run.
 Getting the geometry right is not your job and hand-drawn SVG is a hard failure.
 
 \`\`\`
-{* chart: The title shown above the diagram *}
+\`\`\`chart title="The title shown above the diagram"
 {"kind":"grid","items":[{"label":"...","detail":"...","color":"blue"}]}
-{* END *}
+\`\`\`
 \`\`\`
 
 Pick the \`kind\` that matches the relationship you're actually showing:
@@ -907,23 +910,26 @@ Your goal is not maximum information density — it's maximum learning value per
 - Could any section be removed without reducing learning value? If yes, cut it.
 Revise weak parts before returning the final answer — this is not an extra step for the user, just something you do silently before printing.
 
-## OUTPUT FORMAT — exact order, nothing outside these three blocks, code-fenced (chat UIs render raw HTML visually, so the fence is what keeps it copyable as source — never skip it)
-Two extra SEO fields beyond the panel above: "imageAltText" (starts with the keyphrase, describes the featured image) and "imagePrompt" (a ready-to-paste AI image-gen prompt: loud, high-CTR YouTube-thumbnail style — exaggerated expression on a student/teacher character, bold saturated colors, thick outlines, 16:9, explicitly NO baked-in text).
+## OUTPUT FORMAT — ONE Markdown file, code-fenced (chat UIs render raw Markdown visually, so the fence is what keeps it copyable as source — never skip it)
+Two extra SEO fields beyond the frontmatter shape shown: "imageAltText" (starts with the keyphrase, describes the featured image) and "imagePrompt" (a ready-to-paste AI image-gen prompt: loud, high-CTR YouTube-thumbnail style — exaggerated expression on a student/teacher character, bold saturated colors, thick outlines, 16:9, explicitly NO baked-in text).
 
-<<<SEO_JSON>>>
-\`\`\`json
-{"focusKeyword":"...","seoTitle":"...","slug":"...","metaDescription":"...","h1":"...","imageAltText":"...","imagePrompt":"..."}
-\`\`\`
-<<<END_SEO_JSON>>>
+Output the entire file inside ONE fence, in this exact order — frontmatter, then the Markdown body, then a single \`<!-- PUBLISHER NOTES -->\` sentinel line (the one and only place any HTML-style syntax is allowed) followed by the publisher notes:
 
-<<<NOTES_BODY_HTML>>>
 \`\`\`
-(the entire block-tagged body — every chunk wrapped in {* type: title *} ... {* END *}, [[AD]] placeholders where you placed them, nothing removed, nothing summarized)
-\`\`\`
-<<<END_NOTES_BODY_HTML>>>
+\`\`\`markdown
+---
+focusKeyword: "..."
+seoTitle: "..."
+slug: "..."
+metaDescription: "..."
+h1: "..."
+imageAltText: "..."
+imagePrompt: "..."
+---
 
-<<<PUBLISHER_NOTES>>>
-\`\`\`
+(the entire Markdown body — ## sections, fenced \`\`\`type blocks, [[AD]] placeholders where you placed them, nothing removed, nothing summarized)
+
+<!-- PUBLISHER NOTES -->
 - Structure chosen for this topic and why (brief)
 - Sources consulted: [list]
 - Claims softened/omitted: [list — empty is suspicious, re-check]
@@ -932,21 +938,21 @@ Two extra SEO fields beyond the panel above: "imageAltText" (starts with the key
 - URLs needing manual verification: [list]
 - Approx. body word count: [N]
 \`\`\`
-<<<END_PUBLISHER_NOTES>>>
+\`\`\`
 
-If you run out of space, stop cleanly at the end of a complete block's \`{* END *}\` — the user will send "continue" and you resume exactly where you stopped, inside a new code fence, no repetition, no fresh introduction.
+If you run out of space, stop cleanly at the end of a complete paragraph or fenced block — the user will send "continue" and you resume exactly where you stopped, inside a new code fence, no repetition, no fresh introduction.
 
 ## FINAL CHECKS (qualitative — this is the SELF-EDIT pass above, confirm it was actually done)
 \`\`\`
-All 5 SEO fields byte-identical between panel and JSON; Title ≤60 chars, names the real topic?    YES/NO
+All 7 frontmatter fields present and consistent with the body; Title ≤60 chars, names the real topic?  YES/NO
 Every exam-specific claim (weightage/PYQ/prediction) evidence-based or honestly labeled/omitted?  YES/NO
-Every block closed with a literal {* END *}? Zero hand-written styled <div> outside a block?      YES/NO
+Zero HTML anywhere in the body — only Markdown and fenced \`\`\`type blocks? Every fence closed?    YES/NO
 Structure adapted to this specific topic/subject, not a fixed generic template?                   YES/NO
-Every visual (svg/table) earns its place — none decorative or forced to fill a quota?             YES/NO
+Every visual (chart/table) earns its place — none decorative or forced to fill a quota?           YES/NO
 Zero <script> tags; 3 [[AD]] markers placed, spread across the article, not bunched at the end?   YES/NO
 Zero locked/blurred/upsell content; premium-hint line appears once, naturally?                    YES/NO
 Reads like a teacher-created study resource, not a templated SEO article?                         YES/NO
-Publisher Notes copied field-for-field?                                                           YES/NO
+Publisher Notes copied field-for-field, below the <!-- PUBLISHER NOTES --> sentinel?               YES/NO
 \`\`\`
 
 **>>> NOW GENERATE THE LONG POST <<<**`;
@@ -1481,7 +1487,208 @@ function expandLongPostBlocks(raw){
   return { html: out, blockCount, unclosedCount };
 }
 
+/* ================= MARKDOWN PIPELINE =================
+   Current format: ONE Markdown file (YAML frontmatter + Markdown body +
+   an optional <!-- PUBLISHER NOTES --> tail) — no HTML, no {* type *} tags,
+   from any AI or a human pasting by hand. Everything below this comment,
+   up to parseResponse(), renders that file into the same styled cards the
+   old block-tag system produced (BLOCK_RENDERERS/renderChartBlock above are
+   reused unchanged). The legacy {* type *}/<<<SEO_JSON>>> extractors above
+   stay in place as a fallback inside parseResponse() for any older reply
+   still lying around — they are never used for new content. */
+
+// Strips ONLY a single fence wrapping the ENTIRE reply (first line and last
+// line are bare ``` or ```lang) — unlike stripFences() above, this must NOT
+// touch fences inside the body, since those are now real content (```def,
+// ```chart, etc.), not something to discard.
+function stripOuterFence(raw){
+  let s = String(raw||'').trim();
+  const lines = s.split(/\r?\n/);
+  if(lines.length > 2 && /^```[a-zA-Z]*\s*$/.test(lines[0]) && /^```\s*$/.test(lines[lines.length-1])){
+    return lines.slice(1,-1).join('\n').trim();
+  }
+  return s;
+}
+
+// Flat "key: value" YAML — the only shape the frontmatter ever needs.
+// Handles a double- or single-quoted value; bare values are used as-is.
+function parseFrontmatter(fmText){
+  const seo = {};
+  String(fmText||'').split(/\r?\n/).forEach(line=>{
+    const m = /^([a-zA-Z0-9_]+)\s*:\s*(.*)$/.exec(line);
+    if(!m) return;
+    let val = m[2].trim();
+    if(/^".*"$/.test(val)) val = val.slice(1,-1).replace(/\\"/g,'"');
+    else if(/^'.*'$/.test(val)) val = val.slice(1,-1).replace(/\\'/g,"'");
+    seo[m[1]] = val;
+  });
+  return seo;
+}
+
+// Finds the frontmatter block + splits the rest into body vs. publisher
+// notes. Returns null when the reply isn't in this format at all, so
+// parseResponse() can fall back to the legacy extractors.
+function extractMarkdownFile(raw){
+  const text = stripOuterFence(String(raw||''));
+  const fmMatch = /^---\s*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/.exec(text);
+  if(!fmMatch) return null;
+  const seo = parseFrontmatter(fmMatch[1]);
+  if(!seo.slug && !seo.seoTitle && !seo.focusKeyword) return null; // frontmatter shape didn't match ours
+  const after = text.slice(fmMatch[0].length);
+  const pubIdx = after.search(/<!--\s*PUBLISHER NOTES\s*-->/i);
+  const bodyMarkdown = (pubIdx===-1 ? after : after.slice(0,pubIdx)).trim();
+  const publisherNotes = pubIdx===-1 ? '' : after.slice(pubIdx).replace(/<!--\s*PUBLISHER NOTES\s*-->/i,'').trim();
+  return { seo, bodyMarkdown, publisherNotes, cutOff: pubIdx===-1 };
+}
+
+// Inline Markdown: escape raw HTML first (the AI must never emit any, but a
+// stray '<' from an unescaped example must not become a real tag), then
+// apply **bold**, *italic*, [^N] footnote refs, and [text](url) links.
+function renderInlineMarkdown(text){
+  return String(text||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,'$1<em>$2</em>')
+    .replace(/\[\^(\d+)\]/g,'<sup id="cite-$1"><a href="#ref-$1">[$1]</a></sup>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+
+function renderMarkdownTable(tableLines){
+  const parseRow = l => l.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(c=>c.trim());
+  const header = parseRow(tableLines[0]);
+  const rows = tableLines.slice(2).filter(l=>l.trim()).map(parseRow);
+  let html = '<div style="background:#f8fafc;border-radius:12px;overflow-x:auto;padding:8px 0;margin:14px 0;box-sizing:border-box;max-width:100%;">'
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px;color:#1e293b;min-width:320px;"><thead><tr style="background:#0f172a;color:#fff;">'
+    + header.map(h=>`<th style="padding:10px 12px;text-align:left;border:1px solid #e2e8f0;">${renderInlineMarkdown(h)}</th>`).join('') + '</tr></thead><tbody>';
+  rows.forEach((r,idx)=>{
+    html += `<tr style="background:${idx%2?'#f8fafc':'#fff'};">` + r.map(c=>`<td style="padding:10px 12px;border:1px solid #e2e8f0;">${renderInlineMarkdown(c)}</td>`).join('') + '</tr>';
+  });
+  return html + '</tbody></table></div>\n';
+}
+
+// Renders a slice of plain Markdown (no ## headings, no fenced blocks —
+// those are handled by the caller) into styled prose: paragraphs, lists,
+// tables. Used both for regular body prose and for the content inside a
+// fenced ```type block.
+function renderMarkdownProse(md){
+  const lines = String(md||'').split(/\r?\n/);
+  let html = '', i = 0;
+  while(i < lines.length){
+    const line = lines[i];
+    if(!line.trim()){ i++; continue; }
+    if(/^\|.*\|\s*$/.test(line) && lines[i+1] && /^\|?[\s:-]+\|[\s:|-]*$/.test(lines[i+1])){
+      const tableLines = [line, lines[i+1]]; let j = i+2;
+      while(j<lines.length && /^\|.*\|\s*$/.test(lines[j])){ tableLines.push(lines[j]); j++; }
+      html += renderMarkdownTable(tableLines);
+      i = j; continue;
+    }
+    if(/^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)){
+      const ordered = /^\s*\d+\.\s+/.test(line);
+      const items = []; let j = i;
+      while(j<lines.length && (ordered ? /^\s*\d+\.\s+/.test(lines[j]) : /^\s*[-*]\s+/.test(lines[j]))){
+        items.push(lines[j].replace(/^\s*(?:[-*]|\d+\.)\s+/, '')); j++;
+      }
+      const tag = ordered ? 'ol' : 'ul';
+      html += `<${tag} style="font-size:14px;line-height:1.8;color:#1e293b;padding-left:20px;margin:8px 0;">` + items.map(it=>`<li>${renderInlineMarkdown(it)}</li>`).join('') + `</${tag}>\n`;
+      i = j; continue;
+    }
+    const paraLines = [line]; let j = i+1;
+    while(j<lines.length && lines[j].trim() && !/^\s*[-*]\s+/.test(lines[j]) && !/^\s*\d+\.\s+/.test(lines[j]) && !/^\|.*\|\s*$/.test(lines[j])){
+      paraLines.push(lines[j]); j++;
+    }
+    html += `<p style="font-size:14px;line-height:1.6;color:#334155;margin:0 0 14px;">${paraLines.map(renderInlineMarkdown).join('<br>\n')}</p>\n`;
+    i = j;
+  }
+  return html;
+}
+
+// The main entry point: walks the body line by line, dispatching to the
+// heading/fence/prose handlers above, auto-builds the TOC from the actual
+// `##` headings present (never from anything the AI wrote), and inserts ad
+// slots at [[AD]] markers. Returns the same {html, blockCount} shape the old
+// expandLongPostBlocks() did, so parseResponse() doesn't need to care which
+// path produced it.
+function renderLongPostMarkdown(md){
+  const lines = String(md||'').split(/\r?\n/);
+  const tocHeadings = []; const tocSeen = Object.create(null);
+  for(const line of lines){
+    const hm = /^##\s+(.+)$/.exec(line);
+    if(!hm) continue;
+    let hid = headingSlug(hm[1].trim());
+    if(tocSeen[hid]){ tocSeen[hid] += 1; hid = hid + '-' + tocSeen[hid]; } else { tocSeen[hid] = 1; }
+    tocHeadings.push({ id: hid, title: hm[1].trim() });
+  }
+
+  let out = '', proseBuf = [], adIdx = 0, blockCount = 0, h2Idx = 0, tocInserted = false;
+  const flushProse = () => {
+    if(proseBuf.length){ out += renderMarkdownProse(proseBuf.join('\n')); proseBuf = []; }
+  };
+  let i = 0;
+  while(i < lines.length){
+    const line = lines[i];
+    if(/^\s*\[\[AD\]\]\s*$/.test(line)){
+      flushProse(); out += AD_SNIPPET_TEMPLATE(++adIdx) + '\n'; i++; continue;
+    }
+    const hm = /^##\s+(.+)$/.exec(line);
+    if(hm){
+      flushProse();
+      if(!tocInserted){ out = renderTocBlock('Table of Contents', tocHeadings, '') + '\n' + out; tocInserted = true; }
+      const title = hm[1].trim();
+      out += BLOCK_RENDERERS.h2(title, '', (tocHeadings[h2Idx++]||{}).id) + '\n';
+      i++; continue;
+    }
+    const fm = /^```([a-zA-Z0-9]+)(?:\s+title\s*=\s*"([^"]*)")?\s*$/.exec(line.trim());
+    if(fm){
+      flushProse();
+      const type = fm[1].toLowerCase(), title = fm[2] || '';
+      let j = i+1; const bodyLines = [];
+      while(j < lines.length && lines[j].trim() !== '```'){ bodyLines.push(lines[j]); j++; }
+      const rawInner = bodyLines.join('\n');
+      if(BLOCK_TYPES.has(type) && BLOCK_RENDERERS[type] && type !== 'h2' && type !== 'toc'){
+        const content = type === 'chart' ? rawInner.trim() : renderMarkdownProse(rawInner);
+        out += BLOCK_RENDERERS[type](title, content) + '\n';
+        blockCount++;
+      } else {
+        out += `<div style="background:#fff7ed;border:1px solid #ea580c;border-radius:8px;padding:10px;font-size:12px;color:#9a3412;margin:14px 0;">⚠ Unknown block type "${escBlockTitle(type)}" — rendered as plain text; fix before publishing.</div>\n`
+          + `<div style="margin:14px 0">${renderMarkdownProse(rawInner)}</div>\n`;
+      }
+      i = j+1; continue;
+    }
+    proseBuf.push(line); i++;
+  }
+  flushProse();
+  if(!tocInserted && tocHeadings.length){ out = renderTocBlock('Table of Contents', tocHeadings, '') + '\n' + out; }
+  return { html: out, blockCount, headingCount: tocHeadings.length };
+}
+
 function parseResponse(raw){
+  const md = extractMarkdownFile(raw);
+  if(md){
+    const rendered = renderLongPostMarkdown(md.bodyMarkdown);
+    const result = {
+      seo: md.seo,
+      bodyHtml: rendered.html,
+      publisherNotes: md.publisherNotes,
+      method: 'markdown-frontmatter + blocks:'+rendered.blockCount,
+      truncated: md.cutOff && !md.publisherNotes
+    };
+    const warnings = [];
+    if(!result.seo.focusKeyword) warnings.push('Focus Keyword missing — fill in manually on the next step.');
+    if(!result.seo.seoTitle) warnings.push('SEO Title missing — fill in manually.');
+    if(!result.seo.slug) warnings.push('URL Slug missing — fill in manually.');
+    if(!result.seo.metaDescription) warnings.push('Meta Description missing — fill in manually.');
+    if(!result.seo.h1) warnings.push('H1 missing — fill in manually.');
+    if(!result.seo.imageAltText) warnings.push('Image ALT text missing — fill in manually.');
+    if(!result.seo.imagePrompt) warnings.push('Image generation prompt missing — fill in manually if you want one.');
+    if(!result.bodyHtml || result.bodyHtml.length < 500) warnings.push('Notes body looks too short or missing — re-check the paste, or edit it manually on the next step.');
+    if(result.truncated) warnings.push('The reply looks CUT OFF midway (no <!-- PUBLISHER NOTES --> sentinel found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
+    if(rendered.blockCount === 0) warnings.push('No fenced ```type code blocks were found in the body — double-check the paste is complete and fences were not stripped by the chat UI.');
+    if(!rendered.headingCount) warnings.push('No ## section headings found — the Table of Contents will be empty.');
+    result.warnings = warnings;
+    return result;
+  }
+
+  // ---- legacy fallback: an older reply still using {* type *}/<<<SEO_JSON>>> ----
   const seoResult = extractSEO(raw);
   const bodyResult = extractBody(raw);
   const pubResult = extractPublisherNotes(raw, bodyResult.endIdx);
@@ -1515,8 +1722,8 @@ var accumulatedRaw = '';
 function copyContinue(btn){
   const t = `Continue EXACTLY from where your previous reply stopped. Rules:
 - Do NOT repeat anything already written. Do NOT start over. No introduction, no summary of what came before.
-- Resume mid-block: if you stopped inside <<<NOTES_BODY_HTML>>>, continue the HTML from the next element, inside a new \`\`\`html code fence.
-- When the current block is complete, close it with its END marker and continue with the remaining blocks per the original PIPELINE OUTPUT CONTRACT (code fences mandatory).`;
+- Resume mid-paragraph or mid-fenced-block exactly where you stopped, inside a new \`\`\`markdown code fence — same rules as before (plain Markdown, no HTML, fenced \`\`\`type blocks for cards).
+- When the body (through FAQ) is complete, append the <!-- PUBLISHER NOTES --> sentinel and the publisher notes, same as a normal single-pass reply.`;
   doCopy(t, btn, msg('parseMsg'), '"Continue" prompt copied — paste it in the SAME chat, then paste the new reply here with the continuation checkbox ticked.');
 }
 function parseAndGo(){
