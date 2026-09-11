@@ -921,8 +921,10 @@ Your goal is not maximum information density — it's maximum learning value per
 - Could any section be removed without reducing learning value? If yes, cut it.
 Revise weak parts before returning the final answer — this is not an extra step for the user, just something you do silently before printing.
 
-## OUTPUT FORMAT — ONE Markdown file, code-fenced (chat UIs render raw Markdown visually, so the fence is what keeps it copyable as source — never skip it)
+## OUTPUT FORMAT — ONE Markdown file, code-fenced, NOTHING ELSE
 Two extra SEO fields beyond the frontmatter shape shown: "imageAltText" (starts with the keyphrase, describes the featured image) and "imagePrompt" (a ready-to-paste AI image-gen prompt: loud, high-CTR YouTube-thumbnail style — exaggerated expression on a student/teacher character, bold saturated colors, thick outlines, 16:9, explicitly NO baked-in text).
+
+**Your ENTIRE response is that one code fence and nothing else.** No "Here's your article:" before it, no summary/"let me know if you'd like changes" after it, no explanation of what you did — this reply gets copy-pasted as a raw file by a script, so a single word outside the fence breaks the pipeline. If you have something to say about the run, put it inside the Publisher Notes section at the end — never outside the fence.
 
 Output the entire file inside ONE fence, in this exact order — frontmatter, then the Markdown body, then a single \`<!-- PUBLISHER NOTES -->\` sentinel line (the one and only place any HTML-style syntax is allowed) followed by the publisher notes:
 
@@ -951,7 +953,7 @@ imagePrompt: "..."
 \`\`\`
 \`\`\`
 
-If you run out of space, stop cleanly at the end of a complete paragraph or fenced block — the user will send "continue" and you resume exactly where you stopped, inside a new code fence, no repetition, no fresh introduction.
+That closing \`\`\` is the LAST character of your reply. Nothing after it — not "Hope this helps!", not a question, not a note. If you run out of space, stop cleanly at the end of a complete paragraph or fenced block instead of adding a note about it — the user will send "continue" and you resume exactly where you stopped, inside a new code fence, no repetition, no fresh introduction, still nothing outside the fence.
 
 ## FINAL CHECKS (qualitative — this is the SELF-EDIT pass above, confirm it was actually done)
 \`\`\`
@@ -1558,8 +1560,29 @@ function stripLeadingPublisherNotesLeak(bodyMarkdown){
   return { body, leaked };
 }
 
+// Finds the article's Markdown regardless of any chat wrapper text a model
+// added despite being told not to ("Here's your article:" before the fence,
+// "Let me know if you'd like changes!" after it) — the prompt says the whole
+// reply must be nothing but the fence, but that instruction isn't always
+// followed, and a real pipeline can't just fail on every such reply.
+// Strategy: prefer the content of any fenced code block whose body starts
+// with frontmatter (discards chat text outside that fence entirely); if no
+// fence contains one, fall back to locating the frontmatter block anywhere
+// in the raw text and taking everything from there onward.
+function findMarkdownFileText(raw){
+  const rawStr = String(raw||'');
+  const fenceRe = /```[a-zA-Z]*[ \t]*\r?\n([\s\S]*?)```/g;
+  let m;
+  while((m = fenceRe.exec(rawStr))){
+    if(/^\s*---\s*\r?\n/.test(m[1])) return m[1].trim();
+  }
+  const idx = rawStr.search(/(^|\n)---[ \t]*\r?\n/);
+  if(idx !== -1) return rawStr.slice(idx).replace(/^\n/,'').trim();
+  return stripOuterFence(rawStr); // last resort: old whole-reply-is-one-fence behavior
+}
+
 function extractMarkdownFile(raw){
-  const text = stripOuterFence(String(raw||''));
+  const text = findMarkdownFileText(raw);
   const fmMatch = /^---\s*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/.exec(text);
   if(!fmMatch) return null;
   const seo = parseFrontmatter(fmMatch[1]);
