@@ -213,7 +213,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   <button class="btn ghost" onclick="tryRun(copyWholePrompt,this)">🖥️ Copy whole prompt (PC only)</button>
   <div class="msg" id="pMsg"></div>
   <div id="filePickWrap" style="display:none">
-    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v13.md</code> in the folder above this one:</label>
+    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v12.md</code> in the folder above this one:</label>
     <input type="file" id="masterPromptFile" accept=".md,.txt">
   </div>
   <textarea id="promptOut" style="display:none"></textarea>
@@ -611,7 +611,7 @@ function updateLangMixLabel(){
 
 async function loadMasterPrompt(){
   if(masterPromptText) return masterPromptText;
-  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v13.md'];
+  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v12.md'];
   let lastErr;
   for(const url of candidates){
     try{
@@ -625,7 +625,7 @@ async function loadMasterPrompt(){
   const hint = location.protocol === 'file:'
     ? 'This page was opened straight from the folder (file://), where browsers block reading other files automatically.'
     : 'Could not load the master prompt file from the repo root ('+(lastErr?lastErr.message:'')+').';
-  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v13.md manually — then tap "Build & copy prompt" again.');
+  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v12.md manually — then tap "Build & copy prompt" again.');
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -940,11 +940,11 @@ function stripHtmlComments(html){
 }
 
 /* ================= BLOCK-TAG EXPANSION =================
-   As of MASTER-PROMPT-ExamNotesPDF_v13, the AI writes {* type: title *} ...
-   {* END *} markers instead of hand-written styled HTML (saves a large share
-   of output tokens, less chance of a run cutting off mid-article) — ported
-   verbatim from long-post-factory/index.html, which designed this renderer
-   to already reproduce Notes' own card grammar (same types, same colors).
+   Notes are back on MASTER-PROMPT-ExamNotesPDF_v12 (the AI hand-writes styled
+   HTML directly, like published-notes/) — the block-tag system below is Long
+   Post Factory's mechanism, not Notes'. It's kept here only so this function
+   stays a harmless no-op passthrough on a v12 reply (no {* type *} markers to
+   find); it is not part of how Notes are meant to be generated.
 
    Auto-detection of a missing/forgotten {* END *}: rather than requiring an
    explicit close, a block's content is simply everything between its opening
