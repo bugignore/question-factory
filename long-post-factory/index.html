@@ -576,7 +576,7 @@ function getTeachingLevel(examTypeRaw){
   if (hasAny('class 11','class 12','senior secondary','pgt')) return 'Senior Secondary (Class 11–12)';
   if (hasAny('paper i','paper 1') && !hasAny('paper ii','paper 2')) return 'Primary (Class 1–5)';
   if (hasAny('paper ii','paper 2')) return 'Upper Primary/Secondary (Class 6–10)';
-  return 'Not explicitly stated in EXAM TYPE — infer the most likely level from TOPIC/SUBJECT/EXAM TYPE context and state your inference once in Publisher Notes';
+  return 'Not explicitly stated in EXAM TYPE — infer the most likely level from TOPIC/SUBJECT/EXAM TYPE context. Note this inference ONLY under the <!-- PUBLISHER NOTES --> sentinel at the very end of the file — never as a visible heading or note inside the article body itself';
 }
 function buildTeachingLevelBlock(examType){
   const level = getTeachingLevel(examType);
@@ -823,7 +823,7 @@ Most of the article is just Markdown, no wrapper needed:
 - \`##\` starts a genuinely new section — this is your only section-heading level. The publisher builds the Table of Contents from these automatically, with working jump links — **never hand-write a TOC or a heading anchor**; you cannot know the ids the renderer generates, and hand-written ones have shipped broken (half the links dead in a real published article).
 - Ordinary paragraphs, \`**bold**\`, \`-\`/\`1.\` lists are just themselves.
 - A comparison that's genuinely easier as a table is a standard Markdown table (\`| col | col |\` / \`|---|---|\`) — auto-styled by the renderer. 2–3 columns read best; 4+ columns split into several small tables instead, since a wide table breaks on the phone screens most readers use.
-- A citation is \`[^N]\` inline, matched by a numbered entry under \`## References\`.
+- A citation is \`[^N]\` inline, matched by a numbered entry under \`## References\`. **Every References entry MUST be a real Markdown link with the actual URL** — \`1. [NCF 2005](https://ncert.nic.in/pdf/nc-framework/nf2005-english.pdf)\`, never just the source's name as bare text with no link. Use the REFERENCE SOURCES supplied below where relevant, or another URL from the HARD BAN 6 whitelist — never a fabricated one.
 - The article's featured image is handled entirely by the pipeline — never mention or embed one.
 
 For everything else, use a fenced code block whose language tag is the type, with an optional \`title="..."\` on the opening line:
@@ -1539,6 +1539,25 @@ function parseFrontmatter(fmText){
 // Finds the frontmatter block + splits the rest into body vs. publisher
 // notes. Returns null when the reply isn't in this format at all, so
 // parseResponse() can fall back to the legacy extractors.
+// A model occasionally writes its "state this in Publisher Notes" aside as a
+// literal visible heading at the TOP of the article instead of using the
+// <!-- PUBLISHER NOTES --> sentinel at the end (real incident: a teaching-
+// level inference shipped as a "## Publisher Notes" section on a live page).
+// Defense in depth beyond the prompt wording: if the body's very first
+// heading matches this, cut that whole leading section out of the body and
+// fold it into publisherNotes instead of letting it render as an article
+// section — never silently drop it, since it may contain a real inference
+// worth keeping in the notes.
+function stripLeadingPublisherNotesLeak(bodyMarkdown){
+  const m = /^\s*##\s*Publisher(?:'s)?\s*Notes\s*\r?\n/i.exec(bodyMarkdown);
+  if(!m) return { body: bodyMarkdown, leaked: '' };
+  const rest = bodyMarkdown.slice(m[0].length);
+  const nextHeading = rest.search(/\r?\n##\s+/);
+  const leaked = (nextHeading===-1 ? rest : rest.slice(0,nextHeading)).trim();
+  const body = (nextHeading===-1 ? '' : rest.slice(nextHeading)).replace(/^\r?\n+/,'');
+  return { body, leaked };
+}
+
 function extractMarkdownFile(raw){
   const text = stripOuterFence(String(raw||''));
   const fmMatch = /^---\s*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/.exec(text);
@@ -1547,9 +1566,16 @@ function extractMarkdownFile(raw){
   if(!seo.slug && !seo.seoTitle && !seo.focusKeyword) return null; // frontmatter shape didn't match ours
   const after = text.slice(fmMatch[0].length);
   const pubIdx = after.search(/<!--\s*PUBLISHER NOTES\s*-->/i);
-  const bodyMarkdown = (pubIdx===-1 ? after : after.slice(0,pubIdx)).trim();
-  const publisherNotes = pubIdx===-1 ? '' : after.slice(pubIdx).replace(/<!--\s*PUBLISHER NOTES\s*-->/i,'').trim();
-  return { seo, bodyMarkdown, publisherNotes, cutOff: pubIdx===-1 };
+  let bodyMarkdown = (pubIdx===-1 ? after : after.slice(0,pubIdx)).trim();
+  let publisherNotes = pubIdx===-1 ? '' : after.slice(pubIdx).replace(/<!--\s*PUBLISHER NOTES\s*-->/i,'').trim();
+  const stripped = stripLeadingPublisherNotesLeak(bodyMarkdown);
+  let leakedNote = '';
+  if(stripped.leaked){
+    bodyMarkdown = stripped.body;
+    leakedNote = stripped.leaked;
+    publisherNotes = (publisherNotes ? publisherNotes + '\n\n' : '') + '- (recovered from a leaked "## Publisher Notes" heading in the body — the AI put this in the wrong place):\n' + leakedNote;
+  }
+  return { seo, bodyMarkdown, publisherNotes, cutOff: pubIdx===-1, leakedNote };
 }
 
 // Inline Markdown: escape raw HTML first (the AI must never emit any, but a
@@ -1561,7 +1587,13 @@ function renderInlineMarkdown(text){
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g,'$1<em>$2</em>')
     .replace(/\[\^(\d+)\]/g,'<sup id="cite-$1"><a href="#ref-$1">[$1]</a></sup>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // safety net: a bare URL the AI wrote without proper [text](url) syntax
+    // (e.g. a References entry that's just "Source Name — https://...") still
+    // becomes a real clickable link instead of shipping as dead text. The
+    // negative lookbehind skips a URL already inside an href="..." attribute
+    // from the replace just above.
+    .replace(/(?<!["'])(https?:\/\/[^\s<>"')]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
 }
 
 function renderMarkdownTable(tableLines){
@@ -1695,6 +1727,7 @@ function parseResponse(raw){
     if(result.truncated) warnings.push('The reply looks CUT OFF midway (no <!-- PUBLISHER NOTES --> sentinel found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
     if(rendered.blockCount === 0) warnings.push('No fenced ```type code blocks were found in the body — double-check the paste is complete and fences were not stripped by the chat UI.');
     if(!rendered.headingCount) warnings.push('No ## section headings found — the Table of Contents will be empty.');
+    if(md.leakedNote) warnings.push('The AI wrote a "## Publisher Notes" heading at the top of the article body instead of using the <!-- PUBLISHER NOTES --> sentinel — it was caught and moved into Publisher Notes automatically, but double-check the body reads correctly starting from its actual first section.');
     result.warnings = warnings;
     return result;
   }

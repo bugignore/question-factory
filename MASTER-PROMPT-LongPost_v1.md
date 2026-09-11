@@ -141,7 +141,7 @@ Every article needs an intro, real core-concept depth, and a closing FAQ (the TO
 - **Comparison & Differentiation** — confusing pairs (Markdown table), classification, a real timeline (```insight``` or ```chart```) only if the topic has one. ≥1 solved walkthrough with elimination (```question```), ≥1 misconception repair with WHY (```mistake```).
 - **Mnemonics & Memory Architecture** — ```trick``` blocks, fully open, only if the topic actually benefits from a memory device (don't force one onto pure-reasoning topics).
 - **Conclusion + Related Topics** — a plain summary paragraph → ```summary``` block → ```revision``` block → roadmap naming 2–3 genuinely related articles/topics worth reading next, real reasons, not a fixed slug pattern.
-- **References** — right before FAQ, a `## References` heading followed by a plain Markdown ordered list, 4–8 entries. Every entry needs ≥1 in-body `[^N]` pointing to it.
+- **References** — right before FAQ, a `## References` heading followed by a plain Markdown ordered list, 4–8 entries. Every entry needs ≥1 in-body `[^N]` pointing to it, and **must be a real Markdown link with the actual URL** — `1. [NCF 2005](https://ncert.nic.in/pdf/nc-framework/nf2005-english.pdf)` — never just the source's name as bare text with no link.
 - **FAQ** — always last. One ```faq``` block per question, 5–8 questions, ≥1 containing the exact keyphrase, every answer opens with the answer.
 
 ## OUTPUT FORMAT — ONE Markdown file, nothing else
