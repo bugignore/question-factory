@@ -114,11 +114,15 @@ jobs:
               id="$(jq -r --arg n "$name" '[.[] | select(.name==$n)] | .[0].id // empty' /tmp/term-search.json 2>/dev/null || true)"
             fi
             if [ -n "$id" ]; then echo "$id"; return 0; fi
-            http="$(curl -sS -o /tmp/term-resp.json -w "%{http_code}" \
+            # Piped through stdin (--data-binary @-) rather than substituted as
+            # a command-line argument — small here, but kept consistent with
+            # the payload sends below so nothing in this file relies on
+            # argument-size limits at all.
+            http="$(jq -n --arg n "$name" '{name:$n}' | curl -sS -o /tmp/term-resp.json -w "%{http_code}" \
                       -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}" \
                       -H "Content-Type: application/json" \
                       -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-                      --data-binary "$(jq -n --arg n "$name" '{name:$n}')" || echo "000")"
+                      --data-binary @- || echo "000")"
             if [ "$http" = "201" ]; then
               jq -r '.id' /tmp/term-resp.json 2>/dev/null || true
             else
@@ -305,22 +309,23 @@ jobs:
             # blip, not a WordPress-side rejection) — worth a couple of retries
             # before giving up, since these have recurred and cost a whole draft.
             #
-            # The payload is written to a file and sent via --data-binary @file
+            # The payload is piped into curl via stdin (--data-binary @-)
             # rather than passed as a command-line argument (--data-binary
             # "$payload") — a long article's JSON easily exceeds the OS's
             # execve() argument-size limit ("Argument list too long" / E2BIG),
             # which curl can't even start under, and which this loop's
             # `|| echo "000"` was silently misreporting as a network failure.
             # Real incident: a 172KB pending file failed with exactly this,
-            # logged as three bogus "connection attempt failed" retries.
-            printf '%s' "$payload" > /tmp/wp-payload.json
+            # logged as three bogus "connection attempt failed" retries. echo
+            # is a shell builtin here, not an exec'd process, so it isn't
+            # subject to that argument-size limit either.
             http_code="000"
             for attempt in 1 2 3; do
-              http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+              http_code="$(echo "$payload" | curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
                 -X "$wp_method" "$wp_url" \
                 -H "Content-Type: application/json" \
                 -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-                --data-binary @/tmp/wp-payload.json || echo "000")"
+                --data-binary @- || echo "000")"
               [ "$http_code" != "000" ] && break
               echo "::warning::$slug — connection attempt $attempt to WordPress failed, retrying…"
               sleep 5
@@ -332,12 +337,11 @@ jobs:
               if grep -q "rank_math" /tmp/wp-response.json 2>/dev/null; then
                 echo "::warning::$slug — WordPress rejected the Rank Math meta fields. Install the register-rank-math-meta snippet (see notes-factory/README.md) to publish SEO fields automatically. Retrying WITHOUT meta so the draft still lands; paste the Rank Math fields manually for this post."
                 payload="$(echo "$payload" | jq 'del(.meta)')"
-                printf '%s' "$payload" > /tmp/wp-payload.json
-                http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+                http_code="$(echo "$payload" | curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
                   -X "$wp_method" "$wp_url" \
                   -H "Content-Type: application/json" \
                   -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-                  --data-binary @/tmp/wp-payload.json || echo "000")"
+                  --data-binary @- || echo "000")"
               fi
             fi
 
@@ -356,14 +360,13 @@ jobs:
               wp_url="${WP_SITE_URL%/}/wp-json/wp/v2/free_notes"
               ok_code="201"
               update_post_id=""
-              printf '%s' "$payload" > /tmp/wp-payload.json
               http_code="000"
               for attempt in 1 2 3; do
-                http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+                http_code="$(echo "$payload" | curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
                   -X "$wp_method" "$wp_url" \
                   -H "Content-Type: application/json" \
                   -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-                  --data-binary @/tmp/wp-payload.json || echo "000")"
+                  --data-binary @- || echo "000")"
                 [ "$http_code" != "000" ] && break
                 echo "::warning::$slug — connection attempt $attempt to WordPress failed, retrying…"
                 sleep 5
