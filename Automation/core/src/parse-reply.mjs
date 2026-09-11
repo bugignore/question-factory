@@ -1,7 +1,7 @@
 // Ported from long-post-factory/index.html (slugify, extractSEO, extractBody,
 // extractPublisherNotes, stripHtmlComments, expandLongPostBlocks,
 // parseResponse). Keep byte-for-byte in sync with that file — this is what
-// makes an AI reply captured by Notes-Automate/run_pipeline.py (via
+// makes an AI reply captured by Automation/long-post-runner/run_pipeline.py (via
 // validate-bundle.mjs) parse into the exact same pending-long-posts/<slug>.json
 // shape the manual browser tool produces.
 

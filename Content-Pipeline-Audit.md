@@ -7,6 +7,22 @@
 - Scope: `notes-factory` pipeline (37/37 published notes reviewed) and `long-post-factory` pipeline (1/1 published long post reviewed)
 - Method: direct inspection of every file in `published-notes/`, `published-long-posts/`, both publish workflows, and `automation/`, cross-referenced against Google's own policy language (sources in §2)
 
+> **Status check (2026-09-11), not a full re-audit:** F1/F2-shaped defects
+> (unfilled prompt scaffolding, `via.placeholder.com` images) now have
+> client-side hard-fail checks in `notes-factory/index.html` before a human
+> saves to `pending-notes/` — spot-checked present in the current file.
+> **F5's core finding likely still stands**: `.github/workflows/publish-note.yml`
+> and `publish-long-post.yml` still only appear to do the same weak 3-field
+> non-empty check this audit describes, and `Automation/core/src/validate-bundle.mjs`
+> (the real hard-fail checker, formerly `automation/src/validate-bundle.mjs`)
+> still isn't called by either production workflow — only by
+> `Automation/long-post-runner/run_pipeline.py` before a file is even
+> committed. That means content saved through the browser tools still
+> reaches WordPress with only the client-side JS as a gate, not anything
+> server-side. Verify against the current workflow YAML before treating F5
+> as closed. Folder paths in the body below also predate the
+> `Automation/{core,ncert-knowledge-base,long-post-runner}/` rename.
+
 ---
 
 ## 1. Problem statement

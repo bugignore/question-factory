@@ -13,9 +13,9 @@ the per-topic cooldown (15-40s) plus DeepSeek's own reply time, not a
 bug where several tabs are open at once.
 
 Prompt-building, reply-parsing, and hard-fail validation all run in Node
-(automation/build-automation-prompt.mjs, automation/validate-bundle.mjs) -
+(Automation/core/src/build-automation-prompt.mjs, Automation/core/src/validate-bundle.mjs) -
 this script only orchestrates: CSV -> prompt -> browser -> reply -> Node
-validator -> file -> git. See automation/prompt-builder-automation.mjs for
+validator -> file -> git. See Automation/core/src/prompt-builder-automation.mjs for
 the actual prompt content (same quality bar as the manual long-post-factory
 tool, with the self-report/checklist scaffolding stripped out - this
 script's Node validator does those checks in code instead, and only a
@@ -56,8 +56,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from patchright.sync_api import sync_playwright, Page
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-AUTOMATION_DIR = REPO_ROOT / "automation"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+AUTOMATION_DIR = REPO_ROOT / "Automation" / "core"
 AUTOMATION_SRC_DIR = AUTOMATION_DIR / "src"
 PENDING_DIR = REPO_ROOT / "pending-long-posts"
 PUBLISHED_INDEX = REPO_ROOT / "published-long-posts" / "index.json"

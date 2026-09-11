@@ -1,8 +1,9 @@
 node_modules/
-Notes-Automate/debug-replies/
-Notes-Automate/__pycache__/
+Automation/long-post-runner/debug-replies/
+Automation/long-post-runner/__pycache__/
+Automation/long-post-runner/.venv/
 
 # Retired/superseded local working data (old download-tool test runs, a raw
 # text backup) — never commit. The active book-input folder is
-# automation/book-library/ (see automation/.gitignore), not this one.
+# Automation/core/input/book-library/ (see Automation/core/.gitignore), not this one.
 _archive/

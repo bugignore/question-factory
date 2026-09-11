@@ -5,16 +5,16 @@ Takes the raw extracted chapters in ncert-corpus/_raw/<book-folder>/chNN.txt
 1. Cleans obvious extraction noise (repeated running headers, bare page
    numbers, stray whitespace).
 2. Re-groups everything into ONE coherent folder tree by subject, written to
-   the shared ncert-knowledge-base/ folder at the repo root (not here in
-   automation/ — that's where any tool reads the finished corpus from):
-       ../../ncert-knowledge-base/by-subject/<Subject>/<book-slug>__chNN.txt
-3. Writes a single flat CSV covering the whole corpus (stays in automation/ —
+   the shared Automation/ncert-knowledge-base/ folder at the repo root (not
+   here in Automation/core/ — that's where any tool reads the finished corpus from):
+       ../../../ncert-knowledge-base/by-subject/<Subject>/<book-slug>__chNN.txt
+3. Writes a single flat CSV covering the whole corpus (stays in Automation/core/ —
    a convenience export, not part of the shared knowledge base):
        ncert-corpus/ncert_corpus.csv
    columns: subject, book, chapter, title, word_count, text
 
 Both outputs are the input to build-index.mjs (TF-IDF, no API key needed —
-see automation/README.md for why this path needs no key, unlike the
+see Automation/core/README.md for why this path needs no key, unlike the
 AI-rewritten-gist path in summarize_ncert_gists.mjs).
 
 Usage:
@@ -31,8 +31,8 @@ from collections import Counter
 from pathlib import Path
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-KB_DIR = REPO_ROOT / "ncert-knowledge-base"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+KB_DIR = REPO_ROOT / "Automation" / "ncert-knowledge-base"
 RAW_DIR = OUTPUT_DIR / "ncert-corpus" / "_raw"
 BY_SUBJECT_DIR = KB_DIR / "by-subject"
 CSV_PATH = OUTPUT_DIR / "ncert-corpus" / "ncert_corpus.csv"

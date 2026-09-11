@@ -208,7 +208,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <legend>📚 Reference sources (optional)</legend>
     <p class="hint" style="margin-top:0">Not fetched automatically — these are just handed to the AI as supporting material to ground the rewrite against, alongside whatever it already knows. Leave blank to skip.</p>
     <label>Reference corpus (NCERT chapter text already in this repo)</label>
-    <input type="text" id="refCorpusUrl" placeholder="https://github.com/bugignore/question-factory/tree/main/ncert-knowledge-base/by-subject">
+    <input type="text" id="refCorpusUrl" placeholder="https://github.com/bugignore/question-factory/tree/main/Automation/ncert-knowledge-base/by-subject">
     <label>Optional source URLs (one per line — official NCERT/exam-body pages, etc.)</label>
     <textarea id="refSourceUrls" style="min-height:70px" placeholder="https://ncert.nic.in/...&#10;https://ctet.nic.in/..."></textarea>
   </fieldset>
@@ -626,7 +626,7 @@ function selectPublishedItem(idx){
   document.getElementById('selectedDetails').open = true;
   const corpusField = document.getElementById('refCorpusUrl');
   if(corpusField && !corpusField.value.trim()){
-    corpusField.value = `https://github.com/${GH_OWNER}/${GH_REPO}/tree/main/ncert-knowledge-base/by-subject`;
+    corpusField.value = `https://github.com/${GH_OWNER}/${GH_REPO}/tree/main/Automation/ncert-knowledge-base/by-subject`;
   }
   show(msg('pubSelectedMsg'),'ok', `Selected "${old.seo.slug}" (${it.contentType==='note'?'Note':'Long Post'}, WordPress post #${it.postId}). Review the fields below, then tap "Build update prompt".`);
 }

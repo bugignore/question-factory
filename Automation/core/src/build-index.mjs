@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CSV_PATH = join(__dirname, '..', 'output', 'ncert-corpus', 'ncert_corpus.csv');
 // The index is a finished, searchable artifact — it lives in the shared
-// ncert-knowledge-base/ folder (repo root), not buried in automation/output/,
+// Automation/ncert-knowledge-base/ folder, not buried in Automation/core/output/,
 // so any tool (not just this pipeline) can find and read it.
 const INDEX_PATH = join(__dirname, '..', '..', 'ncert-knowledge-base', 'index.json');
 

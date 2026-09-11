@@ -104,7 +104,7 @@ async function main() {
       publisherNotes: (parsed.publisherNotes || '') +
         (warnings.length ? `\n\n=== AUTOMATION WARNINGS (soft, non-blocking) ===\n${warnings.map(w => `- ${w}`).join('\n')}` : ''),
       createdAt: new Date().toISOString(),
-      generator: 'Notes-Automate/run_pipeline.py (DeepSeek via browser)',
+      generator: 'Automation/long-post-runner/run_pipeline.py (DeepSeek via browser)',
       wordCount
     };
   }

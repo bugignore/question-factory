@@ -1,8 +1,8 @@
-# NCERT corpus — build-intermediate data (automation-internal)
+# NCERT corpus — build-intermediate data (Automation/core-internal)
 
 **The finished, searchable corpus lives at `../../../ncert-knowledge-base/`
-(repo root), not here.** This folder only holds the raw/intermediate files
-this pipeline produces on the way there — see
+(sibling of `Automation/core/`), not here.** This folder only holds the
+raw/intermediate files this pipeline produces on the way there — see
 `../../../ncert-knowledge-base/README.md` for the corpus itself.
 
 ## What's in here (gitignored — never committed)
@@ -26,17 +26,17 @@ output/ncert-corpus/_raw/<book>/chNN.txt  (raw text, gitignored — often garble
 output/ncert-corpus/_raw/<book>/chNN.txt  (same files, now real Unicode Devanagari)
         │  src/organize_ncert_corpus.py
         ▼
-../../ncert-knowledge-base/by-subject/<Subject>/...  (COMMITTED — the canonical corpus, shared)
-output/ncert-corpus/ncert_corpus.csv                 (gitignored, convenience export, stays here)
+../../../ncert-knowledge-base/by-subject/<Subject>/...  (COMMITTED — the canonical corpus, shared)
+output/ncert-corpus/ncert_corpus.csv                     (gitignored, convenience export, stays here)
         │  src/build-index.mjs
         ▼
-../../ncert-knowledge-base/index.json      (COMMITTED — the BM25 search index, shared)
+../../../ncert-knowledge-base/index.json      (COMMITTED — the BM25 search index, shared)
         │  src/verify_corpus.py
         ▼
         sanity-check report (word counts, Devanagari density, cross-checks)
 ```
 
-Run the whole chain with one command from `automation/`:
+Run the whole chain with one command from `Automation/core/`:
 
 ```
 node src/rebuild-corpus.mjs
@@ -63,11 +63,11 @@ font (garbled with a different byte→glyph mapping) needs its own decoder —
 ## Adding more books later
 
 1. Drop more `.epub`/`.zip` book files into `../../input/book-library/` by hand.
-2. From `automation/`, run `node src/rebuild-corpus.mjs`.
+2. From `Automation/core/`, run `node src/rebuild-corpus.mjs`.
 3. Check the `verify_corpus.py` output at the end of that run for any
    flagged files (too short, low Devanagari density, un-converted Kruti Dev
    text) before committing.
-4. Commit `../../ncert-knowledge-base/by-subject/` and `../../ncert-knowledge-base/index.json`
+4. Commit `../../../ncert-knowledge-base/by-subject/` and `../../../ncert-knowledge-base/index.json`
    (not anything in this folder — everything here is gitignored working data).
 
 ## Verifying corpus quality any time

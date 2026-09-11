@@ -6,9 +6,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // tokenize() is the one piece still owned by the build pipeline in
-// automation/ — everything else here is pure read/search over the finished
-// index sitting right next to this file.
-import { tokenize } from '../automation/src/build-index.mjs';
+// Automation/core/ — everything else here is pure read/search over the
+// finished index sitting right next to this file.
+import { tokenize } from '../core/src/build-index.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INDEX_PATH = join(__dirname, 'index.json');

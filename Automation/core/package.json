@@ -2,7 +2,7 @@
   "name": "examnotespdf-automation",
   "private": true,
   "type": "module",
-  "description": "NCERT RAG corpus build pipeline + the shared prompt/parse/validate scripts Notes-Automate/run_pipeline.py calls into. Not a standalone runner — see README.md and ../Notes-Automate/README.md.",
+  "description": "NCERT RAG corpus build pipeline + the shared prompt/parse/validate scripts Automation/long-post-runner/run_pipeline.py calls into. Not a standalone runner — see README.md and ../long-post-runner/README.md.",
   "scripts": {
     "rebuild-corpus": "node src/rebuild-corpus.mjs",
     "build-index": "node src/build-index.mjs"

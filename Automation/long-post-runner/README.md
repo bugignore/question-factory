@@ -1,4 +1,4 @@
-# Notes-Automate — browser-driven Long Post batch pipeline
+# Automation/long-post-runner — browser-driven Long Post batch pipeline
 
 Automates the same flow `long-post-factory/index.html` does by hand — build
 prompt → get an AI reply → parse/validate → save → publish — but for a whole
@@ -12,13 +12,13 @@ fingerprint gets flagged by DeepSeek's bot detection).
 CSV topic list (input sylabuss/*.csv)
         │
         ▼
-automation/build-automation-prompt.mjs   ← Node, builds the exact same
+Automation/core/src/build-automation-prompt.mjs   ← Node, builds the exact same
         │                                   prompt long-post-factory's
         ▼                                   buildLongPostPrompt() builds
 Chrome (real signed-in profile) → chat.deepseek.com
         │  patchright: paste prompt, wait, scrape the reply
         ▼
-automation/validate-bundle.mjs           ← Node, same parser +
+Automation/core/src/validate-bundle.mjs           ← Node, same parser +
         │                                   hard-fail validator as the
         ▼                                   browser tool's vRunChecks
 pending-long-posts/<slug>.json  →  git commit + push
@@ -34,15 +34,15 @@ what the manual browser tools produce, or a script-generated post and a
 human-generated one could silently drift apart in shape. Rather than
 re-implementing that logic twice (once in each language, guaranteed to
 diverge eventually), this script shells out to the *same* `.mjs` files the
-browser tools' logic was ported from — see `automation/README.md` for what
+browser tools' logic was ported from — see `Automation/core/README.md` for what
 each one does. Python's job is everything else: CSV/state handling, Chrome
 profile management, retries, dedup, and driving the actual browser.
 
 ## One-time setup
 
-1. `cd automation && npm install` (installs the Node side — see
-   `automation/README.md`).
-2. `pip install patchright` (plus whatever else `automation/requirements.txt`
+1. `cd Automation/core && npm install` (installs the Node side — see
+   `Automation/core/README.md`).
+2. `pip install patchright` (plus whatever else `Automation/core/requirements.txt`
    lists), then `patchright install chrome`.
 3. Sign into the Google account tied to your DeepSeek login in **your real,
    normal Chrome** — the script clones that profile rather than launching it
@@ -82,7 +82,7 @@ python run_pipeline.py --start 0 --limit 5   # the real thing, 5 topics starting
 
 ## Prompt content
 
-The actual prompt text comes from `automation/prompt-builder-automation.mjs`
+The actual prompt text comes from `Automation/core/src/prompt-builder-automation.mjs`
 (same quality bar as the manual `long-post-factory` tool, with the
 self-report/checklist scaffolding stripped out — this script's Node
 validator does those checks in code instead of asking the AI to

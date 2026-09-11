@@ -47,7 +47,7 @@ function main() {
   run('6/6 Verify corpus quality', python, ['verify_corpus.py']);
 
   console.log('\nCorpus rebuild complete. Review the verify_corpus.py output above for any flagged files.');
-  console.log('Commit ncert-knowledge-base/by-subject/ and ncert-knowledge-base/index.json when you\'re happy with it.');
+  console.log('Commit Automation/ncert-knowledge-base/by-subject/ and Automation/ncert-knowledge-base/index.json when you\'re happy with it.');
 }
 
 main();

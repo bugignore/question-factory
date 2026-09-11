@@ -26,8 +26,8 @@ import sys
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent / "output"
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-KB_DIR = REPO_ROOT / "ncert-knowledge-base"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+KB_DIR = REPO_ROOT / "Automation" / "ncert-knowledge-base"
 RAW_DIR = BASE / "ncert-corpus" / "_raw"
 BY_SUBJECT_DIR = KB_DIR / "by-subject"
 CSV_PATH = BASE / "ncert-corpus" / "ncert_corpus.csv"

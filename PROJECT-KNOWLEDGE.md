@@ -7,6 +7,21 @@ project back up without re-deriving context, and (2) as interview-prep
 material for discussing RAG, agentic AI systems, and data pipeline
 engineering.
 
+> **⚠️ Partially superseded.** §3 below (`generate-long-post.mjs` /
+> `run-batch.mjs`, the Claude/Gemini/OpenAI API-key agentic batch generator)
+> describes a pipeline that **has since been removed**. It was replaced by
+> `Automation/long-post-runner/run_pipeline.py` — a free, key-free
+> browser-automation approach driving DeepSeek's web chat via Playwright —
+> because keeping two separate generation pipelines side by side was more
+> confusing than useful. See `Automation/long-post-runner/README.md` and
+> `Automation/core/README.md` for what actually runs today. §1–2 (content
+> types, the block-tag contract) and §4 (the NCERT RAG corpus — BM25,
+> Kruti-Dev decoding, the Unicode `\p{M}` bug) are still accurate; only the
+> *generation* mechanism in §3 changed, not the corpus or content contract.
+> Folder paths throughout (`automation/`, `ncert-knowledge-base/`,
+> `Notes-Automate/`) also predate a folder-structure rename — the current
+> layout is `Automation/{core,ncert-knowledge-base,long-post-runner}/`.
+
 ---
 
 ## 1. What this repo is
