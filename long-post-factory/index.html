@@ -622,6 +622,44 @@ ${lines.join('\n')}
 `;
 }
 
+/* This repo's own NCERT chapter-text knowledge base (Automation/ncert-
+   knowledge-base/by-subject/<Subject>/) — plain-text NCERT chapters,
+   pre-cleaned, one file per chapter. Surfaced here as a GitHub folder link
+   because this browser tool can't read local files or run the repo's BM25
+   retrieve.mjs itself; if the AI you're pasting this into has web/browsing
+   access, it can open the folder and individual .txt files directly for
+   real grounding beyond its own training knowledge. Deliberately separate
+   from REFERENCE SOURCES above: github.com isn't a HARD BAN 6 whitelisted
+   citation domain, so this is for the AI's OWN reading/grounding only —
+   never a URL to cite in the article body. */
+const NCERT_KB_SUBJECT_MAP = {
+  'Geography': ['Geography'],
+  'History': ['History'],
+  'Science': ['Science', 'Biology', 'Chemistry'],
+  'EVS': ['Science', 'Geography'],
+  'Maths': ['Maths'],
+  'Hindi': ['Hindi'],
+};
+function buildNcertKnowledgeBaseBlock(subject){
+  const folders = NCERT_KB_SUBJECT_MAP[subject];
+  if(!folders || !folders.length) return '';
+  const base = 'https://github.com/bugignore/question-factory/tree/main/Automation/ncert-knowledge-base/by-subject';
+  const links = folders.map(f => `- ${f}: ${base}/${encodeURIComponent(f)}`).join('\n');
+  return `
+
+## NCERT KNOWLEDGE BASE (optional deep-grounding — read only, never cite this URL)
+This repo maintains its own cleaned NCERT chapter-text corpus for SUBJECT. If you have the
+ability to open a URL, browse these folders and read whichever chapter .txt files are actually
+relevant to TOPIC before writing — treat the chapter text as evidence to extract facts from and
+explain in your own words (same RAG/SOURCES rule as above: never copy source prose verbatim).
+If a claim traces back to something you read here, cite the ORIGINAL NCERT source
+(ncert.nic.in — see REFERENCE SOURCES above) in the article's References, not this GitHub
+mirror. If you have no browsing ability, skip this section entirely and rely on your own
+verified knowledge under the same honesty rules — do not guess at what these files contain.
+${links}
+`;
+}
+
 // Safe to run now that the REFERENCE_SOURCES_* consts above are initialised.
 initSelectors();
 
@@ -797,7 +835,7 @@ Apply this ratio to explanations/tricks/teacher-talk/connecting prose only — k
 
 ## RAG / SOURCES — evidence, never article text
 If NCERT corpus material or source URLs are supplied for this run, use them as evidence: extract the facts and concepts, then explain them in your own original, student-friendly language — never copy the source's prose. Where sources disagree, or evidence is genuinely insufficient, do not invent a compromise answer — flag the uncertainty honestly or omit the claim entirely. Where nothing is supplied, write from your own reliable knowledge under the same honesty rules (HARD BAN 3–4 still apply in full either way).
-${buildReferenceSourcesBlock(subject)}
+${buildReferenceSourcesBlock(subject)}${buildNcertKnowledgeBaseBlock(subject)}
 
 ## LENGTH AND DEPTH — no fixed target, no padding
 This is the **deep** version of the same educational design language as the site's shorter Notes — meaningfully longer and more thorough than a quick note, because it earns that length through real teaching value, not because a word count demands it. Write however long it genuinely takes to teach TOPIC properly for a ${profile.label} candidate — covering it shallowly to hit a page-length feel is a failure; padding with repetition, filler transitions, or restating a point in different words to hit a number is an equal and opposite failure. If you are genuinely running low on room mid-article, stop cleanly at the end of a complete paragraph or fenced block — the user will say "continue" and you resume exactly where you left off. Never cite token limits or "conciseness" as a reason to under-teach a topic; never cite a word-count target as a reason to over-write one.
@@ -868,12 +906,26 @@ Getting the geometry right is not your job and hand-drawn SVG is a hard failure.
 \`\`\`
 \`\`\`
 
-Pick the \`kind\` that matches the relationship you're actually showing:
+**Which \`kind\` to pick — do not default to \`grid\` out of habit.** Ask what relationship you're
+actually showing first, then pick the ONE kind built for that shape:
+- Several parallel same-type things (3+ categories, no single item more important) → \`grid\`
+- Exactly TWO things a student keeps confusing, head-to-head → \`compare\`
+- One thing branching into distinct cases/outcomes → \`flow\`
+- A real chronology (dates/stages in order) → \`timeline\`
+- A real magnitude difference across items (an actual number, not a vague "more/less") → \`bars\`
+A long article with 3–5 charts that each earn their place should rarely use the same kind twice in a row — real topics have more than one kind of relationship worth showing.
 
-**\`grid\`** — parallel categories/types/components (the most common case). 2–9 items; 3–6
+**\`grid\`** — parallel categories/types/components. 2–9 items; 3–6
 reads best. \`icon\` is optional (a single emoji), \`detail\` is an optional one-line gloss.
 \`{"kind":"grid","items":[{"icon":"🚗","label":"थल","detail":"सड़क + रेल","color":"blue"},{"icon":"⛵","label":"जल","detail":"जहाज़","color":"cyan"}]}\`
 Add \`"dense":true\` for a compact end-of-section recap strip (label only, no icon/detail).
+
+**\`compare\`** — exactly TWO confusable things side by side with a VS divider, each with its
+own short bullet list. This is the single most useful kind for a grammar/exam-notes site and
+the most underused — reach for it whenever the topic has a genuine confusable pair (कर्ता vs
+कर्म, अपादान vs संबंध, two similar-sounding rules, a common right-vs-wrong usage). \`left\`/\`right\`
+each need \`label\`, \`color\`, and 2–4 short \`items\` (plain strings, not objects).
+\`{"kind":"compare","left":{"label":"करण कारक","color":"blue","items":["साधन/माध्यम बताता है","चिह्न: से"]},"right":{"label":"अपादान कारक","color":"rose","items":["अलगाव/स्रोत बताता है","चिह्न: से (अलग अर्थ में)"]}}\`
 
 **\`flow\`** — one thing that branches into cases/outcomes. \`root\` plus 2–4 \`branches\`, each
 optionally with up to 3 \`children\`.
@@ -926,10 +978,11 @@ Two extra SEO fields beyond the frontmatter shape shown: "imageAltText" (starts 
 
 **Your ENTIRE response is that one code fence and nothing else.** No "Here's your article:" before it, no summary/"let me know if you'd like changes" after it, no explanation of what you did — this reply gets copy-pasted as a raw file by a script, so a single word outside the fence breaks the pipeline. If you have something to say about the run, put it inside the Publisher Notes section at the end — never outside the fence.
 
-Output the entire file inside ONE fence, in this exact order — frontmatter, then the Markdown body, then a single \`<!-- PUBLISHER NOTES -->\` sentinel line (the one and only place any HTML-style syntax is allowed) followed by the publisher notes:
+Output the entire file inside ONE fence, in this exact order — frontmatter, then the Markdown body, then a single \`<!-- PUBLISHER NOTES -->\` sentinel line (the one and only place any HTML-style syntax is allowed) followed by the publisher notes.
 
-\`\`\`
-\`\`\`markdown
+**This outer fence MUST use FOUR backticks (\`\`\`\`markdown ... \`\`\`\`), not three.** The body itself contains three-backtick fences for card types (\`\`\`def, \`\`\`chart, etc.) — a three-backtick outer wrapper would be closed prematurely by the very first one of those, corrupting the file. Four backticks around everything, three backticks for each card type inside — never the same count for both.
+
+\`\`\`\`markdown
 ---
 focusKeyword: "..."
 seoTitle: "..."
@@ -940,7 +993,7 @@ imageAltText: "..."
 imagePrompt: "..."
 ---
 
-(the entire Markdown body — ## sections, fenced \`\`\`type blocks, [[AD]] placeholders where you placed them, nothing removed, nothing summarized)
+(the entire Markdown body — ## sections, fenced \`\`\`type blocks (three backticks, unaffected by the outer four), [[AD]] placeholders where you placed them, nothing removed, nothing summarized)
 
 <!-- PUBLISHER NOTES -->
 - Structure chosen for this topic and why (brief)
@@ -950,10 +1003,10 @@ imagePrompt: "..."
 - Visuals used and why each earned its place: [list]
 - URLs needing manual verification: [list]
 - Approx. body word count: [N]
-\`\`\`
+\`\`\`\`
 \`\`\`
 
-That closing \`\`\` is the LAST character of your reply. Nothing after it — not "Hope this helps!", not a question, not a note. If you run out of space, stop cleanly at the end of a complete paragraph or fenced block instead of adding a note about it — the user will send "continue" and you resume exactly where you stopped, inside a new code fence, no repetition, no fresh introduction, still nothing outside the fence.
+That closing \`\`\`\` (four backticks) is the LAST character of your reply. Nothing after it — not "Hope this helps!", not a question, not a note. If you run out of space, stop cleanly at the end of a complete paragraph or fenced block instead of adding a note about it — the user will send "continue" and you resume exactly where you stopped, inside a new \`\`\`\`markdown fence, no repetition, no fresh introduction, still nothing outside the fence.
 
 ## FINAL CHECKS (qualitative — this is the SELF-EDIT pass above, confirm it was actually done)
 \`\`\`
@@ -1296,6 +1349,36 @@ function chartFlow(spec){
   return { inner, height: maxY + 14 };
 }
 
+/* "compare" — two confusable things side by side with a VS divider, each
+   with its own short bullet list. Distinct from `grid` (many parallel
+   same-shape items) and from a Markdown table (compare is for exactly TWO
+   things head-to-head, with room to breathe, not a dense data grid) —
+   this is the most common gap in a Hindi-grammar/exam-notes site: कर्ता
+   vs कर्म, अपादान vs संबंध, दो confusable कारक, a common-mistake pair. */
+function chartCompare(spec){
+  const left = spec.left || {}, right = spec.right || {};
+  const colW = 158, gap = 20, colX1 = 12, colX2 = colX1 + colW + gap;
+  const lc = chartColor(left.color || 'blue', 0), rc = chartColor(right.color || 'rose', 1);
+  const top = 12, headH = 26;
+  let inner = '';
+  [ [colX1, lc, left], [colX2, rc, right] ].forEach(([x, c, side]) => {
+    inner += `<rect x="${x}" y="${top}" width="${colW}" height="${headH}" fill="${c.stroke}" rx="6"></rect>`;
+    inner += `<text x="${x + colW/2}" y="${top + 17}" font-size="10" fill="#fff" text-anchor="middle" font-weight="bold">${escChart(fitChartText(side.label, colW - 10, 10))}</text>`;
+  });
+  const vsY = top + headH / 2;
+  inner += `<circle cx="180" cy="${vsY}" r="13" fill="#fff" stroke="#94a3b8" stroke-width="1.5"></circle>`;
+  inner += `<text x="180" y="${vsY + 4}" font-size="9" fill="#475569" text-anchor="middle" font-weight="bold">VS</text>`;
+  const itemsY = top + headH + 10;
+  const maxItems = Math.max((left.items||[]).length, (right.items||[]).length, 1);
+  [ [colX1, lc, (left.items||[])], [colX2, rc, (right.items||[])] ].forEach(([x, c, items]) => {
+    inner += `<rect x="${x}" y="${itemsY}" width="${colW}" height="${maxItems * 20 + 10}" fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5" rx="6"></rect>`;
+    items.slice(0, maxItems).forEach((it, j) => {
+      inner += `<text x="${x + 8}" y="${itemsY + 18 + j * 20}" font-size="8" fill="${c.text}">• ${escChart(fitChartText(it, colW - 16, 8))}</text>`;
+    });
+  });
+  return { inner, height: itemsY + maxItems * 20 + 22 };
+}
+
 /* Renders a {* chart: Title *} block's JSON content into on-brand SVG.
    Falls back gracefully: raw <svg> passes through untouched (older articles
    and the deprecated `svg` block type still render), and unparseable JSON
@@ -1315,6 +1398,7 @@ function renderChartBlock(rawContent, blockTitle){
     case 'timeline': out = chartTimeline(spec); break;
     case 'bars': case 'comparison': out = chartBars(spec); break;
     case 'flow': case 'tree': out = chartFlow(spec); break;
+    case 'compare': case 'vs': out = chartCompare(spec); break;
     default: out = chartGrid(spec); break;
   }
   const h = Math.round(out.height);
@@ -1511,14 +1595,20 @@ function expandLongPostBlocks(raw){
    still lying around — they are never used for new content. */
 
 // Strips ONLY a single fence wrapping the ENTIRE reply (first line and last
-// line are bare ``` or ```lang) — unlike stripFences() above, this must NOT
-// touch fences inside the body, since those are now real content (```def,
-// ```chart, etc.), not something to discard.
+// line are a bare run of backticks) — unlike stripFences() above, this must
+// NOT touch fences inside the body, since those are now real content
+// (```def, ```chart, etc.), not something to discard. Requires the closing
+// run to be at least as long as the opening one, same as real Markdown fence
+// rules — so a ```` (4) opener is never closed early by a ``` (3) line
+// inside the body, which is exactly why the prompt requires 4 backticks for
+// this outer wrapper while inner ```type blocks stay at 3.
 function stripOuterFence(raw){
   let s = String(raw||'').trim();
   const lines = s.split(/\r?\n/);
-  if(lines.length > 2 && /^```[a-zA-Z]*\s*$/.test(lines[0]) && /^```\s*$/.test(lines[lines.length-1])){
-    return lines.slice(1,-1).join('\n').trim();
+  const openM = lines.length > 2 && /^(`{3,})[a-zA-Z]*\s*$/.exec(lines[0]);
+  if(openM){
+    const closeM = new RegExp('^`{'+openM[1].length+',}\\s*$').exec(lines[lines.length-1]);
+    if(closeM) return lines.slice(1,-1).join('\n').trim();
   }
   return s;
 }
@@ -1562,15 +1652,26 @@ function stripLeadingPublisherNotesLeak(bodyMarkdown){
 
 // Finds the article's Markdown regardless of any chat wrapper text a model
 // added despite being told not to ("Here's your article:" before the fence,
-// "Let me know if you'd like changes!" after it) — the prompt says the whole
-// reply must be nothing but the fence, but that instruction isn't always
-// followed, and a real pipeline can't just fail on every such reply.
-// Strategy: prefer the content of any fenced code block whose body starts
-// with frontmatter (discards chat text outside that fence entirely); if no
-// fence contains one, fall back to locating the frontmatter block anywhere
-// in the raw text and taking everything from there onward.
+// "Let me know if you'd like changes!" after it), AND regardless of whether
+// it correctly used a 4-backtick outer fence (the prompt requires this
+// specifically so the body's own 3-backtick ```type blocks can't close it
+// early — see stripOuterFence's comment) or, non-compliantly, only 3.
+//
+// Tier 1: a proper N-backtick (N>=4) fence whose CLOSING run is also >=N
+// backticks — this is fence-length-aware, so an outer ```` correctly
+// contains every ```def/```chart block inside it without truncating.
+// Tier 2: no such fence found — fall back to the naive "first ``` pair"
+// search (this mis-extracts if the reply nests fences at equal length, but
+// that's strictly a non-compliant reply this function can't perfectly
+// recover from; better than nothing).
+// Tier 3: no fence at all — locate the frontmatter block directly in the
+// raw text and take everything from there onward.
 function findMarkdownFileText(raw){
   const rawStr = String(raw||'');
+  const longFenceRe = /^(`{4,})[a-zA-Z]*[ \t]*\r?\n([\s\S]*?)\r?\n\1`*[ \t]*$/m;
+  const lf = longFenceRe.exec(rawStr);
+  if(lf && /^\s*---\s*\r?\n/.test(lf[2])) return lf[2].trim();
+
   const fenceRe = /```[a-zA-Z]*[ \t]*\r?\n([\s\S]*?)```/g;
   let m;
   while((m = fenceRe.exec(rawStr))){
@@ -1789,7 +1890,7 @@ var accumulatedRaw = '';
 function copyContinue(btn){
   const t = `Continue EXACTLY from where your previous reply stopped. Rules:
 - Do NOT repeat anything already written. Do NOT start over. No introduction, no summary of what came before.
-- Resume mid-paragraph or mid-fenced-block exactly where you stopped, inside a new \`\`\`markdown code fence — same rules as before (plain Markdown, no HTML, fenced \`\`\`type blocks for cards).
+- Resume mid-paragraph or mid-fenced-block exactly where you stopped, inside a new \`\`\`\`markdown (four backticks) code fence — same rules as before (plain Markdown, no HTML, fenced \`\`\`type blocks for cards, three backticks, inside the four-backtick outer wrapper).
 - When the body (through FAQ) is complete, append the <!-- PUBLISHER NOTES --> sentinel and the publisher notes, same as a normal single-pass reply.`;
   doCopy(t, btn, msg('parseMsg'), '"Continue" prompt copied — paste it in the SAME chat, then paste the new reply here with the continuation checkbox ticked.');
 }
