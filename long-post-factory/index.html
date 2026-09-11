@@ -414,9 +414,17 @@ const EXAM_PROFILES = {
   },
   'bpsc tre': {
     label: 'BPSC TRE (Bihar Teacher Recruitment Examination)',
-    persona: 'a Bihar state-cadre TGT/PGT subject expert who has cleared and now coaches BPSC TRE aspirants, fluent in exactly how BPSC phrases its subject-wise questions and the state syllabus quirks that differ from CBSE/NCERT-only prep',
-    subjects: 'subject-wise TGT (Class 9–10) and PGT (Class 11–12) content per the SUBJECT given below, plus Bihar-specific pedagogy/CDP for the teaching-eligibility portion',
-    angle: 'Treat this as the "BPSC TRE" program (also referred to as Bihar TRE) — subject-wise practice framing works best (e.g. "BPSC TRE TGT [Subject] practice questions"), and Hindi-medium PYQ-style questions matter as much as English ones.'
+    persona: 'a Bihar state-cadre subject expert who has cleared and now coaches BPSC TRE aspirants, fluent in exactly how BPSC phrases its objective questions and the state syllabus quirks that differ from CBSE/NCERT-only prep',
+    subjects: 'level-dependent — see the paper structure below; for Primary (Class 1–5) it is Language (qualifying) + General Studies only, for TGT/PGT it is subject-wise Class 9–10/11–12 content',
+    // Sourced 2026-09 from BPSC TRE 4.0 official notification summaries
+    // (pw.live/adda247/testbook syllabus pages) — see
+    // Automation/input sylabuss/BPSC-TRE-4-Primary-Teacher-Question-Types.md
+    // for the full research and per-subject question-style notes this was
+    // distilled from. Update both files together if BPSC revises the pattern.
+    angle: `Treat this as the "BPSC TRE" program (also referred to as Bihar TRE). Real, verified paper structure — apply the one matching TEACHING LEVEL below, never invent a different one:
+- **Primary Teacher (Class 1–5):** 150 objective questions / 150 marks, 2.5 hours, 1/3 negative marking per wrong answer. Part I = Language (30Q, English + one of Hindi/Urdu/Bangla) — QUALIFYING ONLY, not counted to merit. Part II = General Studies (120Q): Elementary Mathematics, Mental Ability, General Awareness, General Science, Social Science, Geography & Environment, Indian National Movement. **There is no separate CDP/Pedagogy paper at this level** — do not frame practice questions as pedagogy MCQs unless SUBJECT is explicitly CDP; question style is direct fact/rule/calculation-based, not classroom-scenario-based.
+- **TGT/PGT (Class 6–10 / 11–12):** subject-wise paper per the SUBJECT given below, same 1/3 negative-marking convention; subject-wise practice framing works best (e.g. "BPSC TRE TGT [Subject] practice questions").
+Hindi-medium PYQ-style questions matter as much as English ones either way. Per-subject question-type patterns (Hindi grammar = rule + identify + correct-usage; Maths = direct calculation, rarely word-problem-heavy; Science/Social Science = fact-recall and one-line-definition style, not deep conceptual application; Geography = map/location + one-fact association) are general observed patterns for this exam family, not a specific sourced weightage — treat them as a style guide, not a citable statistic.`
   },
   'dsssb tgt': {
     label: 'DSSSB TGT',
