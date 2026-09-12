@@ -308,7 +308,8 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <textarea id="fPublisherNotes" style="min-height:160px"></textarea></details>
 
   <label>Preview (how the notes body will render)</label>
-  <iframe class="previewFrame" id="previewFrame" sandbox=""></iframe>
+  <p class="hint" style="margin-top:0">✏️ Click inside the preview to edit it directly, like a document — your changes sync back into the HTML above automatically.</p>
+  <iframe class="previewFrame" id="previewFrame" sandbox="allow-same-origin"></iframe>
 
   <fieldset style="margin-top:16px">
     <legend>🛡️ Rank Math validation gate</legend>
@@ -2111,6 +2112,41 @@ function copyReviewField(e, id, label){
   doCopy(val, null, msg('reviewMsg'), label+' copied.');
 }
 
+// Wires up direct WYSIWYG editing of the preview iframe: the user can click
+// into the rendered cards and fix a typo/small mistake right there instead of
+// hunting for it in the raw HTML textarea. `sandbox="allow-same-origin"` on
+// the iframe (see the HTML) is what makes this possible — without it, a
+// srcdoc iframe gets an opaque cross-origin document the parent page can
+// never read back from, sandboxed or not. This does NOT enable scripts
+// inside the iframe (no `allow-scripts`), so AI-generated content still
+// can't execute anything even though we can now read/write its DOM.
+// Deliberately does NOT call updatePreview()/reassign .srcdoc from inside the
+// input handler — that would reload the iframe on every keystroke, wiping
+// the cursor position and selection; instead it writes straight into the
+// textarea + state + word count, the same three things updatePreview()
+// itself keeps in sync, so nothing downstream (save/validate/publish, which
+// all read from the textarea or state.bodyHtml) can tell the difference
+// between a preview edit and a textarea edit.
+function attachPreviewEditing(frame){
+  const doc = frame.contentDocument;
+  if(!doc || !doc.body) return;
+  doc.body.setAttribute('contenteditable', 'true');
+  doc.body.spellcheck = false;
+  const style = doc.createElement('style');
+  style.textContent = 'body[contenteditable="true"]{cursor:text} body[contenteditable="true"]:focus{outline:2px dashed #2563eb;outline-offset:-2px}';
+  doc.head.appendChild(style);
+  doc.body.addEventListener('input', () => {
+    const html = doc.body.innerHTML;
+    const ta = document.getElementById('fBodyHtml');
+    if(ta) ta.value = html;
+    state.bodyHtml = html;
+    const text = html.replace(/<[^>]+>/g,' ');
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const bw = document.getElementById('bodyWords');
+    if(bw) bw.textContent = words.toLocaleString();
+    saveDraft();
+  });
+}
 function updatePreview(){
   syncFormToState();
   const frame = document.getElementById('previewFrame');
@@ -2120,6 +2156,7 @@ function updatePreview(){
      and dump the rest of the source as visible page text.
      The DOCTYPE is load-bearing too: without it the iframe renders in quirks
      mode, where the notes cards' box-sizing/margin CSS displays wrong. */
+  frame.onload = () => attachPreviewEditing(frame);
   frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'<\/body></html>';
   const text = state.bodyHtml.replace(/<[^>]+>/g,' ');
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;

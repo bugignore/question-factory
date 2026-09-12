@@ -213,7 +213,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   <button class="btn ghost" onclick="tryRun(copyWholePrompt,this)">🖥️ Copy whole prompt (PC only)</button>
   <div class="msg" id="pMsg"></div>
   <div id="filePickWrap" style="display:none">
-    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v12.md</code> in the folder above this one:</label>
+    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v13.md</code> in the folder above this one:</label>
     <input type="file" id="masterPromptFile" accept=".md,.txt">
   </div>
   <textarea id="promptOut" style="display:none"></textarea>
@@ -274,7 +274,8 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <textarea id="fPublisherNotes" style="min-height:160px"></textarea></details>
 
   <label>Preview (how the notes body will render)</label>
-  <iframe class="previewFrame" id="previewFrame" sandbox=""></iframe>
+  <p class="hint" style="margin-top:0">✏️ Click inside the preview to edit it directly, like a document — your changes sync back into the HTML above automatically.</p>
+  <iframe class="previewFrame" id="previewFrame" sandbox="allow-same-origin"></iframe>
 
   <fieldset style="margin-top:16px">
     <legend>🛡️ Rank Math validation gate</legend>
@@ -472,6 +473,43 @@ Use these as supporting material where genuinely relevant to TOPIC — same whit
 ${lines.join('\n')}`;
 }
 
+/* This repo's own NCERT chapter-text knowledge base (Automation/ncert-
+   knowledge-base/by-subject/<Subject>/) — plain-text NCERT chapters,
+   pre-cleaned, one file per chapter. Ported verbatim from
+   long-post-factory/index.html (see its identical comment there for the
+   full rationale) so both tools point the AI at the SAME grounding source
+   instead of an ungrounded general web search. Read-only for the AI: never
+   a URL to cite in the article body (github.com isn't a HARD BAN 6
+   whitelisted citation domain) — only for its own background reading. */
+const NCERT_KB_SUBJECT_MAP = {
+  'Geography': ['Geography'],
+  'History': ['History'],
+  'Science': ['Science', 'Biology', 'Chemistry'],
+  'EVS': ['Science', 'Geography'],
+  'Maths': ['Maths'],
+  'Hindi': ['Hindi'],
+};
+function buildNcertKnowledgeBaseBlock(subject){
+  const folders = NCERT_KB_SUBJECT_MAP[subject];
+  if(!folders || !folders.length) return '';
+  const base = 'https://github.com/bugignore/question-factory/tree/main/Automation/ncert-knowledge-base/by-subject';
+  const links = folders.map(f => `- ${f}: ${base}/${encodeURIComponent(f)}`).join('\n');
+  return `
+
+## NCERT KNOWLEDGE BASE (check this FIRST, before any general web search)
+This repo maintains its own cleaned NCERT chapter-text corpus for SUBJECT — this is the
+preferred grounding source for this run, ahead of an open-ended web search. If you have the
+ability to open a URL, browse these folders and read whichever chapter .txt files are actually
+relevant to TOPIC before writing — treat the chapter text as evidence to extract facts from and
+explain in your own words (same RAG/SOURCES rule as above: never copy source prose verbatim).
+If a claim traces back to something you read here, cite the ORIGINAL NCERT source
+(ncert.nic.in — see REFERENCE SOURCES above) in the article's References, not this GitHub
+mirror. If you have no browsing ability, skip this section entirely and rely on your own
+verified knowledge under the same honesty rules — never substitute a generic, uncurated web
+search for this repo's own knowledge base.
+${links}`;
+}
+
 // Safe to run now that the REFERENCE_SOURCES_* consts above are initialised.
 initSelectors();
 
@@ -611,7 +649,7 @@ function updateLangMixLabel(){
 
 async function loadMasterPrompt(){
   if(masterPromptText) return masterPromptText;
-  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v12.md'];
+  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v13.md'];
   let lastErr;
   for(const url of candidates){
     try{
@@ -625,7 +663,7 @@ async function loadMasterPrompt(){
   const hint = location.protocol === 'file:'
     ? 'This page was opened straight from the folder (file://), where browsers block reading other files automatically.'
     : 'Could not load the master prompt file from the repo root ('+(lastErr?lastErr.message:'')+').';
-  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v12.md manually — then tap "Build & copy prompt" again.');
+  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v13.md manually — then tap "Build & copy prompt" again.');
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -735,7 +773,7 @@ async function buildPrompt(){
   saveDraft();
 
   let master = await loadMasterPrompt();
-  master = master.replace('{{REFERENCE_SOURCES_BLOCK}}', buildReferenceSourcesBlock(subject));
+  master = master.replace('{{REFERENCE_SOURCES_BLOCK}}', buildReferenceSourcesBlock(subject) + buildNcertKnowledgeBaseBlock(subject));
   master = master.replaceAll('{{TEACHING_LEVEL}}', getTeachingLevel(examType));
 
   const config = state.isUpdate ? updateConfig(topic, examType, subject, hindiPercent) : `=== RUN THIS GENERATION WITH THESE EXACT INPUT VARIABLES ===
@@ -940,11 +978,17 @@ function stripHtmlComments(html){
 }
 
 /* ================= BLOCK-TAG EXPANSION =================
-   Notes are back on MASTER-PROMPT-ExamNotesPDF_v12 (the AI hand-writes styled
-   HTML directly, like published-notes/) — the block-tag system below is Long
-   Post Factory's mechanism, not Notes'. It's kept here only so this function
-   stays a harmless no-op passthrough on a v12 reply (no {* type *} markers to
-   find); it is not part of how Notes are meant to be generated.
+   Notes run on MASTER-PROMPT-ExamNotesPDF_v13, which merges v13's content
+   judgment (teaching-level awareness, four-role framing, the Variety Engine,
+   no length/keyword-density quota) with v12's DESIGN half — the AI hand-
+   writes styled HTML directly, like published-notes/, exactly as v12 always
+   did. An earlier v13 draft moved styling into `{* type: title *}` markers
+   for a publisher script to expand; that shipped broken in production
+   (markers went out unexpanded, raw labels/JSON visible on published pages)
+   and was reverted. The current v13 prompt no longer asks for those markers
+   at all, so this function stays a harmless no-op passthrough (nothing to
+   find); it is kept only for old replies that might still contain one, and
+   because Long Post Factory's own pipeline still uses this same mechanism.
 
    Auto-detection of a missing/forgotten {* END *}: rather than requiring an
    explicit close, a block's content is simply everything between its opening
@@ -1327,7 +1371,10 @@ function parseResponse(raw){
   if(result.truncated) warnings.push('The reply looks CUT OFF midway (no closing marker found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
   if(seoResult.method==='label-text') warnings.push('SEO fields: no JSON block found — read from the plain labeled panel instead. Double-check every field.');
   if(bodyResult.method==='h2-scan') warnings.push('Notes body: no marker comments found — guessed the body by scanning from the first <h2> to the next recognizable end-of-notes marker. Double-check the body did not get cut short or include trailing text.');
-  if(blockResult.blockCount === 0) warnings.push('No {* type: title *} block tags were found in the body — it was passed through as-is (fine for a pre-v13 hand-written-HTML reply; re-check if you expected block tags).');
+  // blockResult.blockCount is expected to be 0 for every current-prompt reply —
+  // the merged v13 prompt is back to hand-written HTML (see BLOCK-TAG EXPANSION
+  // comment above), so a 0 count here is the normal case, not worth a warning.
+  // A non-zero count still gets recorded in `method` above for visibility.
   result.warnings = warnings;
   return result;
 }
@@ -1436,6 +1483,41 @@ function copyReviewField(e, id, label){
   doCopy(val, null, msg('reviewMsg'), label+' copied.');
 }
 
+// Wires up direct WYSIWYG editing of the preview iframe: the user can click
+// into the rendered cards and fix a typo/small mistake right there instead of
+// hunting for it in the raw HTML textarea. `sandbox="allow-same-origin"` on
+// the iframe (see the HTML) is what makes this possible — without it, a
+// srcdoc iframe gets an opaque cross-origin document the parent page can
+// never read back from, sandboxed or not. This does NOT enable scripts
+// inside the iframe (no `allow-scripts`), so AI-generated content still
+// can't execute anything even though we can now read/write its DOM.
+// Deliberately does NOT call updatePreview()/reassign .srcdoc from inside the
+// input handler — that would reload the iframe on every keystroke, wiping
+// the cursor position and selection; instead it writes straight into the
+// textarea + state + word count, the same three things updatePreview()
+// itself keeps in sync, so nothing downstream (save/validate/publish, which
+// all read from the textarea or state.bodyHtml) can tell the difference
+// between a preview edit and a textarea edit.
+function attachPreviewEditing(frame){
+  const doc = frame.contentDocument;
+  if(!doc || !doc.body) return;
+  doc.body.setAttribute('contenteditable', 'true');
+  doc.body.spellcheck = false;
+  const style = doc.createElement('style');
+  style.textContent = 'body[contenteditable="true"]{cursor:text} body[contenteditable="true"]:focus{outline:2px dashed #2563eb;outline-offset:-2px}';
+  doc.head.appendChild(style);
+  doc.body.addEventListener('input', () => {
+    const html = doc.body.innerHTML;
+    const ta = document.getElementById('fBodyHtml');
+    if(ta) ta.value = html;
+    state.bodyHtml = html;
+    const text = html.replace(/<[^>]+>/g,' ');
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const bw = document.getElementById('bodyWords');
+    if(bw) bw.textContent = words.toLocaleString();
+    saveDraft();
+  });
+}
 function updatePreview(){
   syncFormToState();
   const frame = document.getElementById('previewFrame');
@@ -1445,6 +1527,7 @@ function updatePreview(){
      and dump the rest of the source as visible page text.
      The DOCTYPE is load-bearing too: without it the iframe renders in quirks
      mode, where the notes cards' box-sizing/margin CSS displays wrong. */
+  frame.onload = () => attachPreviewEditing(frame);
   frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'<\/body></html>';
   const text = state.bodyHtml.replace(/<[^>]+>/g,' ');
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;

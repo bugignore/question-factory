@@ -278,7 +278,8 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <textarea id="fPublisherNotes" style="min-height:160px"></textarea></details>
 
   <label>Preview (how the notes body will render)</label>
-  <iframe class="previewFrame" id="previewFrame" sandbox=""></iframe>
+  <p class="hint" style="margin-top:0">✏️ Click inside the preview to edit it directly, like a document — your changes sync back into the HTML above automatically.</p>
+  <iframe class="previewFrame" id="previewFrame" sandbox="allow-same-origin"></iframe>
 
   <fieldset style="margin-top:16px">
     <legend>🛡️ Rank Math validation gate</legend>
@@ -647,15 +648,17 @@ function buildNcertKnowledgeBaseBlock(subject){
   const links = folders.map(f => `- ${f}: ${base}/${encodeURIComponent(f)}`).join('\n');
   return `
 
-## NCERT KNOWLEDGE BASE (optional deep-grounding — read only, never cite this URL)
-This repo maintains its own cleaned NCERT chapter-text corpus for SUBJECT. If you have the
+## NCERT KNOWLEDGE BASE (check this FIRST, before any general web search — read only, never cite this URL)
+This repo maintains its own cleaned NCERT chapter-text corpus for SUBJECT — this is the
+preferred grounding source for this run, ahead of an open-ended web search. If you have the
 ability to open a URL, browse these folders and read whichever chapter .txt files are actually
 relevant to TOPIC before writing — treat the chapter text as evidence to extract facts from and
 explain in your own words (same RAG/SOURCES rule as above: never copy source prose verbatim).
 If a claim traces back to something you read here, cite the ORIGINAL NCERT source
 (ncert.nic.in — see REFERENCE SOURCES above) in the article's References, not this GitHub
 mirror. If you have no browsing ability, skip this section entirely and rely on your own
-verified knowledge under the same honesty rules — do not guess at what these files contain.
+verified knowledge under the same honesty rules — never substitute a generic, uncurated web
+search for this repo's own knowledge base.
 ${links}
 `;
 }
@@ -1359,7 +1362,11 @@ function chartCompare(spec){
   const left = spec.left || {}, right = spec.right || {};
   const colW = 158, gap = 20, colX1 = 12, colX2 = colX1 + colW + gap;
   const lc = chartColor(left.color || 'blue', 0), rc = chartColor(right.color || 'rose', 1);
-  const top = 12, headH = 26;
+  // top=34 (not 12) to clear the title text renderChartBlock draws at y=22 —
+  // a real published diagram had its two comparison boxes start at y=12,
+  // directly overlapping that title (visible as two texts stacked on each
+  // other). Every other chart kind already reserves ~34-38px for this.
+  const top = 34, headH = 26;
   let inner = '';
   [ [colX1, lc, left], [colX2, rc, right] ].forEach(([x, c, side]) => {
     inner += `<rect x="${x}" y="${top}" width="${colW}" height="${headH}" fill="${c.stroke}" rx="6"></rect>`;
@@ -1774,6 +1781,25 @@ function renderMarkdownProse(md, wrapParagraphs){
       html += renderMarkdownTable(tableLines);
       i = j; continue;
     }
+    // A stray '#'/'###'/'####' heading — the prompt only asks for '##' (handled
+    // one level up, never reaching here) so anything landing here is the AI
+    // drifting to a different heading level. Render it as a real sub-heading
+    // instead of leaking literal '#' characters onto the page (a real published
+    // article shipped "### तत्सम और तद्भव..." as visible body text).
+    const headM = /^(#{1,6})\s+(.+)$/.exec(line);
+    if(headM){
+      const size = headM[1].length <= 1 ? 18 : (headM[1].length === 2 ? 18 : 16);
+      html += `<h3 style="font-size:${size}px;font-weight:700;color:#1e293b;margin:16px 0 6px;">${renderInlineMarkdown(headM[2].trim())}</h3>\n`;
+      i++; continue;
+    }
+    // A '>' blockquote — also unhandled previously, leaking a literal '>'
+    // character onto the page in front of quoted exam-style lines.
+    if(/^>\s?/.test(line)){
+      const quoteLines = []; let j = i;
+      while(j<lines.length && /^>\s?/.test(lines[j])){ quoteLines.push(lines[j].replace(/^>\s?/, '')); j++; }
+      html += `<div style="border-left:4px solid #94a3b8;padding:8px 14px;margin:10px 0;color:#475569;font-style:italic;font-size:14px;line-height:1.6;">${quoteLines.map(renderInlineMarkdown).join('<br>\n')}</div>\n`;
+      i = j; continue;
+    }
     if(/^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)){
       const ordered = /^\s*\d+\.\s+/.test(line);
       const items = []; let j = i;
@@ -1806,7 +1832,7 @@ function renderMarkdownProse(md, wrapParagraphs){
 // slots at [[AD]] markers. Returns the same {html, blockCount} shape the old
 // expandLongPostBlocks() did, so parseResponse() doesn't need to care which
 // path produced it.
-function renderLongPostMarkdown(md){
+function renderLongPostMarkdown(md, imageAltText){
   const lines = String(md||'').split(/\r?\n/);
   const tocHeadings = []; const tocSeen = Object.create(null);
   for(const line of lines){
@@ -1817,9 +1843,22 @@ function renderLongPostMarkdown(md){
     tocHeadings.push({ id: hid, title: hm[1].trim() });
   }
 
-  let out = '', proseBuf = [], adIdx = 0, blockCount = 0, h2Idx = 0, tocInserted = false;
+  // The featured image, inserted right after the intro (before the TOC/first
+  // section) — the current prompt deliberately tells the AI never to mention
+  // or embed an image itself ("the pipeline handles it"), but nothing was
+  // actually doing that insertion, so an uploaded featured image never
+  // appeared inline in the body at all, only as WP's post-thumbnail meta.
+  // This placeholder URL is the exact string publish-long-post.yml already
+  // knows to swap for the real uploaded media URL at publish time.
+  const introImgHtml = `<img src="https://via.placeholder.com/700x350?text=Diagram" alt="${escBlockTitle((imageAltText||'').trim())} — concept overview" style="width:100%;height:auto;border-radius:12px;margin:14px 0;box-sizing:border-box;max-width:100%;">\n`;
+
+  let out = '', proseBuf = [], adIdx = 0, blockCount = 0, h2Idx = 0, tocInserted = false, imgInserted = false;
   const flushProse = () => {
-    if(proseBuf.length){ out += renderMarkdownProse(proseBuf.join('\n'), true); proseBuf = []; }
+    if(proseBuf.length){
+      out += renderMarkdownProse(proseBuf.join('\n'), true);
+      proseBuf = [];
+      if(!imgInserted){ out += introImgHtml; imgInserted = true; }
+    }
   };
   let i = 0;
   while(i < lines.length){
@@ -1856,13 +1895,17 @@ function renderLongPostMarkdown(md){
   }
   flushProse();
   if(!tocInserted && tocHeadings.length){ out = renderTocBlock('Table of Contents', tocHeadings, '') + '\n' + out; }
+  // Fallback for the edge case where the article opens straight with a `##`
+  // and never has any intro prose to trigger flushProse's insertion above —
+  // still guarantee the mandatory image appears somewhere near the top.
+  if(!imgInserted){ out = introImgHtml + out; imgInserted = true; }
   return { html: out, blockCount, headingCount: tocHeadings.length };
 }
 
 function parseResponse(raw){
   const md = extractMarkdownFile(raw);
   if(md){
-    const rendered = renderLongPostMarkdown(md.bodyMarkdown);
+    const rendered = renderLongPostMarkdown(md.bodyMarkdown, md.seo && md.seo.imageAltText);
     const result = {
       seo: md.seo,
       bodyHtml: rendered.html,
@@ -2139,6 +2182,41 @@ function copyReviewField(e, id, label){
   doCopy(val, null, msg('reviewMsg'), label+' copied.');
 }
 
+// Wires up direct WYSIWYG editing of the preview iframe: the user can click
+// into the rendered cards and fix a typo/small mistake right there instead of
+// hunting for it in the raw HTML textarea. `sandbox="allow-same-origin"` on
+// the iframe (see the HTML) is what makes this possible — without it, a
+// srcdoc iframe gets an opaque cross-origin document the parent page can
+// never read back from, sandboxed or not. This does NOT enable scripts
+// inside the iframe (no `allow-scripts`), so AI-generated content still
+// can't execute anything even though we can now read/write its DOM.
+// Deliberately does NOT call updatePreview()/reassign .srcdoc from inside the
+// input handler — that would reload the iframe on every keystroke, wiping
+// the cursor position and selection; instead it writes straight into the
+// textarea + state + word count, the same three things updatePreview()
+// itself keeps in sync, so nothing downstream (save/validate/publish, which
+// all read from the textarea or state.bodyHtml) can tell the difference
+// between a preview edit and a textarea edit.
+function attachPreviewEditing(frame){
+  const doc = frame.contentDocument;
+  if(!doc || !doc.body) return;
+  doc.body.setAttribute('contenteditable', 'true');
+  doc.body.spellcheck = false;
+  const style = doc.createElement('style');
+  style.textContent = 'body[contenteditable="true"]{cursor:text} body[contenteditable="true"]:focus{outline:2px dashed #2563eb;outline-offset:-2px}';
+  doc.head.appendChild(style);
+  doc.body.addEventListener('input', () => {
+    const html = doc.body.innerHTML;
+    const ta = document.getElementById('fBodyHtml');
+    if(ta) ta.value = html;
+    state.bodyHtml = html;
+    const text = html.replace(/<[^>]+>/g,' ');
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const bw = document.getElementById('bodyWords');
+    if(bw) bw.textContent = words.toLocaleString();
+    saveDraft();
+  });
+}
 function updatePreview(){
   syncFormToState();
   const frame = document.getElementById('previewFrame');
@@ -2148,6 +2226,7 @@ function updatePreview(){
      and dump the rest of the source as visible page text.
      The DOCTYPE is load-bearing too: without it the iframe renders in quirks
      mode, where the notes cards' box-sizing/margin CSS displays wrong. */
+  frame.onload = () => attachPreviewEditing(frame);
   frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:12px;font-family:system-ui,sans-serif;">'+state.bodyHtml+'<\/body></html>';
   const text = state.bodyHtml.replace(/<[^>]+>/g,' ');
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -2775,6 +2854,22 @@ function vCheckToc(doc){
   return { id:'toc', label:'Linked TOC present (proxy — Rank Math’s real TOC-plugin detection is unconfirmed, see audit)', tier:'soft',
     pass: matching.length>=2, detail: `${matching.length} anchor link(s) resolve to a real H2 id` };
 }
+// The FAQ section's h2 is written by the AI like any other section heading —
+// but everything under it MUST be a ```faq fenced block per question (each
+// renders as its own <h3> question + answer div), never left as plain prose.
+// A real published article wrote just the "अक्सर पूछे जाने वाले सवाल" h2 with
+// no ```faq blocks under it at all — it rendered as a bare title banner with
+// nothing that reads as an actual FAQ. Hard-fail if an FAQ-labeled h2 has
+// fewer than 3 h3s before the next h2/end of body.
+function vCheckFaqCards(doc){
+  const h2s = [...doc.querySelectorAll('h2')];
+  const faqH2 = h2s.find(h => /faq|frequently asked|प्रश्न|सवाल/i.test(h.textContent||'') || /faq/i.test(h.id||''));
+  if(!faqH2) return { id:'faq-cards', label:'FAQ section has real Q&A cards, not just a heading', tier:'soft', pass:true, detail:'no FAQ heading found to check' };
+  let n = faqH2.nextElementSibling, h3Count = 0;
+  while(n && n.tagName !== 'H2'){ if(n.tagName === 'H3') h3Count++; n = n.nextElementSibling; }
+  return { id:'faq-cards', label:'FAQ section has real Q&A cards, not just a heading', tier:'hard',
+    pass: h3Count>=3, detail: `${h3Count} question card(s) found under the FAQ heading (need >=3 — each FAQ question must be its own \`\`\`faq block)` };
+}
 function vCheckAdSlots(doc){
   const ads = [...doc.querySelectorAll('ins.adsbygoogle')];
   if(ads.length!==3) return { id:'ad-slots', label:'Exactly 3 ad slots, spread early/mid/late', tier:'soft', pass:false, detail:`${ads.length} found (need exactly 3)` };
@@ -2858,7 +2953,15 @@ function vCheckPipelineArtifacts(bodyHtml, seo){
   const proseOnly = html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   if(proseOnly && /^\[[^\]]{1,120}\]$/.test(proseOnly)){ offenders.push('body is nothing but a single bracketed placeholder'); }
 
-  if(/via\.placeholder\.com/i.test(html)) offenders.push('via.placeholder.com placeholder image');
+  // via.placeholder.com is now EXPECTED exactly once, inside the mandatory
+  // <img> renderLongPostMarkdown inserts after the intro — publish-long-
+  // post.yml swaps it for the real uploaded media URL. Only flag it if it's
+  // missing/duplicated, or shows up somewhere that isn't that one <img> tag
+  // (e.g. the AI wrote its own placeholder mention in prose).
+  const placeholderImgs = (html.match(/<img[^>]*via\.placeholder\.com[^>]*>/gi)||[]).length;
+  const otherPlaceholderMentions = (html.match(/via\.placeholder\.com/gi)||[]).length - placeholderImgs;
+  if(placeholderImgs > 1) offenders.push('more than one placeholder <img> tag found (expected exactly 1)');
+  if(otherPlaceholderMentions > 0) offenders.push('via.placeholder.com text found outside the mandatory <img> tag');
   if(/lorem ipsum/i.test(html)) offenders.push('Lorem ipsum filler text');
   if(proseOnly === 'undefined' || proseOnly === 'null') offenders.push(`body is literally "${proseOnly}"`);
   if(/^\s*(?:html|htm)\s*\n/i.test(html)) offenders.push('leaked markdown fence language word ("html") before the first tag');
@@ -2873,8 +2976,30 @@ function vCheckPipelineArtifacts(bodyHtml, seo){
   // failure that turned post 534 into unstyled grey text with a leaked
   // chart JSON blob (root cause: a non-ASCII colon in the AI's reply).
   // Hard-fail instead of shipping a wall of unstyled text.
-  if(/<b>(?:h2|def|tip|exam|question|trick|mistake|summary|revision|insight|update|toc|faq|table|chart|svg|img)[:\uFF1A\uA789\u2236\s][^<]*<\/b>/i.test(html))
+    // (?!\\s+of\\s+contents) excludes the TOC card's own legitimate
+  // "<b>Table of Contents</b>" label, which otherwise false-positives on the
+  // "table" keyword + whitespace — found while testing this exact check: it
+  // was hard-failing on literally every article, TOC included, which would
+  // train a human to click "post anyway" regardless of what hard checks say.
+  if(/<b>(?:h2|def|tip|exam|question|trick|mistake|summary|revision|insight|update|toc|faq|table|chart|svg|img)(?!\s+of\s+contents)[:\uFF1A\uA789\u2236\s][^<]*<\/b>/i.test(html))
     offenders.push('a block title still starts with a type keyword (e.g. "chart: ...") — parseBlockHeader failed to recognize the type separator; check for a non-ASCII colon or invisible character in the AI reply');
+
+  // A chart whose JSON genuinely failed to parse renders this exact warning
+  // box (see renderChartBlock) — useful in the editor's live preview, but a
+  // real incident shipped it straight to a published page as visible text.
+  // Hard-fail so it can never reach Auto-save/publish unfixed.
+  if(/Chart block could not be parsed as JSON/i.test(html))
+    offenders.push('a chart block JSON failed to parse and rendered its error box straight into the body - fix that chart before publishing');
+  // A literal leftover '#' heading marker or '>' blockquote marker visible in
+  // the rendered text means a markdown construct this renderer didn't
+  // recognize slipped through as raw text (a real published article showed
+  // "### तत्सम और तद्भव..." verbatim). Checked right after a tag boundary
+  // (not on whitespace-collapsed proseOnly, which loses line breaks and would
+  // false-positive on something like "Room #5") so this only fires on a '#'
+  // that actually opens a line/paragraph, matching how a real leaked heading
+  // renders (as the first characters inside a <p>/<br> text node).
+  if(/(?:^|>)\s*#{1,6}\s+\S/.test(html) || /(?:^|>)\s*&gt;\s*\S/.test(html))
+    offenders.push('a literal "#" heading or ">" blockquote marker is visible in the body text - a markdown construct was not converted to styled HTML');
 
   return { id:'pipeline-artifacts', label:'No leaked AI-scaffolding / placeholder artifacts', tier:'hard',
     pass: offenders.length===0, detail: offenders.length ? offenders.join('; ') : 'clean' };
@@ -2891,7 +3016,7 @@ function vRunChecks(seo, bodyHtml){
     vCheckWordCount(words), vCheckDensity(words, kw), vCheckHeadings(doc, seo.focusKeyword),
     vCheckImageAlt(doc, seo.focusKeyword), vCheckSvg(doc, seo.focusKeyword), vCheckMedia(doc),
     vCheckParagraphs(doc), vCheckLinks(doc), vCheckDuplicateIds(doc), vCheckBareH3(doc),
-    vCheckScriptTags(doc), vCheckCitations(doc), vCheckToc(doc), vCheckAdSlots(doc),
+    vCheckScriptTags(doc), vCheckCitations(doc), vCheckToc(doc), vCheckFaqCards(doc), vCheckAdSlots(doc),
     vCheckTitle(seo), vCheckTitleWords(seo), vCheckMeta(seo), vCheckSlug(seo), vCheckH1(seo),
     vCheckFirst100Words(doc, seo)
   ];
