@@ -8,6 +8,7 @@
     "build-index": "node src/build-index.mjs"
   },
   "dependencies": {
-    "@anthro-ai/krutidev-unicode": "^0.1.0"
+    "@anthro-ai/krutidev-unicode": "^0.1.0",
+    "jsdom": "^29.1.1"
   }
 }

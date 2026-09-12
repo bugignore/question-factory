@@ -352,29 +352,20 @@ All HARD BANS on honesty still apply — only the question *type* varies.
    text? This is the exact class of defect that broke a real published article's Table
    of Contents.
 
-## OUTPUT FORMAT (exact order — the pipeline parses these markers; copy them verbatim)
+## OUTPUT FORMAT
+Follow the PIPELINE OUTPUT CONTRACT appended after this prompt exactly — it specifies the
+`<<<SEO_JSON>>>` / `<<<NOTES_BODY_HTML>>>` / `<<<PUBLISHER_NOTES>>>` sentinel wrapper and
+code-fencing rules. Everything above still applies in full — every card, the hand-written
+HTML design, every honesty rule; the contract only adds packaging around your final answer,
+it does not change the body back to markdown/block-tags.
+
 If you run out of room mid-article: stop cleanly at the end of a complete section, no
 scaffolding yet, end your turn — the user says "continue," you resume until the body is
-actually done, and only then print the SEO panel/Publisher Notes below.
-```
-[SEO PANEL]
+actually done, and only then print the sentinel-wrapped output the contract specifies.
 
-<!-- NOTES BODY START -->
-[entire notes body — pure HTML per VISUAL/HTML SYSTEM above]
-<!-- NOTES BODY END -->
-
----
-📋 END OF NOTES — below is for the publisher, not the page
----
-
-=== PUBLISHER NOTES ===
-- Seed: [N] — voice [_], opening move [_], example domain [_] (see VARIETY ENGINE)
-- Sources consulted: [list]
-- Claims softened/omitted: [list — empty is suspicious, re-check]
-- Question labels: [N] verified PYQ + [N] practice-pattern
-- Visuals used (0–6 SVGs) and why each earns its place: [list, or "none — not needed"]
-- URLs needing manual verification: [list]
-- Body word count (prose only): [N]
-```
+In Publisher Notes, state: your VARIETY ENGINE seed and the resulting voice/opening
+move/example domain, sources consulted, any claims softened/omitted (an empty list here is
+suspicious — re-check), the mix of question types used, and how many verified-PYQ vs
+practice-pattern questions you included.
 
 **>>> END OF MASTER PROMPT — NOW GENERATE THE NOTES <<<**

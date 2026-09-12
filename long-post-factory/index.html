@@ -2679,8 +2679,6 @@ function resetAll(){
    and 0.07% keyphrase density despite the AI's self-report claiming compliance. */
 
 const TARGET_SITE_HOST = 'examnotespdf.in'; // where notes get published — used to tell internal vs external links apart
-const APPROVED_POWER_WORDS = ['Complete','Ultimate','Essential','Proven','Definitive','Powerful','Master','Instant'];
-const APPROVED_SENTIMENT_WORDS = ['Best','Easy','Top','Smart','Perfect','Amazing'];
 
 function vParseBody(html){ return new DOMParser().parseFromString(html || '', 'text/html'); }
 
@@ -2764,21 +2762,12 @@ function vCountKeyphrase(text, keyphrase){
    density, or repetition count (see MASTER-PROMPT long-post rewrite:
    "natural, not mechanical" SEO, topic-adaptive structure). A short,
    well-taught topic and a long, rich one can both be genuinely good. */
-function vCheckWordCount(words){
-  return { id:'word-count', label:'Approx. word count (informational — no fixed target)', tier:'soft', pass: words>=1500, detail: words.toLocaleString()+' words' };
-}
-function vCheckDensity(words, kw){
-  const pct = words ? (kw.total/words*100) : 0;
-  return { id:'density', label:'Keyphrase density (informational — natural use, no target band)', tier:'soft', pass: pct>0,
-    detail: `${kw.exact} exact + ${kw.variant} variant = ${kw.total} / ${words} words = ${pct.toFixed(2)}%` };
-}
-function vCheckHeadings(doc, keyphrase){
-  const k = vNormalize(keyphrase);
-  const h2s = k ? [...doc.querySelectorAll('h2')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
-  const h3s = k ? [...doc.querySelectorAll('h3')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
-  return { id:'headings', label:'Keyphrase appears in some headings (informational)', tier:'soft', pass: h2s.length>=1 || h3s.length>=1,
-    detail: `${h2s.length} H2(s), ${h3s.length} H3(s) contain it` };
-}
+// vCheckWordCount, vCheckDensity, vCheckHeadings, vCheckSvg, vCheckMedia, and
+// vCheckTitleWords were removed here -- each enforced (or softly implied) a
+// v12-only numeric target this pipeline's own prompt explicitly rejects (a
+// word floor, a density band, a keyphrase-in-headings count, an SVG count, a
+// Rank-Math image-count metric, a title formula). Nothing in the Markdown
+// Output System / SEO section asks for any of these as a target to hit.
 function vCheckImageAlt(doc, keyphrase){
   const imgs = [...doc.querySelectorAll('img')];
   const k = vNormalize(keyphrase);
@@ -2786,18 +2775,6 @@ function vCheckImageAlt(doc, keyphrase){
   const pass = imgs.length>=1 && alts.some(a=>vNormalize(a).startsWith(k)) && k.length>0;
   return { id:'image-alt', label:'≥1 <img> with ALT starting with keyphrase', tier:'hard', pass,
     detail: imgs.length===0 ? 'NO <img> TAGS FOUND IN BODY' : `${imgs.length} image(s), alt="${alts.join('" / "')}"` };
-}
-function vCheckSvg(doc, keyphrase){
-  const svgs = [...doc.querySelectorAll('svg')];
-  const k = vNormalize(keyphrase);
-  const withLabel = svgs.filter(s=>vNormalize(s.getAttribute('aria-label')||'').includes(k)).length;
-  return { id:'svg-count', label:'SVG visuals used (informational, no fixed target — quality over quantity; NOT counted as Rank Math "media", see media check)', tier:'soft',
-    pass: true, detail: `${svgs.length} SVG(s), ${withLabel} with keyphrase in aria-label` };
-}
-function vCheckMedia(doc){
-  const count = doc.querySelectorAll('img, video').length; // Rank Math's real "Media in Posts" test: img/video only, not svg
-  return { id:'media', label:'Rank Math media test — 4+ real <img>/<video> for 100%', tier:'soft',
-    pass: count>=4, detail: `${count} real <img>/<video> element(s) found — SVGs don't count toward this` };
 }
 function vCheckParagraphs(doc){
   let longest=0, sample='';
@@ -2887,15 +2864,6 @@ function vCheckTitle(seo){
   const k = vNormalize(seo.focusKeyword), t = seo.seoTitle||'';
   return { id:'title', label:'SEO Title starts with keyphrase, ≤60 chars', tier:'hard',
     pass: k.length>0 && vNormalize(t).startsWith(k) && t.length<=60, detail: `"${t}" (${t.length} chars)` };
-}
-/* The rigid "number + power word + sentiment word" headline formula was
-   dropped from the prompt (it produced formulaic clickbait-style titles) —
-   this check is now informational only, never blocks saving. */
-function vCheckTitleWords(seo){
-  const t = seo.seoTitle||'';
-  const hasNumber = /\d/.test(t), hasPower = APPROVED_POWER_WORDS.some(w=>t.includes(w)), hasSentiment = APPROVED_SENTIMENT_WORDS.some(w=>t.includes(w));
-  return { id:'title-words', label:'Number/power/sentiment word in title (informational — not required)', tier:'soft',
-    pass: hasNumber && hasPower && hasSentiment, detail: `number:${hasNumber} power:${hasPower} sentiment:${hasSentiment}` };
 }
 function vCheckMeta(seo){
   const m = seo.metaDescription||'';
@@ -3008,21 +2976,17 @@ function vCheckPipelineArtifacts(bodyHtml, seo){
 function vRunChecks(seo, bodyHtml){
   seo = seo || {};
   const doc = vParseBody(bodyHtml);
-  const proseText = vProseText(doc);
-  const words = vWordCount(proseText);
-  const kw = vCountKeyphrase(proseText, seo.focusKeyword);
   const checks = [
     vCheckPipelineArtifacts(bodyHtml, seo),
-    vCheckWordCount(words), vCheckDensity(words, kw), vCheckHeadings(doc, seo.focusKeyword),
-    vCheckImageAlt(doc, seo.focusKeyword), vCheckSvg(doc, seo.focusKeyword), vCheckMedia(doc),
+    vCheckImageAlt(doc, seo.focusKeyword),
     vCheckParagraphs(doc), vCheckLinks(doc), vCheckDuplicateIds(doc), vCheckBareH3(doc),
     vCheckScriptTags(doc), vCheckCitations(doc), vCheckToc(doc), vCheckFaqCards(doc), vCheckAdSlots(doc),
-    vCheckTitle(seo), vCheckTitleWords(seo), vCheckMeta(seo), vCheckSlug(seo), vCheckH1(seo),
+    vCheckTitle(seo), vCheckMeta(seo), vCheckSlug(seo), vCheckH1(seo),
     vCheckFirst100Words(doc, seo)
   ];
   const hardChecks = checks.filter(c=>c.tier==='hard');
   return { checks, hardFails: hardChecks.filter(c=>!c.pass), hardPass: hardChecks.every(c=>c.pass),
-    softWarnings: checks.filter(c=>c.tier==='soft' && !c.pass), words, density: kw.total/(words||1)*100 };
+    softWarnings: checks.filter(c=>c.tier==='soft' && !c.pass) };
 }
 
 /* ---- the one network call: read every already-saved note's focus keyword for the uniqueness test ---- */

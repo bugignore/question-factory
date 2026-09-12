@@ -1947,8 +1947,6 @@ function resetAll(){
    and 0.07% keyphrase density despite the AI's self-report claiming compliance. */
 
 const TARGET_SITE_HOST = 'examnotespdf.in'; // where notes get published — used to tell internal vs external links apart
-const APPROVED_POWER_WORDS = ['Complete','Ultimate','Essential','Proven','Definitive','Powerful','Master','Instant'];
-const APPROVED_SENTIMENT_WORDS = ['Best','Easy','Top','Smart','Perfect','Amazing'];
 
 function vParseBody(html){ return new DOMParser().parseFromString(html || '', 'text/html'); }
 
@@ -2026,22 +2024,17 @@ function vCountKeyphrase(text, keyphrase){
   return { exact, variant: Math.max(0,total-exact), total };
 }
 
-/* ---- individual checks: each returns {id,label,tier:'hard'|'soft',pass,detail} with a REAL number in detail ---- */
-function vCheckWordCount(words){
-  return { id:'word-count', label:'Word count ≥ 4,500', tier:'soft', pass: words>=4500, detail: words.toLocaleString()+' words' };
-}
-function vCheckDensity(words, kw){
-  const pct = words ? (kw.total/words*100) : 0;
-  return { id:'density', label:'Keyphrase density 1.0–1.4%', tier:'hard', pass: pct>=1.0 && pct<=1.4,
-    detail: `${kw.exact} exact + ${kw.variant} variant = ${kw.total} / ${words} words = ${pct.toFixed(2)}%` };
-}
-function vCheckHeadings(doc, keyphrase){
-  const k = vNormalize(keyphrase);
-  const h2s = k ? [...doc.querySelectorAll('h2')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
-  const h3s = k ? [...doc.querySelectorAll('h3')].filter(h=>vNormalize(h.textContent).includes(k)) : [];
-  return { id:'headings', label:'Keyphrase in ≥2 H2s and ≥1 H3', tier:'hard', pass: h2s.length>=2 && h3s.length>=1,
-    detail: `${h2s.length} H2(s), ${h3s.length} H3(s) contain it` };
-}
+/* ---- individual checks: each returns {id,label,tier:'hard'|'soft',pass,detail} with a REAL number in detail ----
+   vCheckWordCount, vCheckDensity, vCheckHeadings, vCheckSvg, vCheckMedia, and
+   vCheckTitleWords were removed here (not softened -- deleted outright): all
+   six enforced a v12-only numeric target (a 4,500-word floor, 1.0-1.4%
+   keyphrase density, keyphrase in >=2 H2s/1 H3, a 4-6 SVG count, 4+ images
+   for a Rank Math metric, a number+power+sentiment title formula) that v13's
+   own prompt explicitly rejects ("not a target to hit", "no density target",
+   "no fixed... formula"). Keeping them even as soft/informational checks
+   still implies a target the AI might chase; v13's actual checklist (its
+   "On-page checklist, quick, not a counting exercise" table) doesn't ask for
+   any of these, so there's nothing here for a validator to enforce. */
 function vCheckImageAlt(doc, keyphrase){
   const imgs = [...doc.querySelectorAll('img')];
   const k = vNormalize(keyphrase);
@@ -2049,18 +2042,6 @@ function vCheckImageAlt(doc, keyphrase){
   const pass = imgs.length>=1 && alts.some(a=>vNormalize(a).startsWith(k)) && k.length>0;
   return { id:'image-alt', label:'≥1 <img> with ALT starting with keyphrase', tier:'hard', pass,
     detail: imgs.length===0 ? 'NO <img> TAGS FOUND IN BODY' : `${imgs.length} image(s), alt="${alts.join('" / "')}"` };
-}
-function vCheckSvg(doc, keyphrase){
-  const svgs = [...doc.querySelectorAll('svg')];
-  const k = vNormalize(keyphrase);
-  const withLabel = svgs.filter(s=>vNormalize(s.getAttribute('aria-label')||'').includes(k)).length;
-  return { id:'svg-count', label:'4–6 SVG visuals (informational — NOT counted as Rank Math "media", see media check)', tier:'soft',
-    pass: svgs.length>=4 && svgs.length<=6, detail: `${svgs.length} SVG(s), ${withLabel} with keyphrase in aria-label` };
-}
-function vCheckMedia(doc){
-  const count = doc.querySelectorAll('img, video').length; // Rank Math's real "Media in Posts" test: img/video only, not svg
-  return { id:'media', label:'Rank Math media test — 4+ real <img>/<video> for 100%', tier:'soft',
-    pass: count>=4, detail: `${count} real <img>/<video> element(s) found — SVGs don't count toward this` };
 }
 function vCheckParagraphs(doc){
   let longest=0, sample='';
@@ -2079,8 +2060,8 @@ function vCheckLinks(doc){
       else { external++; if(/nofollow/i.test(a.getAttribute('rel')||'')) externalNofollow++; }
     } else if(href.startsWith('/')) internal++;
   });
-  return { id:'links', label:'≥5 internal + ≥1 external link, zero href="#"', tier:'hard',
-    pass: internal>=5 && external>=1 && hashLinks===0,
+  return { id:'links', label:'≥5 internal + ≥2 external links, zero href="#"', tier:'hard',
+    pass: internal>=5 && external>=2 && hashLinks===0,
     detail: `${internal} internal, ${external} external (${externalNofollow} nofollow), ${hashLinks} href="#"` };
 }
 function vCheckDuplicateIds(doc){
@@ -2134,12 +2115,6 @@ function vCheckTitle(seo){
   const k = vNormalize(seo.focusKeyword), t = seo.seoTitle||'';
   return { id:'title', label:'SEO Title starts with keyphrase, ≤60 chars', tier:'hard',
     pass: k.length>0 && vNormalize(t).startsWith(k) && t.length<=60, detail: `"${t}" (${t.length} chars)` };
-}
-function vCheckTitleWords(seo){
-  const t = seo.seoTitle||'';
-  const hasNumber = /\d/.test(t), hasPower = APPROVED_POWER_WORDS.some(w=>t.includes(w)), hasSentiment = APPROVED_SENTIMENT_WORDS.some(w=>t.includes(w));
-  return { id:'title-words', label:'Title has a number + power word + sentiment word', tier:'hard',
-    pass: hasNumber && hasPower && hasSentiment, detail: `number:${hasNumber} power:${hasPower} sentiment:${hasSentiment}` };
 }
 function vCheckMeta(seo){
   const m = seo.metaDescription||'';
@@ -2197,7 +2172,16 @@ function vCheckPipelineArtifacts(bodyHtml, seo){
   const proseOnly = html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   if(proseOnly && /^\[[^\]]{1,120}\]$/.test(proseOnly)){ offenders.push('body is nothing but a single bracketed placeholder'); }
 
-  if(/via\.placeholder\.com/i.test(html)) offenders.push('via.placeholder.com placeholder image');
+  // via.placeholder.com is EXPECTED exactly once, in the mandatory featured
+  // <img> the VISUAL/HTML SYSTEM requires right after the intro — a human
+  // replaces it with the real uploaded image before hitting Publish on a
+  // draft (publish-note.yml, unlike publish-long-post.yml, has no automatic
+  // media-upload/swap step). Only flag it showing up more than once, or
+  // outside an <img> tag (e.g. the AI mentioning it in prose by mistake).
+  const placeholderImgs = (html.match(/<img[^>]*via\.placeholder\.com[^>]*>/gi)||[]).length;
+  const otherPlaceholderMentions = (html.match(/via\.placeholder\.com/gi)||[]).length - placeholderImgs;
+  if(placeholderImgs > 1) offenders.push('more than one placeholder <img> tag found (expected exactly 1)');
+  if(otherPlaceholderMentions > 0) offenders.push('via.placeholder.com text found outside the mandatory <img> tag');
   if(/lorem ipsum/i.test(html)) offenders.push('Lorem ipsum filler text');
   if(proseOnly === 'undefined' || proseOnly === 'null') offenders.push(`body is literally "${proseOnly}"`);
   if(/^\s*(?:html|htm)\s*\n/i.test(html)) offenders.push('leaked markdown fence language word ("html") before the first tag');
@@ -2206,14 +2190,17 @@ function vCheckPipelineArtifacts(bodyHtml, seo){
   // page's renderer didn't know — i.e. the fetched prompt and this loaded tool are
   // different versions. Hard-fail rather than publish a wall of raw JSON to readers.
   if(/"kind"\s*:\s*"(grid|flow|timeline|bars|comparison|tree)"/i.test(proseOnly)) offenders.push('raw chart JSON leaked into the body — the prompt and this tool are out of sync (this page does not know the {* chart *} block type; reload it)');
-  // A "plain" block whose visible title still starts with a known
-  // block-type keyword (h2, chart, def, ...) means parseBlockHeader
-  // failed to recognize the header's type/title separator -- the exact
-  // failure that turned post 534 into unstyled grey text with a leaked
-  // chart JSON blob (root cause: a non-ASCII colon in the AI's reply).
-  // Hard-fail instead of shipping a wall of unstyled text.
-  if(/<b>(?:h2|def|tip|exam|question|trick|mistake|summary|revision|insight|update|toc|faq|table|chart|svg|img)[:\uFF1A\uA789\u2236\s][^<]*<\/b>/i.test(html))
-    offenders.push('a block title still starts with a type keyword (e.g. "chart: ...") — parseBlockHeader failed to recognize the type separator; check for a non-ASCII colon or invisible character in the AI reply');
+  // The "block title still starts with a type keyword" check (e.g. a card
+  // literally titled "chart: ...") was removed here -- it only made sense
+  // for the OLD {* type: title *} block-tag system, where a failed parse
+  // left the raw marker text visible. v13 hand-writes real HTML directly
+  // (HARD BAN 8: "there is no publisher script rendering card markup for
+  // Notes"), so that failure mode can't happen any more, and the check was
+  // firing on ordinary English card labels that legitimately start with a
+  // word like "Question" or "Table" (e.g. "Question 1 (Direct)"), a much
+  // more common false positive than the "Table of Contents" one already
+  // patched here before this was fully removed.
+
 
   return { id:'pipeline-artifacts', label:'No leaked AI-scaffolding / placeholder artifacts', tier:'hard',
     pass: offenders.length===0, detail: offenders.length ? offenders.join('; ') : 'clean' };
@@ -2222,21 +2209,17 @@ function vCheckPipelineArtifacts(bodyHtml, seo){
 function vRunChecks(seo, bodyHtml){
   seo = seo || {};
   const doc = vParseBody(bodyHtml);
-  const proseText = vProseText(doc);
-  const words = vWordCount(proseText);
-  const kw = vCountKeyphrase(proseText, seo.focusKeyword);
   const checks = [
     vCheckPipelineArtifacts(bodyHtml, seo),
-    vCheckWordCount(words), vCheckDensity(words, kw), vCheckHeadings(doc, seo.focusKeyword),
-    vCheckImageAlt(doc, seo.focusKeyword), vCheckSvg(doc, seo.focusKeyword), vCheckMedia(doc),
+    vCheckImageAlt(doc, seo.focusKeyword),
     vCheckParagraphs(doc), vCheckLinks(doc), vCheckDuplicateIds(doc), vCheckBareH3(doc),
     vCheckScriptTags(doc), vCheckCitations(doc), vCheckToc(doc), vCheckAdSlots(doc),
-    vCheckTitle(seo), vCheckTitleWords(seo), vCheckMeta(seo), vCheckSlug(seo), vCheckH1(seo),
+    vCheckTitle(seo), vCheckMeta(seo), vCheckSlug(seo), vCheckH1(seo),
     vCheckFirst100Words(doc, seo)
   ];
   const hardChecks = checks.filter(c=>c.tier==='hard');
   return { checks, hardFails: hardChecks.filter(c=>!c.pass), hardPass: hardChecks.every(c=>c.pass),
-    softWarnings: checks.filter(c=>c.tier==='soft' && !c.pass), words, density: kw.total/(words||1)*100 };
+    softWarnings: checks.filter(c=>c.tier==='soft' && !c.pass) };
 }
 
 /* ---- the one network call: read every already-saved note's focus keyword for the uniqueness test ---- */
