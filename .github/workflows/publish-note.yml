@@ -228,13 +228,26 @@ jobs:
             # HTTP 000 means curl couldn't connect at all (transient network/hosting
             # blip, not a WordPress-side rejection) — worth a couple of retries
             # before giving up, since these have recurred and cost a whole draft.
+            #
+            # The payload is piped into curl via stdin (--data-binary @-)
+            # rather than passed as a command-line argument (--data-binary
+            # "$payload") — a long note's JSON easily exceeds the OS's
+            # execve() argument-size limit ("Argument list too long" / E2BIG),
+            # which curl can't even start under, and which this loop's
+            # `|| echo "000"` was silently misreporting as a network failure.
+            # Ported from publish-long-post.yml, which hit this exact incident
+            # (a 172KB pending file, logged as three bogus "connection attempt
+            # failed" retries) and fixed it there — this workflow was never
+            # updated to match, so notes kept failing this way. echo is a
+            # shell builtin here, not an exec'd process, so it isn't subject
+            # to that argument-size limit either.
             http_code="000"
             for attempt in 1 2 3; do
-              http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+              http_code="$(echo "$payload" | curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
                 -X "$wp_method" "$wp_url" \
                 -H "Content-Type: application/json" \
                 -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-                --data-binary "$payload" || echo "000")"
+                --data-binary @- || echo "000")"
               [ "$http_code" != "000" ] && break
               echo "::warning::$slug — connection attempt $attempt to WordPress failed, retrying…"
               sleep 5
@@ -246,11 +259,11 @@ jobs:
               if grep -q "rank_math" /tmp/wp-response.json 2>/dev/null; then
                 echo "::warning::$slug — WordPress rejected the Rank Math meta fields. Install the register-rank-math-meta snippet (see notes-factory/README.md) to publish SEO fields automatically. Retrying WITHOUT meta so the draft still lands; paste the Rank Math fields manually for this post."
                 payload="$(echo "$payload" | jq 'del(.meta)')"
-                http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+                http_code="$(echo "$payload" | curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
                   -X "$wp_method" "$wp_url" \
                   -H "Content-Type: application/json" \
                   -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-                  --data-binary "$payload" || echo "000")"
+                  --data-binary @- || echo "000")"
               fi
             fi
 
@@ -271,11 +284,11 @@ jobs:
               update_post_id=""
               http_code="000"
               for attempt in 1 2 3; do
-                http_code="$(curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
+                http_code="$(echo "$payload" | curl -sS -o /tmp/wp-response.json -w "%{http_code}" \
                   -X "$wp_method" "$wp_url" \
                   -H "Content-Type: application/json" \
                   -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-                  --data-binary "$payload" || echo "000")"
+                  --data-binary @- || echo "000")"
                 [ "$http_code" != "000" ] && break
                 echo "::warning::$slug — connection attempt $attempt to WordPress failed, retrying…"
                 sleep 5
