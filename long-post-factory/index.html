@@ -1491,13 +1491,24 @@ function parseBlockHeader(header){
    [a-z0-9], so a Devanagari heading collapses to '' and every Hindi h2 in an
    article would land on the same 'section' id (duplicate ids, dead TOC links,
    and a hard validation failure). HTML5 ids allow any character except
-   whitespace, so non-Latin headings keep their own characters instead. */
+   whitespace, so non-Latin headings keep their own characters instead — BUT
+   punctuation like ':' or ',' must still go: a real incident shipped
+   id="संज्ञा:-नाम-बताने-वाला-शब्द", and WordPress's content sanitizer treats
+   "संज्ञा:" in the matching href="#संज्ञा:-..." as a bogus URL protocol
+   prefix and strips it (plus the leading '#'), silently breaking every TOC
+   jump link on the live page. \p{L} (letters), \p{M} (combining marks — the
+   vowel signs/virama Devanagari depends on) and \p{N} (numbers), from ANY
+   script, are kept; everything else (colons, commas, full stops, …)
+   collapses to '-'. Dropping \p{M} looked plausible but silently mangled
+   every Hindi word (संज्ञा -> सजञ, losing the matras) — caught by testing
+   against real headings before landing this fix. */
 function headingSlug(title){
   const base = slugify(title);
   if(base) return base;
   const uni = String(title || '').trim().toLowerCase()
-    .replace(/["'<>#?&\/\\]/g, '')
-    .replace(/\s+/g, '-');
+    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '');
   return uni || 'section';
 }
 
@@ -1737,7 +1748,21 @@ function renderMarkdownTable(tableLines){
 // those are handled by the caller) into styled prose: paragraphs, lists,
 // tables. Used both for regular body prose and for the content inside a
 // fenced ```type block.
-function renderMarkdownProse(md){
+//
+// wrapParagraphs (default false): when true, each plain paragraph also gets
+// a light neutral card box instead of shipping as bare gray text. This
+// exists because a real published long post came out looking "blank" next
+// to the site's notes — the notes wrap almost every paragraph in a colored
+// card (def/tip/exam/etc.), but the long-post prompt only asks the AI to
+// card SPECIAL content, leaving ordinary explanation as unstyled <p> text
+// (one audited post: 381 plain paragraphs vs 132 carded ones). Relying on
+// the AI to card more of its own prose was tried in spirit already (the
+// MARKDOWN OUTPUT SYSTEM instructs it to) and still didn't happen reliably
+// — this wraps it in code instead, which can't be forgotten. Only passed
+// true for TOP-LEVEL body prose (see flushProse below); left false for
+// prose rendered INSIDE a def/tip/exam/etc. fenced block so a real card's
+// body text never gets a second, nested box around it.
+function renderMarkdownProse(md, wrapParagraphs){
   const lines = String(md||'').split(/\r?\n/);
   let html = '', i = 0;
   while(i < lines.length){
@@ -1756,14 +1781,20 @@ function renderMarkdownProse(md){
         items.push(lines[j].replace(/^\s*(?:[-*]|\d+\.)\s+/, '')); j++;
       }
       const tag = ordered ? 'ol' : 'ul';
-      html += `<${tag} style="font-size:14px;line-height:1.8;color:#1e293b;padding-left:20px;margin:8px 0;">` + items.map(it=>`<li>${renderInlineMarkdown(it)}</li>`).join('') + `</${tag}>\n`;
+      const listHtml = `<${tag} style="font-size:14px;line-height:1.8;color:#1e293b;padding-left:20px;margin:8px 0;">` + items.map(it=>`<li>${renderInlineMarkdown(it)}</li>`).join('') + `</${tag}>\n`;
+      html += wrapParagraphs
+        ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:10px;padding:12px 14px;margin:10px 0;box-sizing:border-box;max-width:100%;">${listHtml}</div>\n`
+        : listHtml;
       i = j; continue;
     }
     const paraLines = [line]; let j = i+1;
     while(j<lines.length && lines[j].trim() && !/^\s*[-*]\s+/.test(lines[j]) && !/^\s*\d+\.\s+/.test(lines[j]) && !/^\|.*\|\s*$/.test(lines[j])){
       paraLines.push(lines[j]); j++;
     }
-    html += `<p style="font-size:14px;line-height:1.6;color:#334155;margin:0 0 14px;">${paraLines.map(renderInlineMarkdown).join('<br>\n')}</p>\n`;
+    const paraHtml = `<p style="font-size:14px;line-height:1.6;color:#334155;margin:0;">${paraLines.map(renderInlineMarkdown).join('<br>\n')}</p>\n`;
+    html += wrapParagraphs
+      ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:10px;padding:12px 14px;margin:10px 0;box-sizing:border-box;max-width:100%;">${paraHtml}</div>\n`
+      : paraHtml;
     i = j;
   }
   return html;
@@ -1788,7 +1819,7 @@ function renderLongPostMarkdown(md){
 
   let out = '', proseBuf = [], adIdx = 0, blockCount = 0, h2Idx = 0, tocInserted = false;
   const flushProse = () => {
-    if(proseBuf.length){ out += renderMarkdownProse(proseBuf.join('\n')); proseBuf = []; }
+    if(proseBuf.length){ out += renderMarkdownProse(proseBuf.join('\n'), true); proseBuf = []; }
   };
   let i = 0;
   while(i < lines.length){

@@ -2,6 +2,7 @@ node_modules/
 Automation/long-post-runner/debug-replies/
 Automation/long-post-runner/__pycache__/
 Automation/long-post-runner/.venv/
+Automation/knowledge-base/
 
 # Retired/superseded local working data (old download-tool test runs, a raw
 # text backup) — never commit. The active book-input folder is
