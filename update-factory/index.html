@@ -390,6 +390,17 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   <button id="nextBtn" onclick="nav(1)">Next →</button>
 </nav>
 
+<!-- Shared EXAM_PROFILES (Automation/core/src/exam-profiles.mjs, mirrored
+     by gen-exam-profiles-browser.mjs) — window.ExamProfiles. -->
+<script src="../shared/exam-profiles.js"></script>
+<!-- Shared Editorial Flavour Engine (Automation/core/src/flavour-engine.mjs,
+     mirrored by gen-flavour-engine-browser.mjs) — window.FlavourEngine.
+     buildFlavourBlock() below falls back to plain text if this fails to load. -->
+<script src="../shared/flavour-engine.js"></script>
+<!-- Prompt Assembler (Automation/core/src/master-prompt-modules.mjs +
+     prompt-assembler.mjs, mirrored by gen-prompt-assembler-browser.mjs) —
+     window.PromptAssembler, shared with notes-factory/long-post-factory. -->
+<script src="../shared/prompt-assembler.js"></script>
 <script>
 "use strict";
 
@@ -430,105 +441,22 @@ const CDP_TOPICS = [
 const EXAM_SUGGESTIONS = ["CTET Paper I","CTET Paper II","BPSC TRE 4.0","Bihar TRE","DSSSB TGT","DSSSB PRT","UPTET","UP TGT","KVS TGT","KVS PGT","NVS TGT","NVS PGT","PGT","TGT","PRT"];
 
 /* ================= EXAM PERSONA SYSTEM =================
-   No master-prompt file is loaded for this pipeline (keeps the built prompt
-   short) — instead the prompt is assembled entirely in this script, cast as
-   a veteran faculty persona for whichever exam is typed. Built-in profiles
-   below are informed by the site's SEO audit (CTET's Hindi-medium PYQ demand
-   is its single biggest clean keyword opportunity; BPSC TRE / DSSSB TGT are
-   the next-priority exams, structurally planned but not yet content-heavy).
-   Any exam name NOT in this list still works — genericExamProfile() below
-   synthesizes a real-sounding persona from the name itself rather than
-   refusing or guessing wrong details. */
-const EXAM_PROFILES = {
-  'ctet': {
-    label: 'CTET',
-    persona: 'a veteran CDP & Pedagogy faculty member who has personally coached 10,000+ CTET Hindi-medium aspirants across both papers and has memorized exactly which NCERT lines the exam twists into distractors',
-    subjects: 'Child Development & Pedagogy (CDP), EVS, Mathematics, Mathematics Pedagogy, Hindi, English, Language Development',
-    angle: 'CTET Hindi-medium PYQ trends are this exam\'s single biggest untapped keyword opportunity — always surface authentic PYQ patterns, and treat Devanagari keyword variants (सीटीईटी) as worth targeting separately from the Romanized ones, not interchangeable with them. Strict NCERT/NCF 2005+2023 alignment language throughout.'
-  },
-  'bpsc tre': {
-    label: 'BPSC TRE (Bihar Teacher Recruitment Examination)',
-    persona: 'a Bihar state-cadre TGT/PGT subject expert who has cleared and now coaches BPSC TRE aspirants, fluent in exactly how BPSC phrases its subject-wise questions and the state syllabus quirks that differ from CBSE/NCERT-only prep',
-    subjects: 'subject-wise TGT (Class 9–10) and PGT (Class 11–12) content per the SUBJECT given below, plus Bihar-specific pedagogy/CDP for the teaching-eligibility portion',
-    angle: 'Treat this as the "BPSC TRE" program (also referred to as Bihar TRE) — subject-wise practice framing works best (e.g. "BPSC TRE TGT [Subject] practice questions"), and Hindi-medium PYQ-style questions matter as much as English ones.'
-  },
-  'dsssb tgt': {
-    label: 'DSSSB TGT',
-    persona: 'a Delhi-cadre TGT subject expert who has taught DSSSB TGT batches for years and knows the exact Delhi-government question style, distinct from CTET or state-TET patterns',
-    subjects: 'subject-wise TGT content (Class 9–10) per the SUBJECT given below, plus general awareness/Delhi-specific pedagogy where relevant',
-    angle: 'Mirror the CTET-style hub structure in tone but keep DSSSB\'s own question phrasing conventions — this exam has real search demand but almost no populated content yet, so authoritative, exam-pattern-accurate content is a genuine gap to fill.'
-  },
-  'dsssb prt': {
-    label: 'DSSSB PRT',
-    persona: 'a Delhi-cadre Primary Teacher (PRT) exam expert who has coached DSSSB PRT batches and knows the primary-level pedagogy and subject-integration style DSSSB actually tests',
-    subjects: 'Primary-level pedagogy, CDP, EVS, Hindi, English, Mathematics per the SUBJECT given below',
-    angle: 'Primary-teacher framing throughout — simpler classroom scenarios, foundational-literacy and numeracy angle, not secondary-level depth.'
-  },
-  'uptet': {
-    label: 'UPTET',
-    persona: 'a UP state-cadre TET faculty member who has coached thousands of UPTET aspirants and knows exactly how UP\'s question style differs from CTET despite the overlapping syllabus',
-    subjects: 'Child Development & Pedagogy, EVS, Mathematics, Hindi, English, Sanskrit (where relevant), UP-specific policy references',
-    angle: 'Heavy Hindi-medium framing — UPTET aspirants overwhelmingly prep in Hindi — and reference UP Basic Shiksha Parishad conventions where the exam actually differs from CTET.'
-  },
-  'up tgt': {
-    label: 'UP TGT',
-    persona: 'a UP-cadre TGT subject expert coaching aspirants for the UP Secondary Education Selection Board\'s TGT exam, fluent in its subject-wise weightage and question style',
-    subjects: 'subject-wise TGT content (Class 9–10) per the SUBJECT given below',
-    angle: 'UP-specific exam pattern and selection-board conventions; Hindi-medium framing dominant.'
-  },
-  'kvs': {
-    label: 'KVS (Kendriya Vidyalaya Sangathan)',
-    persona: 'a KVS-cadre subject expert and former KVPS/PGT interview panelist who knows exactly what KVS tests beyond the generic CTET syllabus — general awareness of KVS policy, computer literacy, and current affairs weightage',
-    subjects: 'subject-wise TGT/PGT content per the SUBJECT given below, plus General Awareness, Current Affairs, and Computer Literacy sections specific to KVS',
-    angle: 'KVS papers add a General Awareness + Computer Literacy layer most state TET exams skip — call that out explicitly rather than treating this as a copy of CTET.'
-  },
-  'nvs': {
-    label: 'NVS (Navodaya Vidyalaya Samiti)',
-    persona: 'an NVS-cadre subject expert familiar with Jawahar Navodaya Vidyalaya\'s residential-school context and NVS\'s own exam pattern (heavier reasoning/GK component than most TET exams)',
-    subjects: 'subject-wise TGT/PGT content per the SUBJECT given below, plus Reasoning and General Knowledge sections specific to NVS',
-    angle: 'NVS leans harder on reasoning/GK than CTET-style pedagogy exams — reflect that balance rather than defaulting to a pure-pedagogy framing.'
-  },
-  'pgt': {
-    label: 'PGT (Post Graduate Teacher, generic)',
-    persona: 'a senior subject-matter expert who has taught at the +2/senior-secondary level for years and coaches PGT aspirants across multiple state and central recruitment boards',
-    subjects: 'senior-secondary (Class 11–12) subject-wise content per the SUBJECT given below',
-    angle: 'Senior-secondary depth — this audience already cleared TGT-level basics, so go deeper into subject nuance rather than re-explaining fundamentals.'
-  },
-  'tgt': {
-    label: 'TGT (Trained Graduate Teacher, generic)',
-    persona: 'a senior TGT subject expert who has coached aspirants across multiple state and central TGT recruitment boards',
-    subjects: 'secondary-level (Class 9–10) subject-wise content per the SUBJECT given below',
-    angle: 'Secondary-level framing, exam-agnostic where the specific board isn\'t named.'
-  },
-  'prt': {
-    label: 'PRT (Primary Teacher, generic)',
-    persona: 'a primary-level teaching expert who has coached PRT aspirants across multiple recruitment boards',
-    subjects: 'primary-level pedagogy, CDP, EVS, Hindi, English, Mathematics per the SUBJECT given below',
-    angle: 'Primary-teacher framing — simple classroom scenarios, foundational literacy/numeracy.'
-  }
-};
-/* longest keys first so "dsssb tgt" matches before the generic "tgt" substring does */
-const EXAM_PROFILE_KEYS = Object.keys(EXAM_PROFILES).sort((a,b)=>b.length-a.length);
-
-function genericExamProfile(name){
-  const n = (name||'this exam').trim();
-  return {
-    label: n,
-    persona: `a veteran ${n} exam faculty member and subject-matter expert who has coached aspirants for this exact exam for years and knows its real syllabus, weightage, and question style in detail`,
-    subjects: 'the subject given below, scoped to what is actually tested in this exam',
-    angle: `Apply real, verifiable knowledge of the ${n} exam pattern, marking scheme, and subject weightage wherever you have it; where you are not certain of a specific number (weightage %, marks, cutoff), state it as an honest estimate rather than inventing a precise-sounding figure.`
+   EXAM_PROFILES now lives in shared/exam-profiles.js (generated from
+   Automation/core/src/exam-profiles.mjs — the single source of truth,
+   shared with long-post-factory and the Automation pipeline). This used to
+   be a third hand-duplicated copy, and had already drifted stale on a
+   real, research-backed BPSC TRE correction the other copy received. Any
+   exam name NOT in EXAM_PROFILES still works — genericExamProfile()
+   synthesizes a real-sounding persona from the name itself. */
+if(!window.ExamProfiles){
+  console.error('shared/exam-profiles.js failed to load — falling back to a generic exam profile for every exam.');
+  window.ExamProfiles = {
+    EXAM_PROFILES: {},
+    genericExamProfile(name){ const n=(name||'this exam').trim(); return { label:n, persona:`a veteran ${n} exam faculty member and subject-matter expert who has coached aspirants for this exact exam for years`, subjects:'the subject given below, scoped to what is actually tested in this exam', angle:'Apply real, verifiable knowledge of this exam\'s pattern and weightage wherever you have it; state uncertain numbers as honest estimates, never invented figures.' }; },
+    getExamProfile(examTypeRaw){ return { key:null, ...window.ExamProfiles.genericExamProfile(examTypeRaw) }; }
   };
 }
-function getExamProfile(examTypeRaw){
-  const norm = String(examTypeRaw||'').toLowerCase().trim();
-  if(!norm) return { key:'ctet', ...EXAM_PROFILES.ctet };
-  for(const key of EXAM_PROFILE_KEYS){
-    if(norm.includes(key)) return { key, ...EXAM_PROFILES[key] };
-  }
-  // "bihar tre" without the BPSC prefix should still resolve to the BPSC TRE profile
-  if(norm.includes('bihar') && norm.includes('tre')) return { key:'bpsc tre', ...EXAM_PROFILES['bpsc tre'] };
-  return { key:null, ...genericExamProfile(examTypeRaw) };
-}
+const { EXAM_PROFILES, getExamProfile, genericExamProfile } = window.ExamProfiles;
 
 /* ================= COMBINED PUBLISHED LIST (Notes + Long Posts) =================
    This tool has no "create fresh" branch — every item on the page is by
@@ -760,7 +688,7 @@ function clearShareBlock(containerId){
 var builtPromptText = null;
 var masterPromptText = null;
 function freshState(){
-  return { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null,
+  return { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', contentMemory:null, topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null,
     contentType:null, isUpdate:false, oldSeo:null, oldBodyHtml:'', wordpress:null, sourceDir:'', sourceName:'',
     reviewFlags:[], reviewOverall:'', reviewGenuinelyGood:[] };
 }
@@ -778,11 +706,37 @@ function updateLangMixLabel(){
    since this pipeline's own parser (expandLongPostBlocks, below) does the
    HTML styling instead of the AI — that's most of what keeps this prompt
    shorter than the sibling notes-factory master prompt. */
-function buildLongPostPrompt(topic, examType, subject, hindiPercent, year){
+/* Editorial Flavour Engine glue — see notes-factory/index.html's identical
+   copy of this comment for the full explanation. Definitions/selection
+   logic live in shared/flavour-engine.js (Automation/core/src/flavour-
+   engine.mjs is the source of truth); this only fetches recent
+   content-memory records and renders the {{FLAVOUR_ENGINE_BLOCK}} slot. */
+async function loadRecentContentMemory(){
+  try{
+    const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/Automation/content-memory`, { headers:{'Accept':'application/vnd.github+json'} });
+    if(!res.ok) return [];
+    const listing = (await res.json()).filter(f=>f.name.endsWith('.json')).slice(-30);
+    const records = await Promise.all(listing.map(async f=>{
+      try{ const r = await fetch(f.download_url); return r.ok ? await r.json() : null; }catch(e){ return null; }
+    }));
+    return records.filter(Boolean);
+  }catch(e){ return []; }
+}
+const FLAVOUR_ENGINE_FALLBACK_TEXT = 'Flavour Engine unavailable this run — choose whatever structural approach (concept-first, misconception-first, problem-first, worked-example, compare-and-contrast, question-led, exam-trap-first, classroom-situation, classification, chronology/cause-effect, or revision-focused) genuinely fits this topic best, and say which one you picked in Publisher Notes.';
+async function buildFlavourBlock(topic, examType, subject){
+  try{
+    if(!window.FlavourEngine) return FLAVOUR_ENGINE_FALLBACK_TEXT;
+    const recent = await loadRecentContentMemory();
+    return window.FlavourEngine.buildFlavourPromptBlock({ topic, exam: examType, subject }, recent);
+  }catch(e){ return FLAVOUR_ENGINE_FALLBACK_TEXT; }
+}
+
+async function buildLongPostPrompt(topic, examType, subject, hindiPercent, year){
   const profile = getExamProfile(examType);
   const seed = Array.from(topic+examType).reduce((a,c)=>a+c.charCodeAt(0),0) % 999 + 1;
+  const flavourBlock = await buildFlavourBlock(topic, examType, subject);
 
-  return `# LONG POST — ${profile.label} — ${topic} (${year})
+  let __prompt = `# LONG POST — ${profile.label} — ${topic} (${year})
 
 ## WHO YOU ARE
 This is a premium exam-study resource, not an SEO article — you are writing it, in one pass, as four internal roles working together:
@@ -828,6 +782,11 @@ Do not mechanically apply a fixed section architecture. Decide the best structur
 A typical run will still cover, in whatever order/weight the topic earns: why this matters for ${profile.label} (exam relevance, honestly sourced or labeled estimated) · the core concepts themselves, taught properly, not just listed · the exam-body/pedagogy angle where genuinely relevant · comparisons and misconceptions where they aid understanding · memory aids where a real mnemonic adds value · a closing summary/roadmap/FAQ. None of these is a mandatory numbered section with a word floor — include what the topic needs, skip what it doesn't, and let 1–2 areas run deep while others stay brief, matching real importance rather than an even split.
 
 **Self-check before finishing a section:** could this section be removed without reducing what the reader actually learns? If yes, cut it or fold it into something that earns its place.
+
+## EDITORIAL FLAVOUR
+Choose the most appropriate editorial flavour for this topic from the supplied FLAVOUR_ENGINE options below. Follow the selected flavour's teaching intent, but adapt structure and depth to the topic. Never force a template.
+
+${flavourBlock}
 
 ## BLOCK-TAG SYSTEM — choose the right block for each idea, never to fill a quota
 Wrap every chunk of content like this:
@@ -957,6 +916,22 @@ Two extra SEO fields beyond the panel above: "imageAltText" (starts with the key
 \`\`\`
 <<<END_PUBLISHER_NOTES>>>
 
+<<<CONTENT_MEMORY_JSON>>>
+\`\`\`json
+{
+  "flavour": "...",
+  "concepts_taught": ["...", "..."],
+  "misconceptions_used": ["...", "..."],
+  "examples_used": ["...", "..."],
+  "pedagogical_strategy": "...",
+  "article_shape": ["...", "..."],
+  "question_types": ["...", "..."],
+  "sources": ["...", "..."]
+}
+\`\`\`
+<<<END_CONTENT_MEMORY_JSON>>>
+Pipeline record-keeping only (never shown to a reader) — a factual summary of what this UPDATED article now actually contains, replacing its previous record.
+
 If you run out of space, stop cleanly at the end of a complete block's \`{* END *}\` — the user will send "continue" and you resume exactly where you stopped, inside a new code fence, no repetition, no fresh introduction.
 
 ## FINAL CHECKS (qualitative — this is the SELF-EDIT pass above, confirm it was actually done)
@@ -970,9 +945,23 @@ Zero <script> tags; 3 [[AD]] markers placed, spread across the article, not bunc
 Zero locked/blurred/upsell content; premium-hint line appears once, naturally?                    YES/NO
 Reads like a teacher-created study resource, not a templated SEO article?                         YES/NO
 Publisher Notes copied field-for-field?                                                           YES/NO
+CONTENT MEMORY sentinel present, valid JSON, all 7 fields filled honestly?                        YES/NO
 \`\`\`
 
 **>>> NOW GENERATE THE LONG POST <<<**`;
+
+  // PROMPT ASSEMBLER — same shared function as long-post-factory/
+  // notes-factory (window.PromptAssembler.assembleRuntimePrompt). See
+  // long-post-factory/index.html's identical comment for the full
+  // explanation. Never a silently swallowed failure.
+  try{
+    if(window.PromptAssembler){
+      __prompt = window.PromptAssembler.assembleRuntimePrompt(__prompt, { tool:'long-post', subject }).prompt;
+    } else {
+      console.warn('PromptAssembler unavailable — sending the untrimmed long-post prompt as-is.');
+    }
+  }catch(e){ console.warn('PromptAssembler failed — sending the untrimmed long-post prompt as-is.', e); }
+  return __prompt;
 }
 
 /* ================= NOTE REVISION PROMPT (ported read-only from
@@ -1034,6 +1023,22 @@ ADDITIVE FIELDS — two extra fields in SEO_JSON beyond what's specified above:
 (the publisher-facing notes exactly as specified above — sources to verify, softened/omitted claims, PYQ label counts, visuals list, variation picks used — plain text)
 \`\`\`
 <<<END_PUBLISHER_NOTES>>>
+
+<<<CONTENT_MEMORY_JSON>>>
+\`\`\`json
+{
+  "flavour": "...",
+  "concepts_taught": ["...", "..."],
+  "misconceptions_used": ["...", "..."],
+  "examples_used": ["...", "..."],
+  "pedagogical_strategy": "...",
+  "article_shape": ["...", "..."],
+  "question_types": ["...", "..."],
+  "sources": ["...", "..."]
+}
+\`\`\`
+<<<END_CONTENT_MEMORY_JSON>>>
+Pipeline record-keeping only (never shown to a reader) — a factual summary of what this UPDATED article now actually contains, replacing its previous record: the specific named sub-concepts explained, misconceptions actually corrected, examples/analogies actually used, dominant pedagogical strategy, actual section sequence as short lowercase labels in order, practice-question types used, and real sources cited (names, not URLs).
 
 If you run out of space and cannot finish, stop cleanly at the end of a complete HTML element — the user will send "continue" and you must resume EXACTLY where you stopped (same block, inside a new code fence, no repetition of anything already written, no fresh introduction).
 `;
@@ -1255,6 +1260,22 @@ async function buildNoteRevisionPrompt(topic, examType, subject, hindiPercent){
   // below, `refs + base`), so filling both would duplicate the section.
   master = master.replace('{{REFERENCE_SOURCES_BLOCK}}', '');
   master = master.replaceAll('{{TEACHING_LEVEL}}', getTeachingLevel(examType));
+  master = master.replace('{{FLAVOUR_ENGINE_BLOCK}}', await buildFlavourBlock(topic, examType, subject));
+
+  // PROMPT ASSEMBLER — same shared function notes-factory/long-post-factory
+  // use. tool:'notes' (not a separate 'update-note' id) because a note
+  // REVISION still produces the exact same HTML/card output contract as a
+  // fresh note — the VISUAL/HTML SYSTEM/SVGs/AD SLOTS modules that
+  // tool:'notes' unlocks are just as required here as in notes-factory.
+  try{
+    if(window.PromptAssembler){
+      const levelKey = window.PromptAssembler.levelKeyFromLabel(getTeachingLevel(examType));
+      master = window.PromptAssembler.assembleRuntimePrompt(master, { tool:'notes', subject, levelKey }).prompt;
+    } else {
+      console.warn('PromptAssembler unavailable — sending the untrimmed master prompt as-is.');
+    }
+  }catch(e){ console.warn('PromptAssembler failed — sending the untrimmed master prompt as-is.', e); }
+
   return notesUpdateConfig(topic, examType, subject, hindiPercent) + master + notesOutputContract();
 }
 
@@ -1263,7 +1284,7 @@ async function buildNoteRevisionPrompt(topic, examType, subject, hindiPercent){
    create a fresh post) — this wraps it with the same approved-flags-only
    patch framing notesUpdateConfig() uses for notes, so both content types
    get equivalent, non-destructive update treatment. */
-function buildLongPostRevisionPrompt(topic, examType, subject, hindiPercent, year){
+async function buildLongPostRevisionPrompt(topic, examType, subject, hindiPercent, year){
   const oldSeo = state.oldSeo || {};
   const level = getTeachingLevel(examType);
   const approved = state.reviewFlags.filter(f=>f.approved);
@@ -1297,7 +1318,7 @@ ${state.oldBodyHtml}
 REMINDER: the slug in your new SEO panel MUST be exactly "${oldSeo.slug || ''}" — do not change it even if a flag suggests a different one.
 
 `;
-  return preamble + buildLongPostPrompt(topic, examType, subject, hindiPercent, year);
+  return preamble + await buildLongPostPrompt(topic, examType, subject, hindiPercent, year);
 }
 
 // §6 of the update-instructions doc: a prompt-slot only, no RAG engine —
@@ -1464,6 +1485,20 @@ function extractBody(raw){
     if(idx !== -1 && idx < endIdx && idx > h2Start) endIdx = idx;
   }
   return { bodyHtml: stripLeakedFenceWord(raw.slice(h2Start, endIdx).trim()), method:'h2-scan', cutOff: endIdx===raw.length, endIdx };
+}
+
+function extractContentMemory(raw){
+  // Sentinel-wrapped JSON only, matching notes-factory/long-post-factory's
+  // Content Memory block — degrades to null (not a warning) since it's
+  // pipeline bookkeeping, not something an update reply is required to carry.
+  const m = raw.match(/<<<CONTENT_MEMORY_JSON>>>([\s\S]*?)<<<END_CONTENT_MEMORY_JSON>>>/);
+  if(!m){
+    // long-post updates may instead carry the Markdown-era sentinel
+    const m2 = raw.match(/<!--\s*CONTENT MEMORY\s*-->([\s\S]*?)```json([\s\S]*?)```/i);
+    if(!m2) return null;
+    try{ return JSON.parse(m2[2].trim()); }catch(e){ return null; }
+  }
+  try{ return JSON.parse(stripFences(m[1])); }catch(e){ return null; }
 }
 
 function extractPublisherNotes(raw, bodyEndIdx){
@@ -1864,10 +1899,12 @@ function parseResponse(raw, contentType){
   // plain HTML through untouched when it finds no block tags, so this also
   // stays back-compatible with pre-v13 notes (hand-written HTML).
   const blockResult = expandLongPostBlocks(cleanedBody);
+  const contentMemory = extractContentMemory(raw);
   const result = {
     seo: seoResult.seo,
     bodyHtml: blockResult.html,
     publisherNotes: pubResult.publisherNotes,
+    contentMemory,
     method: seoResult.method + ' + ' + bodyResult.method + (blockResult.blockCount ? ' + blocks:'+blockResult.blockCount : ''),
     truncated: bodyResult.cutOff && !pubResult.found
   };
@@ -1911,6 +1948,7 @@ function parseAndGo(){
   if(state.isUpdate && state.oldSeo && state.oldSeo.slug) state.seo.slug = state.oldSeo.slug;
   state.bodyHtml = result.bodyHtml;
   state.publisherNotes = result.publisherNotes;
+  state.contentMemory = result.contentMemory;
   saveDraft();
 
   const issuesEl = document.getElementById('parseIssues');
@@ -2224,6 +2262,9 @@ function buildBundle(){
     createdAt: new Date().toISOString()
   };
   if(state.wordpress) bundle.wordpress = state.wordpress;
+  // Feeds Automation/content-memory/ — an update overwrites the article's
+  // existing record with a fresh one reflecting what it actually teaches now.
+  if(state.contentMemory) bundle.contentMemory = state.contentMemory;
   return bundle;
 }
 

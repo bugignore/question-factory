@@ -113,7 +113,55 @@ jobs:
           fi
 
           mkdir -p published-notes
+          mkdir -p Automation/content-memory
           failed=0
+
+          # After a successful publish, save a lightweight content-memory record
+          # (see Automation/content-memory/README.md) — never the full article,
+          # just the AI-reported concepts/misconceptions/examples/shape it used,
+          # so a future prompt run can be told what's already been covered on
+          # this exam and avoid converging on the same choices. Silently a
+          # no-op if the bundle carries no .contentMemory (older prompt reply,
+          # or the model's block failed to parse) — this must never fail the
+          # publish itself.
+          write_content_memory(){
+            local f="$1" slug="$2" post_id="$3" post_link="$4"
+            local cm
+            cm="$(jq -c '.contentMemory // empty' "$f" 2>/dev/null || true)"
+            [ -z "$cm" ] && return 0
+            jq -n --argjson cm "$cm" --arg id "$slug" --arg topic "$(jq -r '.topic // ""' "$f")" \
+              --arg subject "$(jq -r '.subject // ""' "$f")" --arg exam "$(jq -r '.examType // ""' "$f")" \
+              --arg type "note" --arg postId "$post_id" --arg link "$post_link" \
+              --arg published "$(date -u +%FT%TZ)" \
+              '{id:$id, type:$type, topic:$topic, subject:$subject, exam:$exam} + $cm +
+               {postId:$postId, link:$link, published:$published}' \
+              > "Automation/content-memory/$slug.json" 2>/dev/null || {
+                echo "::warning::$slug — failed to write content-memory record (non-fatal, publish already succeeded)."
+                return 0
+              }
+            git add "Automation/content-memory/$slug.json"
+          }
+
+          # Local, non-blocking content-differentiation check (5-gram Jaccard
+          # against the last 30 published notes — see
+          # Automation/core/src/similarity-check.mjs). Informational only:
+          # appended to the article's own publisherNotes field for a human
+          # editor to see, never used to reject or alter the publish itself.
+          write_similarity_note(){
+            local f="$1"
+            local sim_json
+            sim_json="$(node Automation/core/src/similarity-check.mjs "$f" published-notes 30 2>/dev/null || true)"
+            [ -z "$sim_json" ] && return 0
+            local sim_note
+            sim_note="$(echo "$sim_json" | jq -r '
+              if (.closest | length) == 0 then empty else
+                "\n\n--- LOCAL CONTENT-DIFFERENTIATION CHECK (informational; not a rejection gate) ---\nCompared against \(.comparedAgainst) recently published notes using 5-gram overlap.\nClosest matches:\n" +
+                ([.closest[] | "- \(.slug): \((.similarity*100)|floor)% overlap"] | join("\n"))
+              end' 2>/dev/null || true)"
+            [ -z "$sim_note" ] && return 0
+            jq --arg note "$sim_note" '.publisherNotes = ((.publisherNotes // "") + $note)' "$f" > /tmp/pn.json 2>/dev/null \
+              && mv /tmp/pn.json "$f" && git add "$f"
+          }
 
           # Everything that touches one file lives in this function, called as
           # an `if` condition below. This is deliberate, not cosmetic: bash's
@@ -306,6 +354,8 @@ jobs:
                  "$f" > "published-notes/$slug.json"
               git rm -q "$f"
               git add "published-notes/$slug.json"
+              write_similarity_note "published-notes/$slug.json"
+              write_content_memory "published-notes/$slug.json" "$slug" "$post_id" "$post_link"
             else
               echo "::error::WordPress rejected $slug (HTTP $http_code, method $wp_method). Response follows. File stays in pending-notes/ — fix the cause and re-run this workflow from the Actions tab."
               cat /tmp/wp-response.json || true

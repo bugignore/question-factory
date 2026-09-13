@@ -179,6 +179,21 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   <input type="text" id="topic" list="topicSuggestions" placeholder="e.g. Photosynthesis, Mughal Empire, Growth & Development..." oninput="this.classList.remove('fieldErr')">
   <datalist id="topicSuggestions"></datalist>
 
+  <details id="topicBankDetails" ontoggle="openTopicBank()" style="margin-top:8px">
+    <summary>📚 Topic bank — pick a subject to browse, click a topic to use it</summary>
+    <div>
+      <p class="hint" style="margin-top:8px">Research-planned SEO topics, loaded on demand from the repo's own topic-research CSVs — not bundled into the page, and only the subject you pick is shown, not the whole list at once.</p>
+      <label style="margin-top:4px">Exam source</label>
+      <select id="topicBankSource" onchange="loadTopicBankForSource(this.value)"></select>
+      <select id="topicBankSubject" onchange="renderTopicBank()" style="margin-top:8px">
+        <option value="">Pick a subject to browse…</option>
+      </select>
+      <input type="text" id="topicBankSearch" placeholder="Search within this subject…" oninput="renderTopicBank()" style="margin-top:8px">
+      <div id="topicBankList" style="margin-top:8px;max-height:280px;overflow-y:auto"></div>
+      <div class="msg" id="topicBankMsg"></div>
+    </div>
+  </details>
+
   <label>Exam type (select one or more)</label>
   <div id="examTypes"></div>
 
@@ -248,6 +263,14 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 <section class="step" id="step2">
   <h2>3 · Review &amp; edit</h2>
   <p class="hint">Fix anything the parser missed before handing it off. This is what actually gets published.</p>
+
+  <div class="msg show ok" style="font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    ✅ OUTPUT READY
+    <span style="flex:1"></span>
+    <button class="btn small" onclick="tryRun(copyArticle,this)">📋 Copy Article</button>
+    <button class="btn small ghost" onclick="tryRun(downloadArticleHtml,this)">⬇ Download HTML</button>
+    <button class="btn small ghost" onclick="tryRun(previewArticle,this)">👁 Preview</button>
+  </div>
   <div class="msg show warn" id="updateBadge" style="display:none">🔄 Update mode — this will overwrite the existing WordPress post, not create a new one. <button class="miniCopy" onclick="clearUpdateMode()" style="margin-left:8px">Cancel update</button></div>
 
   <div class="msg" id="reviewMsg"></div>
@@ -356,6 +379,15 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   <button id="nextBtn" onclick="nav(1)">Next →</button>
 </nav>
 
+<!-- Shared Editorial Flavour Engine (Automation/core/src/flavour-engine.mjs,
+     mirrored by gen-flavour-engine-browser.mjs) — window.FlavourEngine.
+     buildPrompt() below falls back to plain text if this fails to load. -->
+<script src="../shared/flavour-engine.js"></script>
+<!-- Prompt Assembler (Automation/core/src/master-prompt-modules.mjs +
+     prompt-assembler.mjs, mirrored by gen-prompt-assembler-browser.mjs) —
+     window.PromptAssembler. buildPrompt() below falls back to the full,
+     untrimmed Master Prompt text if this fails to load. -->
+<script src="../shared/prompt-assembler.js"></script>
 <script>
 "use strict";
 
@@ -394,6 +426,149 @@ const CDP_TOPICS = [
 "Important CTET Pedagogy Concepts"
 ];
 const EXAM_TYPES = ["CTET Paper I","CTET Paper II","PGT","TGT","KVS","NVS","DSSSB","UPTET","BPSC TRE"];
+
+/* ---------- Topic bank (research CSVs, multiple exam sources) ----------
+   Deliberately NOT baked into the page like CDP_TOPICS above: each source
+   is fetched on demand (only once the <details> below is actually opened,
+   and only the source the user picks) from the repo's own topic-research
+   CSVs, and the UI only ever renders one subject's rows at a time — never
+   the whole planned-topic list in one visible dump.
+   Every CSV here shares ONE format — `S.No.,Subject,Topic` — on purpose:
+   one exam/post per file (BPSC TRE 4 is one file; DSSSB's 4 posts are 4
+   separate files, split from the original combined CSV), so there's no
+   per-source parsing code to maintain — every entry below is pure data. Add
+   a future exam by adding one more {label, url, examChkFilter, subjectMap}
+   entry, never by writing a new parse function. */
+const TOPIC_BANK_SOURCES = {
+  'bpsc-tre-4': {
+    label: 'BPSC TRE 4 — Primary Teacher',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/BPSC-TRE-4-Primary-Teacher-SEO-Topics-Hindi-v2.csv',
+    examChkFilter: 'BPSC',
+    subjectMap: { 'हिंदी':'Hindi', 'अंग्रेजी':'English', 'गणित':'Maths', 'विज्ञान':'Science', 'इतिहास':'History', 'भूगोल':'Geography' },
+  },
+  'dsssb-tgt-cs': {
+    label: 'DSSSB 2026 — TGT Computer Science',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-TGT-Computer-Science-Topics.csv',
+    examChkFilter: 'DSSSB',
+    subjectMap: { 'Hindi':'Hindi', 'English':'English' }, // General Awareness/Reasoning/etc. have no matching Subject dropdown option — left as Auto-detect
+  },
+  'dsssb-domestic-science': {
+    label: 'DSSSB 2026 — Domestic Science Teacher',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-Domestic-Science-Teacher-Topics.csv',
+    examChkFilter: 'DSSSB',
+    subjectMap: { 'Hindi':'Hindi', 'English':'English' },
+  },
+  'dsssb-tgt-special-ed': {
+    label: 'DSSSB 2026 — TGT Special Education Teacher',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-TGT-Special-Education-Teacher-Topics.csv',
+    examChkFilter: 'DSSSB',
+    subjectMap: { 'Hindi':'Hindi', 'English':'English' },
+  },
+  'dsssb-special-educator-primary': {
+    label: 'DSSSB 2026 — Special Educator (Primary)',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-Special-Educator-Primary-Topics.csv',
+    examChkFilter: 'DSSSB',
+    subjectMap: { 'Hindi':'Hindi', 'English':'English' },
+  },
+};
+let topicBankRows = null; // lazy-loaded, cached per selected source for the rest of this session
+let topicBankLoadedSource = null;
+
+// Minimal RFC4180-ish CSV line splitter — handles quoted fields containing
+// commas (the topic-title columns have plenty), which these CSVs rely on.
+function splitCsvLine(line){
+  const out = []; let cur = ''; let inQuotes = false;
+  for(let i=0; i<line.length; i++){
+    const c = line[i];
+    if(inQuotes){
+      if(c === '"'){ if(line[i+1] === '"'){ cur += '"'; i++; } else inQuotes = false; }
+      else cur += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ',') { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+// Every Topic Bank CSV shares the same `S.No.,Subject,Topic` header — this
+// reads columns BY NAME (not position), so it works for any CSV in this
+// shape regardless of column order, and needs no per-source code.
+function parseTopicBankCsv(text){
+  const lines = text.replace(/^﻿/,'').split(/\r?\n/).filter(l => l.trim());
+  const header = splitCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+  const subjectIdx = header.indexOf('subject');
+  const topicIdx = header.indexOf('topic');
+  if(subjectIdx === -1 || topicIdx === -1) throw new Error('CSV is missing a Subject or Topic column');
+  return lines.slice(1).map(line => {
+    const c = splitCsvLine(line);
+    return { subjectLabel: (c[subjectIdx]||'').trim(), topic: (c[topicIdx]||'').trim() };
+  }).filter(r => r.topic);
+}
+async function loadTopicBank(sourceKey){
+  if(topicBankLoadedSource === sourceKey && topicBankRows) return topicBankRows;
+  const source = TOPIC_BANK_SOURCES[sourceKey];
+  const res = await fetch(source.url);
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  topicBankRows = parseTopicBankCsv(await res.text());
+  topicBankLoadedSource = sourceKey;
+  return topicBankRows;
+}
+async function openTopicBank(){
+  const details = document.getElementById('topicBankDetails');
+  if(!details.open) return;
+  const sourceSel = document.getElementById('topicBankSource');
+  if(!sourceSel.options.length){
+    sourceSel.innerHTML = Object.entries(TOPIC_BANK_SOURCES).map(([key,s]) => `<option value="${key}">${s.label}</option>`).join('');
+  }
+  await loadTopicBankForSource(sourceSel.value);
+}
+async function loadTopicBankForSource(sourceKey){
+  try{
+    show(msg('topicBankMsg'),'warn','Loading topic bank…');
+    const rows = await loadTopicBank(sourceKey);
+    const subjects = [...new Set(rows.map(r=>r.subjectLabel))];
+    document.getElementById('topicBankSubject').innerHTML = '<option value="">Pick a subject to browse…</option>'
+      + subjects.map(s => `<option value="${s}">${s} (${rows.filter(r=>r.subjectLabel===s).length})</option>`).join('');
+    document.getElementById('topicBankSubject').value = '';
+    document.getElementById('topicBankSearch').value = '';
+    renderTopicBank();
+    show(msg('topicBankMsg'),'ok', rows.length+' topics available — pick a subject above.');
+  }catch(e){
+    show(msg('topicBankMsg'),'bad','Could not load the topic bank: '+e.message);
+  }
+}
+function renderTopicBank(){
+  const listEl = document.getElementById('topicBankList');
+  if(!topicBankRows){ listEl.innerHTML = ''; return; }
+  const subj = document.getElementById('topicBankSubject').value;
+  if(!subj){ listEl.innerHTML = '<p class="hint">Pick a subject above to see its topics.</p>'; return; }
+  const q = document.getElementById('topicBankSearch').value.trim().toLowerCase();
+  const rows = topicBankRows
+    .map((r,i) => ({...r, idx:i}))
+    .filter(r => r.subjectLabel === subj && (!q || r.topic.toLowerCase().includes(q)));
+  listEl.innerHTML = rows.length
+    ? rows.map(r => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+        <span style="flex:1;font-size:13px">${r.topic.replace(/</g,'&lt;')}${r.post ? ` <span style="color:var(--muted);font-size:11px">(${r.post.replace(/</g,'&lt;')})</span>` : ''}</span>
+        <button class="btn small ghost" onclick="useTopicBankRow(${r.idx})">Use</button>
+      </div>`).join('')
+    : '<p class="hint">No topics match.</p>';
+}
+function useTopicBankRow(idx){
+  const r = topicBankRows && topicBankRows[idx];
+  if(!r) return;
+  const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
+  const topicEl = document.getElementById('topic');
+  topicEl.value = r.topic;
+  topicEl.classList.remove('fieldErr');
+  const mappedSubject = source.subjectMap[r.subjectLabel];
+  const subjectSel = document.getElementById('subject');
+  if(mappedSubject && [...subjectSel.options].some(o => o.value === mappedSubject)) subjectSel.value = mappedSubject;
+  document.querySelectorAll('.examChk').forEach(cb => { if(cb.value.toUpperCase().includes(source.examChkFilter)) cb.checked = true; });
+  renderRefUrlList();
+  doCopy(r.topic, null, msg('topicBankMsg'), 'Topic copied and filled in above — Exam/Subject set to match.');
+}
 
 function initSelectors(){
   const topicList = document.getElementById('topicSuggestions');
@@ -640,7 +815,7 @@ function clearShareBlock(containerId){
 /* ================= STEP 1 — build prompt ================= */
 var masterPromptText = null;
 var builtPromptText = null;
-var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, isUpdate:false, oldSeo:null, oldBodyHtml:'', wordpress:null };
+var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', contentMemory:null, topic:'', examType:'', subject:'', hindiPercent:70, validation:null, isUpdate:false, oldSeo:null, oldBodyHtml:'', wordpress:null };
 
 function updateLangMixLabel(){
   const hindi = document.getElementById('hindiPercent').value;
@@ -760,8 +935,61 @@ ADDITIVE FIELDS — two extra fields in SEO_JSON beyond what's specified above:
 \`\`\`
 <<<END_PUBLISHER_NOTES>>>
 
+<<<CONTENT_MEMORY_JSON>>>
+\`\`\`json
+{
+  "flavour": "...",
+  "concepts_taught": ["...", "..."],
+  "misconceptions_used": ["...", "..."],
+  "examples_used": ["...", "..."],
+  "pedagogical_strategy": "...",
+  "article_shape": ["...", "..."],
+  "question_types": ["...", "..."],
+  "sources": ["...", "..."]
+}
+\`\`\`
+<<<END_CONTENT_MEMORY_JSON>>>
+A fourth block, purely for the pipeline's own record-keeping (never shown to a reader) — a lightweight, factual summary of what THIS specific article actually contains, so a future run on a related topic can be told what's already been covered and avoid repeating the same misconception/example/shape choices. Every field reports what you actually wrote, not a plan:
+- "flavour": the exact FLAVOUR_ENGINE id you chose under EDITORIAL FLAVOUR above (e.g. "worked-example").
+- "concepts_taught": the specific named concepts/sub-topics actually explained (not the whole TOPIC string repeated — the individual ideas inside it).
+- "misconceptions_used": the specific wrong-belief(s) actually corrected in a Mistake card or similar, in a few words each.
+- "examples_used": the specific real-life examples/analogies actually used (e.g. "12 and 18", "government-school classroom") — this is what your EDITORIAL FLAVOUR's example strategy cashes out to in practice.
+- "pedagogical_strategy": one short phrase for the dominant teaching approach this article actually used (e.g. "worked-example", "compare-and-contrast", "story-first", "definition-drill").
+- "article_shape": the actual section sequence you wrote, as short lowercase labels in order (e.g. ["hook","concept","worked-example","exam-application","practice"]).
+- "question_types": the practice-question types actually used, matching QUESTION TYPE DIVERSITY above.
+- "sources": the real sources actually cited (names, not URLs — URLs already live in the body's citations).
+
 If you run out of space and cannot finish, stop cleanly at the end of a complete HTML element — the user will send "continue" and you must resume EXACTLY where you stopped (same block, inside a new code fence, no repetition of anything already written, no fresh introduction).
 `;
+}
+
+/* ================= EDITORIAL FLAVOUR ENGINE (client glue) =================
+   The flavour DEFINITIONS and SELECTION LOGIC live entirely in
+   shared/flavour-engine.js (generated from Automation/core/src/flavour-
+   engine.mjs — see that file for the single source of truth). This tool
+   only: (1) best-effort fetches recent Automation/content-memory/ records
+   so the engine can avoid repeating a flavour on the same exam/subject, and
+   (2) renders the engine's output into the {{FLAVOUR_ENGINE_BLOCK}} slot.
+   Both steps degrade quietly — a network hiccup or the script failing to
+   load falls back to plain text, never breaking prompt generation. */
+async function loadRecentContentMemory(){
+  try{
+    const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/Automation/content-memory`, { headers:{'Accept':'application/vnd.github+json'} });
+    if(!res.ok) return [];
+    const listing = (await res.json()).filter(f=>f.name.endsWith('.json')).slice(-30);
+    const records = await Promise.all(listing.map(async f=>{
+      try{ const r = await fetch(f.download_url); return r.ok ? await r.json() : null; }catch(e){ return null; }
+    }));
+    return records.filter(Boolean);
+  }catch(e){ return []; } // best-effort only — an empty list just means no repetition-avoidance data this run
+}
+const FLAVOUR_ENGINE_FALLBACK_TEXT = 'Flavour Engine unavailable this run — choose whatever structural approach (concept-first, misconception-first, problem-first, worked-example, compare-and-contrast, question-led, exam-trap-first, classroom-situation, classification, chronology/cause-effect, or revision-focused) genuinely fits this topic best, and say which one you picked in Publisher Notes.';
+async function buildFlavourBlock(topic, examType, subject){
+  try{
+    if(!window.FlavourEngine) return FLAVOUR_ENGINE_FALLBACK_TEXT;
+    const recent = await loadRecentContentMemory();
+    return window.FlavourEngine.buildFlavourPromptBlock({ topic, exam: examType, subject }, recent);
+  }catch(e){ return FLAVOUR_ENGINE_FALLBACK_TEXT; }
 }
 
 async function buildPrompt(){
@@ -775,6 +1003,23 @@ async function buildPrompt(){
   let master = await loadMasterPrompt();
   master = master.replace('{{REFERENCE_SOURCES_BLOCK}}', buildReferenceSourcesBlock(subject) + buildNcertKnowledgeBaseBlock(subject));
   master = master.replaceAll('{{TEACHING_LEVEL}}', getTeachingLevel(examType));
+  master = master.replace('{{FLAVOUR_ENGINE_BLOCK}}', await buildFlavourBlock(topic, examType, subject));
+
+  // PROMPT ASSEMBLER — selects/trims Master Prompt modules for this run
+  // (e.g. keeps only the matching TEACHING LEVEL bullet and the matching
+  // SUBJECT bullet in STRUCTURE, drops the human-only changelog preamble)
+  // so the runtime prompt is smaller than the full Master Prompt file
+  // without ever touching content that DOES apply to this run. See
+  // Automation/core/src/prompt-assembler.mjs for the full explanation and
+  // what is deliberately NOT trimmed. Falls back to the untouched full
+  // master text if the assembler script is unavailable for any reason —
+  // this must never block prompt generation.
+  try{
+    if(window.PromptAssembler){
+      const levelKey = window.PromptAssembler.levelKeyFromLabel(getTeachingLevel(examType));
+      master = window.PromptAssembler.assembleRuntimePrompt(master, { tool:'notes', subject, levelKey }).prompt;
+    }
+  }catch(e){ /* assembler failure -> keep the full, untrimmed master text below */ }
 
   const config = state.isUpdate ? updateConfig(topic, examType, subject, hindiPercent) : `=== RUN THIS GENERATION WITH THESE EXACT INPUT VARIABLES ===
 TOPIC: ${topic}
@@ -954,6 +1199,15 @@ function extractBody(raw){
     if(idx !== -1 && idx < endIdx && idx > h2Start) endIdx = idx;
   }
   return { bodyHtml: raw.slice(h2Start, endIdx).trim(), method:'h2-scan', cutOff: endIdx===raw.length, endIdx };
+}
+
+function extractContentMemory(raw){
+  // Sentinel-wrapped JSON only — this block is new (v13.1+) so older replies
+  // simply won't have it; that's fine, it degrades to null rather than a warning
+  // the way SEO/body do, since it's bookkeeping, not something the reader sees.
+  const m = raw.match(/<<<CONTENT_MEMORY_JSON>>>([\s\S]*?)<<<END_CONTENT_MEMORY_JSON>>>/);
+  if(!m) return null;
+  try{ return JSON.parse(stripFences(m[1])); }catch(e){ return null; }
 }
 
 function extractPublisherNotes(raw, bodyEndIdx){
@@ -1352,10 +1606,12 @@ function parseResponse(raw){
   const pubResult = extractPublisherNotes(raw, bodyResult.endIdx);
   const cleanedBody = stripHtmlComments(bodyResult.bodyHtml);
   const blockResult = expandLongPostBlocks(cleanedBody);
+  const contentMemory = extractContentMemory(raw);
   const result = {
     seo: seoResult.seo,
     bodyHtml: blockResult.html,
     publisherNotes: pubResult.publisherNotes,
+    contentMemory,
     method: seoResult.method + ' + ' + bodyResult.method + (blockResult.blockCount ? ' + blocks:'+blockResult.blockCount : ''),
     truncated: bodyResult.cutOff && !pubResult.found
   };
@@ -1371,6 +1627,7 @@ function parseResponse(raw){
   if(result.truncated) warnings.push('The reply looks CUT OFF midway (no closing marker found). Use the "Copy continue prompt" button, paste it in the same chat, then paste the new reply here with the continuation checkbox ticked.');
   if(seoResult.method==='label-text') warnings.push('SEO fields: no JSON block found — read from the plain labeled panel instead. Double-check every field.');
   if(bodyResult.method==='h2-scan') warnings.push('Notes body: no marker comments found — guessed the body by scanning from the first <h2> to the next recognizable end-of-notes marker. Double-check the body did not get cut short or include trailing text.');
+  if(!result.contentMemory) warnings.push('Content Memory block missing or unparseable — this note won\'t be recorded in Automation/content-memory/. Not fatal, but future runs lose this article\'s anti-repetition signal.');
   // blockResult.blockCount is expected to be 0 for every current-prompt reply —
   // the merged v13 prompt is back to hand-written HTML (see BLOCK-TAG EXPANSION
   // comment above), so a 0 count here is the normal case, not worth a warning.
@@ -1399,6 +1656,7 @@ function parseAndGo(){
   state.seo = result.seo;
   state.bodyHtml = result.bodyHtml;
   state.publisherNotes = result.publisherNotes;
+  state.contentMemory = result.contentMemory;
   // Update mode: the slug MUST stay the same as the old note regardless of
   // what the AI wrote, or this republishes as a brand-new WordPress post
   // instead of updating the flagged one.
@@ -1589,6 +1847,11 @@ function buildBundle(){
     seo: state.seo, bodyHtml: state.bodyHtml, publisherNotes: state.publisherNotes,
     createdAt: new Date().toISOString()
   };
+  // Feeds Automation/content-memory/ — see publish-note.yml, which writes this
+  // out as a standalone record after a successful WordPress publish. Absent
+  // entirely (older prompt reply, or the block failed to parse) is fine —
+  // the workflow just skips writing a record for this article.
+  if(state.contentMemory) bundle.contentMemory = state.contentMemory;
   // Carry the old WordPress post id forward so publish-note.yml knows to
   // PUT-update that existing post instead of creating a new draft.
   if(state.isUpdate && state.wordpress) bundle.wordpress = state.wordpress;
@@ -1729,7 +1992,7 @@ async function addToQueue(btn){
   saveQueueList(q);
   show(m,'ok',`Added "${state.seo.slug}" to the batch queue (${q.length} queued). Start the next note at Step 1, or post the queue when everyone's done.`);
   clearDraft();
-  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', contentMemory:null, topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
   cur = 0; render();
 }
 async function postQueue(btn){
@@ -1915,6 +2178,40 @@ function copyBodyHtml(btn){
   syncFormToState();
   doCopy(state.bodyHtml, btn, msg('sendMsg'), 'Notes body HTML copied — paste into a WordPress Custom HTML block.');
 }
+
+// Full standalone document (DOCTYPE/head/body), as opposed to copyBodyHtml's
+// bare fragment — this is what "Copy Article" / "Download HTML" / "Preview"
+// in the OUTPUT READY banner above all work from, since a downloaded/
+// previewed file needs to be a real openable HTML document, not a fragment.
+function buildStandaloneArticleHtml(){
+  syncFormToState();
+  const title = (state.seo.h1 || state.seo.seoTitle || state.topic || 'Notes').replace(/</g,'&lt;');
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>'+title+'</title></head>'
+    + '<body style="margin:0;padding:12px;font-family:system-ui,sans-serif;max-width:800px;margin-inline:auto;">'
+    + state.bodyHtml + '<\/body></html>';
+}
+function copyArticle(btn){
+  doCopy(buildStandaloneArticleHtml(), btn, msg('reviewMsg'), 'Full article HTML copied — a complete, openable HTML document (not just the body fragment).');
+}
+function downloadArticleHtml(btn){
+  syncFormToState();
+  const blob = new Blob([buildStandaloneArticleHtml()], {type:'text/html'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.seo.slug || 'note') + '.html';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  show(msg('reviewMsg'),'ok','Downloaded '+(state.seo.slug || 'note')+'.html');
+}
+function previewArticle(btn){
+  const blob = new Blob([buildStandaloneArticleHtml()], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if(!win) show(msg('reviewMsg'),'bad','Preview popup was blocked — allow popups for this page and try again.');
+  else setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
 function copySeoFields(btn){
   syncFormToState();
   const t = `Focus Keyword:       ${state.seo.focusKeyword}
@@ -1928,7 +2225,7 @@ Image Gen Prompt:    ${state.seo.imagePrompt || ''}`;
 }
 function resetAll(){
   if(!confirm('Clear this note and start over?')) return;
-  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', contentMemory:null, topic:'', examType:'', subject:'', hindiPercent:70, validation:null };
   accumulatedRaw = '';
   clearDraft();
   document.getElementById('promptOut').value='';

@@ -1,0 +1,34 @@
+{
+  "id": "algebra-ctet-notes-2026",
+  "type": "note",
+  "topic": "Algebra (बीजगणित)",
+  "subject": "Maths",
+  "exam": "CTET Paper I / CTET Paper II / UPTET",
+  "flavour": null,
+  "concepts_taught": [
+    "1. Algebra कितना Important है? — Exam Weightage",
+    "2. Core Concept Notes — बीजगणित के मूल सिद्धांत",
+    "3. Pedagogy & NCF/NEP Angle",
+    "4. हाल के Updates",
+    "5. Deep Theory + Flowchart(s)"
+  ],
+  "misconceptions_used": [],
+  "examples_used": [],
+  "pedagogical_strategy": "unknown",
+  "article_shape": [
+    "sec1-weightage",
+    "sec2-core-concepts",
+    "sec3-pedagogy",
+    "sec4-updates",
+    "sec5-deep-theory"
+  ],
+  "question_types": [],
+  "sources": [
+    "ncert.nic.in",
+    "education.gov.in"
+  ],
+  "postId": "200",
+  "link": "https://examnotespdf.in/?post_type=free_notes&p=200",
+  "published": "2026-07-25T06:17:36Z",
+  "derived": true
+}

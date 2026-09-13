@@ -1,98 +1,16 @@
-// Ported from long-post-factory/index.html (EXAM_PROFILES, getExamProfile,
-// genericExamProfile, buildLongPostPrompt). Keep this in lockstep with that
-// file — if the manual tool's prompt contract changes, mirror the change
-// here too, since the output of buildLongPostPrompt() is what
-// parse-reply.mjs (also ported from the same file) expects to parse back.
-
-export const EXAM_PROFILES = {
-  'ctet': {
-    label: 'CTET',
-    persona: 'a veteran CDP & Pedagogy faculty member who has personally coached 10,000+ CTET Hindi-medium aspirants across both papers and has memorized exactly which NCERT lines the exam twists into distractors',
-    subjects: 'Child Development & Pedagogy (CDP), EVS, Mathematics, Mathematics Pedagogy, Hindi, English, Language Development',
-    angle: 'CTET Hindi-medium PYQ trends are this exam\'s single biggest untapped keyword opportunity — always surface authentic PYQ patterns, and treat Devanagari keyword variants (सीटीईटी) as worth targeting separately from the Romanized ones, not interchangeable with them. Strict NCERT/NCF 2005+2023 alignment language throughout.'
-  },
-  'bpsc tre': {
-    label: 'BPSC TRE (Bihar Teacher Recruitment Examination)',
-    persona: 'a Bihar state-cadre TGT/PGT subject expert who has cleared and now coaches BPSC TRE aspirants, fluent in exactly how BPSC phrases its subject-wise questions and the state syllabus quirks that differ from CBSE/NCERT-only prep',
-    subjects: 'subject-wise TGT (Class 9–10) and PGT (Class 11–12) content per the SUBJECT given below, plus Bihar-specific pedagogy/CDP for the teaching-eligibility portion',
-    angle: 'Treat this as the "BPSC TRE" program (also referred to as Bihar TRE) — subject-wise practice framing works best (e.g. "BPSC TRE TGT [Subject] practice questions"), and Hindi-medium PYQ-style questions matter as much as English ones.'
-  },
-  'dsssb tgt': {
-    label: 'DSSSB TGT',
-    persona: 'a Delhi-cadre TGT subject expert who has taught DSSSB TGT batches for years and knows the exact Delhi-government question style, distinct from CTET or state-TET patterns',
-    subjects: 'subject-wise TGT content (Class 9–10) per the SUBJECT given below, plus general awareness/Delhi-specific pedagogy where relevant',
-    angle: 'Mirror the CTET-style hub structure in tone but keep DSSSB\'s own question phrasing conventions — this exam has real search demand but almost no populated content yet, so authoritative, exam-pattern-accurate content is a genuine gap to fill.'
-  },
-  'dsssb prt': {
-    label: 'DSSSB PRT',
-    persona: 'a Delhi-cadre Primary Teacher (PRT) exam expert who has coached DSSSB PRT batches and knows the primary-level pedagogy and subject-integration style DSSSB actually tests',
-    subjects: 'Primary-level pedagogy, CDP, EVS, Hindi, English, Mathematics per the SUBJECT given below',
-    angle: 'Primary-teacher framing throughout — simpler classroom scenarios, foundational-literacy and numeracy angle, not secondary-level depth.'
-  },
-  'uptet': {
-    label: 'UPTET',
-    persona: 'a UP state-cadre TET faculty member who has coached thousands of UPTET aspirants and knows exactly how UP\'s question style differs from CTET despite the overlapping syllabus',
-    subjects: 'Child Development & Pedagogy, EVS, Mathematics, Hindi, English, Sanskrit (where relevant), UP-specific policy references',
-    angle: 'Heavy Hindi-medium framing — UPTET aspirants overwhelmingly prep in Hindi — and reference UP Basic Shiksha Parishad conventions where the exam actually differs from CTET.'
-  },
-  'up tgt': {
-    label: 'UP TGT',
-    persona: 'a UP-cadre TGT subject expert coaching aspirants for the UP Secondary Education Selection Board\'s TGT exam, fluent in its subject-wise weightage and question style',
-    subjects: 'subject-wise TGT content (Class 9–10) per the SUBJECT given below',
-    angle: 'UP-specific exam pattern and selection-board conventions; Hindi-medium framing dominant.'
-  },
-  'kvs': {
-    label: 'KVS (Kendriya Vidyalaya Sangathan)',
-    persona: 'a KVS-cadre subject expert and former KVPS/PGT interview panelist who knows exactly what KVS tests beyond the generic CTET syllabus — general awareness of KVS policy, computer literacy, and current affairs weightage',
-    subjects: 'subject-wise TGT/PGT content per the SUBJECT given below, plus General Awareness, Current Affairs, and Computer Literacy sections specific to KVS',
-    angle: 'KVS papers add a General Awareness + Computer Literacy layer most state TET exams skip — call that out explicitly rather than treating this as a copy of CTET.'
-  },
-  'nvs': {
-    label: 'NVS (Navodaya Vidyalaya Samiti)',
-    persona: 'an NVS-cadre subject expert familiar with Jawahar Navodaya Vidyalaya\'s residential-school context and NVS\'s own exam pattern (heavier reasoning/GK component than most TET exams)',
-    subjects: 'subject-wise TGT/PGT content per the SUBJECT given below, plus Reasoning and General Knowledge sections specific to NVS',
-    angle: 'NVS leans harder on reasoning/GK than CTET-style pedagogy exams — reflect that balance rather than defaulting to a pure-pedagogy framing.'
-  },
-  'pgt': {
-    label: 'PGT (Post Graduate Teacher, generic)',
-    persona: 'a senior subject-matter expert who has taught at the +2/senior-secondary level for years and coaches PGT aspirants across multiple state and central recruitment boards',
-    subjects: 'senior-secondary (Class 11–12) subject-wise content per the SUBJECT given below',
-    angle: 'Senior-secondary depth — this audience already cleared TGT-level basics, so go deeper into subject nuance rather than re-explaining fundamentals.'
-  },
-  'tgt': {
-    label: 'TGT (Trained Graduate Teacher, generic)',
-    persona: 'a senior TGT subject expert who has coached aspirants across multiple state and central TGT recruitment boards',
-    subjects: 'secondary-level (Class 9–10) subject-wise content per the SUBJECT given below',
-    angle: 'Secondary-level framing, exam-agnostic where the specific board isn\'t named.'
-  },
-  'prt': {
-    label: 'PRT (Primary Teacher, generic)',
-    persona: 'a primary-level teaching expert who has coached PRT aspirants across multiple recruitment boards',
-    subjects: 'primary-level pedagogy, CDP, EVS, Hindi, English, Mathematics per the SUBJECT given below',
-    angle: 'Primary-teacher framing — simple classroom scenarios, foundational literacy/numeracy.'
-  }
-};
-const EXAM_PROFILE_KEYS = Object.keys(EXAM_PROFILES).sort((a, b) => b.length - a.length);
-
-function genericExamProfile(name) {
-  const n = (name || 'this exam').trim();
-  return {
-    label: n,
-    persona: `a veteran ${n} exam faculty member and subject-matter expert who has coached aspirants for this exact exam for years and knows its real syllabus, weightage, and question style in detail`,
-    subjects: 'the subject given below, scoped to what is actually tested in this exam',
-    angle: `Apply real, verifiable knowledge of the ${n} exam pattern, marking scheme, and subject weightage wherever you have it; where you are not certain of a specific number (weightage %, marks, cutoff), state it as an honest estimate rather than inventing a precise-sounding figure.`
-  };
-}
-
-export function getExamProfile(examTypeRaw) {
-  const norm = String(examTypeRaw || '').toLowerCase().trim();
-  if (!norm) return { key: 'ctet', ...EXAM_PROFILES.ctet };
-  for (const key of EXAM_PROFILE_KEYS) {
-    if (norm.includes(key)) return { key, ...EXAM_PROFILES[key] };
-  }
-  if (norm.includes('bihar') && norm.includes('tre')) return { key: 'bpsc tre', ...EXAM_PROFILES['bpsc tre'] };
-  return { key: null, ...genericExamProfile(examTypeRaw) };
-}
+// Ported from long-post-factory/index.html (buildLongPostPrompt). Keep this
+// in lockstep with that file — if the manual tool's prompt contract
+// changes, mirror the change here too, since the output of
+// buildLongPostPrompt() is what parse-reply.mjs (also ported from the same
+// file) expects to parse back.
+//
+// EXAM_PROFILES/getExamProfile no longer live here — this used to be a
+// third hand-duplicated copy (alongside long-post-factory/index.html and
+// update-factory/index.html) and had already drifted stale on a real,
+// research-backed BPSC TRE correction. exam-profiles.mjs is now the single
+// canonical source; see its header for the full story.
+export { EXAM_PROFILES, getExamProfile, genericExamProfile } from './exam-profiles.mjs';
+import { getExamProfile } from './exam-profiles.mjs';
 
 // Identical in substance to buildLongPostPrompt() in long-post-factory/index.html
 // (kept as the sole source of the output contract — SEO_JSON / NOTES_BODY_HTML /

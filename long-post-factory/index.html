@@ -360,6 +360,20 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   <button id="nextBtn" onclick="nav(1)">Next →</button>
 </nav>
 
+<!-- Shared EXAM_PROFILES (Automation/core/src/exam-profiles.mjs, mirrored
+     by gen-exam-profiles-browser.mjs) — window.ExamProfiles, loaded before
+     the main script since it's read at top-level (const {...} = window.ExamProfiles). -->
+<script src="../shared/exam-profiles.js"></script>
+<!-- Shared Editorial Flavour Engine (Automation/core/src/flavour-engine.mjs,
+     mirrored by gen-flavour-engine-browser.mjs) — window.FlavourEngine.
+     buildLongPostPrompt() below falls back to plain text if this fails to load. -->
+<script src="../shared/flavour-engine.js"></script>
+<!-- Prompt Assembler (Automation/core/src/master-prompt-modules.mjs +
+     prompt-assembler.mjs, mirrored by gen-prompt-assembler-browser.mjs) —
+     window.PromptAssembler, shared with notes-factory/update-factory.
+     buildLongPostPrompt() below falls back to the untrimmed prompt (with a
+     console warning) if this fails to load. -->
+<script src="../shared/prompt-assembler.js"></script>
 <script>
 "use strict";
 
@@ -402,111 +416,26 @@ const EXAM_SUGGESTIONS = ["CTET Paper I","CTET Paper II","BPSC TRE 4.0","Bihar T
 /* ================= EXAM PERSONA SYSTEM =================
    No master-prompt file is loaded for this pipeline (keeps the built prompt
    short) — instead the prompt is assembled entirely in this script, cast as
-   a veteran faculty persona for whichever exam is typed. Built-in profiles
-   below are informed by the site's SEO audit (CTET's Hindi-medium PYQ demand
-   is its single biggest clean keyword opportunity; BPSC TRE / DSSSB TGT are
-   the next-priority exams, structurally planned but not yet content-heavy).
-   Any exam name NOT in this list still works — genericExamProfile() below
-   synthesizes a real-sounding persona from the name itself rather than
-   refusing or guessing wrong details. */
-const EXAM_PROFILES = {
-  'ctet': {
-    label: 'CTET',
-    persona: 'a veteran CDP & Pedagogy faculty member who has personally coached 10,000+ CTET Hindi-medium aspirants across both papers and has memorized exactly which NCERT lines the exam twists into distractors',
-    subjects: 'Child Development & Pedagogy (CDP), EVS, Mathematics, Mathematics Pedagogy, Hindi, English, Language Development',
-    angle: 'CTET Hindi-medium PYQ trends are this exam\'s single biggest untapped keyword opportunity — always surface authentic PYQ patterns, and treat Devanagari keyword variants (सीटीईटी) as worth targeting separately from the Romanized ones, not interchangeable with them. Strict NCERT/NCF 2005+2023 alignment language throughout.'
-  },
-  'bpsc tre': {
-    label: 'BPSC TRE (Bihar Teacher Recruitment Examination)',
-    persona: 'a Bihar state-cadre subject expert who has cleared and now coaches BPSC TRE aspirants, fluent in exactly how BPSC phrases its objective questions and the state syllabus quirks that differ from CBSE/NCERT-only prep',
-    subjects: 'level-dependent — see the paper structure below; for Primary (Class 1–5) it is Language (qualifying) + General Studies only, for TGT/PGT it is subject-wise Class 9–10/11–12 content',
-    // Sourced 2026-09 from BPSC TRE 4.0 official notification summaries
-    // (pw.live/adda247/testbook syllabus pages) — see
-    // Automation/input sylabuss/BPSC-TRE-4-Primary-Teacher-Question-Types.md
-    // for the full research and per-subject question-style notes this was
-    // distilled from. Update both files together if BPSC revises the pattern.
-    angle: `Treat this as the "BPSC TRE" program (also referred to as Bihar TRE). Real, verified paper structure — apply the one matching TEACHING LEVEL below, never invent a different one:
-- **Primary Teacher (Class 1–5):** 150 objective questions / 150 marks, 2.5 hours, 1/3 negative marking per wrong answer. Part I = Language (30Q, English + one of Hindi/Urdu/Bangla) — QUALIFYING ONLY, not counted to merit. Part II = General Studies (120Q): Elementary Mathematics, Mental Ability, General Awareness, General Science, Social Science, Geography & Environment, Indian National Movement. **There is no separate CDP/Pedagogy paper at this level** — do not frame practice questions as pedagogy MCQs unless SUBJECT is explicitly CDP; question style is direct fact/rule/calculation-based, not classroom-scenario-based.
-- **TGT/PGT (Class 6–10 / 11–12):** subject-wise paper per the SUBJECT given below, same 1/3 negative-marking convention; subject-wise practice framing works best (e.g. "BPSC TRE TGT [Subject] practice questions").
-Hindi-medium PYQ-style questions matter as much as English ones either way. Per-subject question-type patterns (Hindi grammar = rule + identify + correct-usage; Maths = direct calculation, rarely word-problem-heavy; Science/Social Science = fact-recall and one-line-definition style, not deep conceptual application; Geography = map/location + one-fact association) are general observed patterns for this exam family, not a specific sourced weightage — treat them as a style guide, not a citable statistic.`
-  },
-  'dsssb tgt': {
-    label: 'DSSSB TGT',
-    persona: 'a Delhi-cadre TGT subject expert who has taught DSSSB TGT batches for years and knows the exact Delhi-government question style, distinct from CTET or state-TET patterns',
-    subjects: 'subject-wise TGT content (Class 9–10) per the SUBJECT given below, plus general awareness/Delhi-specific pedagogy where relevant',
-    angle: 'Mirror the CTET-style hub structure in tone but keep DSSSB\'s own question phrasing conventions — this exam has real search demand but almost no populated content yet, so authoritative, exam-pattern-accurate content is a genuine gap to fill.'
-  },
-  'dsssb prt': {
-    label: 'DSSSB PRT',
-    persona: 'a Delhi-cadre Primary Teacher (PRT) exam expert who has coached DSSSB PRT batches and knows the primary-level pedagogy and subject-integration style DSSSB actually tests',
-    subjects: 'Primary-level pedagogy, CDP, EVS, Hindi, English, Mathematics per the SUBJECT given below',
-    angle: 'Primary-teacher framing throughout — simpler classroom scenarios, foundational-literacy and numeracy angle, not secondary-level depth.'
-  },
-  'uptet': {
-    label: 'UPTET',
-    persona: 'a UP state-cadre TET faculty member who has coached thousands of UPTET aspirants and knows exactly how UP\'s question style differs from CTET despite the overlapping syllabus',
-    subjects: 'Child Development & Pedagogy, EVS, Mathematics, Hindi, English, Sanskrit (where relevant), UP-specific policy references',
-    angle: 'Heavy Hindi-medium framing — UPTET aspirants overwhelmingly prep in Hindi — and reference UP Basic Shiksha Parishad conventions where the exam actually differs from CTET.'
-  },
-  'up tgt': {
-    label: 'UP TGT',
-    persona: 'a UP-cadre TGT subject expert coaching aspirants for the UP Secondary Education Selection Board\'s TGT exam, fluent in its subject-wise weightage and question style',
-    subjects: 'subject-wise TGT content (Class 9–10) per the SUBJECT given below',
-    angle: 'UP-specific exam pattern and selection-board conventions; Hindi-medium framing dominant.'
-  },
-  'kvs': {
-    label: 'KVS (Kendriya Vidyalaya Sangathan)',
-    persona: 'a KVS-cadre subject expert and former KVPS/PGT interview panelist who knows exactly what KVS tests beyond the generic CTET syllabus — general awareness of KVS policy, computer literacy, and current affairs weightage',
-    subjects: 'subject-wise TGT/PGT content per the SUBJECT given below, plus General Awareness, Current Affairs, and Computer Literacy sections specific to KVS',
-    angle: 'KVS papers add a General Awareness + Computer Literacy layer most state TET exams skip — call that out explicitly rather than treating this as a copy of CTET.'
-  },
-  'nvs': {
-    label: 'NVS (Navodaya Vidyalaya Samiti)',
-    persona: 'an NVS-cadre subject expert familiar with Jawahar Navodaya Vidyalaya\'s residential-school context and NVS\'s own exam pattern (heavier reasoning/GK component than most TET exams)',
-    subjects: 'subject-wise TGT/PGT content per the SUBJECT given below, plus Reasoning and General Knowledge sections specific to NVS',
-    angle: 'NVS leans harder on reasoning/GK than CTET-style pedagogy exams — reflect that balance rather than defaulting to a pure-pedagogy framing.'
-  },
-  'pgt': {
-    label: 'PGT (Post Graduate Teacher, generic)',
-    persona: 'a senior subject-matter expert who has taught at the +2/senior-secondary level for years and coaches PGT aspirants across multiple state and central recruitment boards',
-    subjects: 'senior-secondary (Class 11–12) subject-wise content per the SUBJECT given below',
-    angle: 'Senior-secondary depth — this audience already cleared TGT-level basics, so go deeper into subject nuance rather than re-explaining fundamentals.'
-  },
-  'tgt': {
-    label: 'TGT (Trained Graduate Teacher, generic)',
-    persona: 'a senior TGT subject expert who has coached aspirants across multiple state and central TGT recruitment boards',
-    subjects: 'secondary-level (Class 9–10) subject-wise content per the SUBJECT given below',
-    angle: 'Secondary-level framing, exam-agnostic where the specific board isn\'t named.'
-  },
-  'prt': {
-    label: 'PRT (Primary Teacher, generic)',
-    persona: 'a primary-level teaching expert who has coached PRT aspirants across multiple recruitment boards',
-    subjects: 'primary-level pedagogy, CDP, EVS, Hindi, English, Mathematics per the SUBJECT given below',
-    angle: 'Primary-teacher framing — simple classroom scenarios, foundational literacy/numeracy.'
-  }
-};
-/* longest keys first so "dsssb tgt" matches before the generic "tgt" substring does */
-const EXAM_PROFILE_KEYS = Object.keys(EXAM_PROFILES).sort((a,b)=>b.length-a.length);
-
-function genericExamProfile(name){
-  const n = (name||'this exam').trim();
-  return {
-    label: n,
-    persona: `a veteran ${n} exam faculty member and subject-matter expert who has coached aspirants for this exact exam for years and knows its real syllabus, weightage, and question style in detail`,
-    subjects: 'the subject given below, scoped to what is actually tested in this exam',
-    angle: `Apply real, verifiable knowledge of the ${n} exam pattern, marking scheme, and subject weightage wherever you have it; where you are not certain of a specific number (weightage %, marks, cutoff), state it as an honest estimate rather than inventing a precise-sounding figure.`
+   a veteran faculty persona for whichever exam is typed. EXAM_PROFILES
+   itself now lives in shared/exam-profiles.js (generated from
+   Automation/core/src/exam-profiles.mjs — the single source of truth,
+   shared with update-factory and the Automation pipeline; this used to be a
+   third hand-duplicated copy that had already drifted stale). Any exam name
+   NOT in EXAM_PROFILES still works — genericExamProfile() synthesizes a
+   real-sounding persona from the name itself rather than refusing or
+   guessing wrong details. */
+if(!window.ExamProfiles){
+  // shared/exam-profiles.js failed to load (unexpected — see comment above)
+  // — never hard-crash the page over it, fall back to a generic profile for
+  // every exam instead of the tailored personas.
+  console.error('shared/exam-profiles.js failed to load — falling back to a generic exam profile for every exam.');
+  window.ExamProfiles = {
+    EXAM_PROFILES: {},
+    genericExamProfile(name){ const n=(name||'this exam').trim(); return { label:n, persona:`a veteran ${n} exam faculty member and subject-matter expert who has coached aspirants for this exact exam for years`, subjects:'the subject given below, scoped to what is actually tested in this exam', angle:'Apply real, verifiable knowledge of this exam\'s pattern and weightage wherever you have it; state uncertain numbers as honest estimates, never invented figures.' }; },
+    getExamProfile(examTypeRaw){ return { key:null, ...window.ExamProfiles.genericExamProfile(examTypeRaw) }; }
   };
 }
-function getExamProfile(examTypeRaw){
-  const norm = String(examTypeRaw||'').toLowerCase().trim();
-  if(!norm) return { key:'ctet', ...EXAM_PROFILES.ctet };
-  for(const key of EXAM_PROFILE_KEYS){
-    if(norm.includes(key)) return { key, ...EXAM_PROFILES[key] };
-  }
-  // "bihar tre" without the BPSC prefix should still resolve to the BPSC TRE profile
-  if(norm.includes('bihar') && norm.includes('tre')) return { key:'bpsc tre', ...EXAM_PROFILES['bpsc tre'] };
-  return { key:null, ...genericExamProfile(examTypeRaw) };
-}
+const { EXAM_PROFILES, getExamProfile, genericExamProfile } = window.ExamProfiles;
 
 function initSelectors(){
   const topicList = document.getElementById('topicSuggestions');
@@ -792,7 +721,7 @@ function clearShareBlock(containerId){
 
 /* ================= STEP 1 — build prompt ================= */
 var builtPromptText = null;
-var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null };
+var state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', contentMemory:null, topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null };
 
 function updateLangMixLabel(){
   const hindi = document.getElementById('hindiPercent').value;
@@ -807,11 +736,39 @@ function updateLangMixLabel(){
    does the HTML styling instead of the AI — plain Markdown, no hand-written
    HTML, no custom block-tag syntax, so any model (ChatGPT/Claude/DeepSeek)
    or a human copy-pasting by hand produces the same reliable input. */
-function buildLongPostPrompt(topic, examType, subject, hindiPercent, year){
+/* ================= EDITORIAL FLAVOUR ENGINE (client glue) =================
+   Flavour DEFINITIONS and SELECTION LOGIC live entirely in
+   shared/flavour-engine.js (generated from Automation/core/src/flavour-
+   engine.mjs — the single source of truth, shared with notes-factory and
+   update-factory). This tool only fetches recent content-memory records
+   for repetition-avoidance and renders the {{FLAVOUR_ENGINE_BLOCK}} slot —
+   both steps degrade quietly to plain text if anything is unavailable. */
+async function loadRecentContentMemory(){
+  try{
+    const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/Automation/content-memory`, { headers:{'Accept':'application/vnd.github+json'} });
+    if(!res.ok) return [];
+    const listing = (await res.json()).filter(f=>f.name.endsWith('.json')).slice(-30);
+    const records = await Promise.all(listing.map(async f=>{
+      try{ const r = await fetch(f.download_url); return r.ok ? await r.json() : null; }catch(e){ return null; }
+    }));
+    return records.filter(Boolean);
+  }catch(e){ return []; }
+}
+const FLAVOUR_ENGINE_FALLBACK_TEXT = 'Flavour Engine unavailable this run — choose whatever structural approach (concept-first, misconception-first, problem-first, worked-example, compare-and-contrast, question-led, exam-trap-first, classroom-situation, classification, chronology/cause-effect, or revision-focused) genuinely fits this topic best, and say which one you picked in Publisher Notes.';
+async function buildFlavourBlock(topic, examType, subject){
+  try{
+    if(!window.FlavourEngine) return FLAVOUR_ENGINE_FALLBACK_TEXT;
+    const recent = await loadRecentContentMemory();
+    return window.FlavourEngine.buildFlavourPromptBlock({ topic, exam: examType, subject }, recent);
+  }catch(e){ return FLAVOUR_ENGINE_FALLBACK_TEXT; }
+}
+
+async function buildLongPostPrompt(topic, examType, subject, hindiPercent, year){
   const profile = getExamProfile(examType);
   const seed = Array.from(topic+examType).reduce((a,c)=>a+c.charCodeAt(0),0) % 999 + 1;
+  const flavourBlock = await buildFlavourBlock(topic, examType, subject);
 
-  return `# LONG POST — ${profile.label} — ${topic} (${year})
+  let __prompt = `# LONG POST — ${profile.label} — ${topic} (${year})
 
 ## WHO YOU ARE
 This is a premium exam-study resource, not an SEO article — you are writing it, in one pass, as four internal roles working together:
@@ -858,6 +815,11 @@ Do not mechanically apply a fixed section architecture. Decide the best structur
 A typical run will still cover, in whatever order/weight the topic earns: why this matters for ${profile.label} (exam relevance, honestly sourced or labeled estimated) · the core concepts themselves, taught properly, not just listed · the exam-body/pedagogy angle where genuinely relevant · comparisons and misconceptions where they aid understanding · memory aids where a real mnemonic adds value · a closing summary/roadmap/FAQ. None of these is a mandatory numbered section with a word floor — include what the topic needs, skip what it doesn't, and let 1–2 areas run deep while others stay brief, matching real importance rather than an even split.
 
 **Self-check before finishing a section:** could this section be removed without reducing what the reader actually learns? If yes, cut it or fold it into something that earns its place.
+
+## EDITORIAL FLAVOUR
+Choose the most appropriate editorial flavour for this topic from the supplied FLAVOUR_ENGINE options below. Follow the selected flavour's teaching intent, but adapt structure and depth to the topic. Never force a template.
+
+${flavourBlock}
 
 ## MARKDOWN OUTPUT SYSTEM — choose the right construct for each idea, never to fill a quota
 Most of the article is just Markdown, no wrapper needed:
@@ -981,7 +943,7 @@ Two extra SEO fields beyond the frontmatter shape shown: "imageAltText" (starts 
 
 **Your ENTIRE response is that one code fence and nothing else.** No "Here's your article:" before it, no summary/"let me know if you'd like changes" after it, no explanation of what you did — this reply gets copy-pasted as a raw file by a script, so a single word outside the fence breaks the pipeline. If you have something to say about the run, put it inside the Publisher Notes section at the end — never outside the fence.
 
-Output the entire file inside ONE fence, in this exact order — frontmatter, then the Markdown body, then a single \`<!-- PUBLISHER NOTES -->\` sentinel line (the one and only place any HTML-style syntax is allowed) followed by the publisher notes.
+Output the entire file inside ONE fence, in this exact order — frontmatter, then the Markdown body, then a single \`<!-- PUBLISHER NOTES -->\` sentinel line (the one and only place any HTML-style syntax is allowed) followed by the publisher notes, then a single \`<!-- CONTENT MEMORY -->\` sentinel line followed by a \`\`\`json fenced block (see shape below).
 
 **This outer fence MUST use FOUR backticks (\`\`\`\`markdown ... \`\`\`\`), not three.** The body itself contains three-backtick fences for card types (\`\`\`def, \`\`\`chart, etc.) — a three-backtick outer wrapper would be closed prematurely by the very first one of those, corrupting the file. Four backticks around everything, three backticks for each card type inside — never the same count for both.
 
@@ -1006,7 +968,23 @@ imagePrompt: "..."
 - Visuals used and why each earned its place: [list]
 - URLs needing manual verification: [list]
 - Approx. body word count: [N]
+
+<!-- CONTENT MEMORY -->
+\`\`\`json
+{
+  "flavour": "...",
+  "concepts_taught": ["...", "..."],
+  "misconceptions_used": ["...", "..."],
+  "examples_used": ["...", "..."],
+  "pedagogical_strategy": "...",
+  "article_shape": ["...", "..."],
+  "question_types": ["...", "..."],
+  "sources": ["...", "..."]
+}
+\`\`\`
 \`\`\`\`
+
+The CONTENT MEMORY block is purely for the pipeline's own record-keeping (never shown to a reader) — a factual summary of what THIS article actually contains, so a future run on a related topic can be told what's already been covered and avoid repeating the same misconception/example/structural-shape choices. Report what you actually wrote, not a plan: the specific named sub-concepts explained, the specific misconceptions actually corrected, the specific examples/analogies actually used (this is where your EDITORIAL FLAVOUR's example strategy cashes out), the dominant pedagogical strategy, the actual section sequence as short lowercase labels in order, the practice-question types actually used, and the real sources actually cited (names, not URLs).
 \`\`\`
 
 That closing \`\`\`\` (four backticks) is the LAST character of your reply. Nothing after it — not "Hope this helps!", not a question, not a note. If you run out of space, stop cleanly at the end of a complete paragraph or fenced block instead of adding a note about it — the user will send "continue" and you resume exactly where you stopped, inside a new \`\`\`\`markdown fence, no repetition, no fresh introduction, still nothing outside the fence.
@@ -1022,9 +1000,31 @@ Zero <script> tags; 3 [[AD]] markers placed, spread across the article, not bunc
 Zero locked/blurred/upsell content; premium-hint line appears once, naturally?                    YES/NO
 Reads like a teacher-created study resource, not a templated SEO article?                         YES/NO
 Publisher Notes copied field-for-field, below the <!-- PUBLISHER NOTES --> sentinel?               YES/NO
+CONTENT MEMORY sentinel + \`\`\`json block present, valid JSON, all 7 fields filled honestly?         YES/NO
 \`\`\`
 
 **>>> NOW GENERATE THE LONG POST <<<**`;
+
+  // PROMPT ASSEMBLER — same shared function notes-factory/update-factory
+  // use (window.PromptAssembler.assembleRuntimePrompt, from
+  // Automation/core/src/prompt-assembler.mjs), applied here with
+  // tool:'long-post' context. Sections whose heading text matches a known
+  // rule (e.g. STRUCTURE's per-subject bullet list, which uses the same
+  // "- **Maths:**" format as the Notes master prompt) get trimmed to only
+  // what applies to THIS run; every other section this parser doesn't
+  // recognize (this prompt isn't built from the same Master Prompt file as
+  // Notes, so most headings won't match) passes through unchanged — never
+  // silently dropped. Falls back to the untrimmed prompt, with a visible
+  // console warning (never a silently swallowed failure), if the assembler
+  // is unavailable.
+  try{
+    if(window.PromptAssembler){
+      __prompt = window.PromptAssembler.assembleRuntimePrompt(__prompt, { tool:'long-post', subject }).prompt;
+    } else {
+      console.warn('PromptAssembler unavailable — sending the untrimmed long-post prompt as-is.');
+    }
+  }catch(e){ console.warn('PromptAssembler failed — sending the untrimmed long-post prompt as-is.', e); }
+  return __prompt;
 }
 
 function buildPrompt(){
@@ -1047,7 +1047,8 @@ async function copyPrompt(btn){
     return;
   }
   const out = document.getElementById('promptOut');
-  const full = buildPrompt();
+  show(msg('pMsg'),'warn','Building prompt…');
+  const full = await buildPrompt();
   out.value = full;
   builtPromptText = full;
   const words = full.trim().split(/\s+/).length;
@@ -1700,6 +1701,24 @@ function findMarkdownFileText(raw){
   return stripOuterFence(rawStr); // last resort: old whole-reply-is-one-fence behavior
 }
 
+// Splits a trailing `<!-- CONTENT MEMORY -->` sentinel + ```json fenced block
+// off of publisherNotes, if present. Returns { publisherNotes, contentMemory }
+// with contentMemory null when the sentinel is missing/unparseable — this
+// block is new (later than the frontmatter/PUBLISHER NOTES system) so older
+// replies simply won't have it; that degrades quietly, it's bookkeeping, not
+// something the reader or the publish step depends on.
+function extractContentMemory(publisherNotesRaw){
+  const raw = String(publisherNotesRaw||'');
+  const m = raw.search(/<!--\s*CONTENT MEMORY\s*-->/i);
+  if(m === -1) return { publisherNotes: raw, contentMemory: null };
+  const before = raw.slice(0,m).trim();
+  const after = raw.slice(m).replace(/<!--\s*CONTENT MEMORY\s*-->/i,'').trim();
+  const fence = /```json([\s\S]*?)```/i.exec(after) || /```([\s\S]*?)```/.exec(after);
+  if(!fence) return { publisherNotes: before, contentMemory: null };
+  try{ return { publisherNotes: before, contentMemory: JSON.parse(fence[1].trim()) }; }
+  catch(e){ return { publisherNotes: before, contentMemory: null }; }
+}
+
 function extractMarkdownFile(raw){
   const text = findMarkdownFileText(raw);
   const fmMatch = /^---\s*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/.exec(text);
@@ -1717,7 +1736,9 @@ function extractMarkdownFile(raw){
     leakedNote = stripped.leaked;
     publisherNotes = (publisherNotes ? publisherNotes + '\n\n' : '') + '- (recovered from a leaked "## Publisher Notes" heading in the body — the AI put this in the wrong place):\n' + leakedNote;
   }
-  return { seo, bodyMarkdown, publisherNotes, cutOff: pubIdx===-1, leakedNote };
+  const cm = extractContentMemory(publisherNotes);
+  publisherNotes = cm.publisherNotes;
+  return { seo, bodyMarkdown, publisherNotes, contentMemory: cm.contentMemory, cutOff: pubIdx===-1, leakedNote };
 }
 
 // Inline Markdown: escape raw HTML first (the AI must never emit any, but a
@@ -1910,6 +1931,7 @@ function parseResponse(raw){
       seo: md.seo,
       bodyHtml: rendered.html,
       publisherNotes: md.publisherNotes,
+      contentMemory: md.contentMemory,
       method: 'markdown-frontmatter + blocks:'+rendered.blockCount,
       truncated: md.cutOff && !md.publisherNotes
     };
@@ -1926,6 +1948,7 @@ function parseResponse(raw){
     if(rendered.blockCount === 0) warnings.push('No fenced ```type code blocks were found in the body — double-check the paste is complete and fences were not stripped by the chat UI.');
     if(!rendered.headingCount) warnings.push('No ## section headings found — the Table of Contents will be empty.');
     if(md.leakedNote) warnings.push('The AI wrote a "## Publisher Notes" heading at the top of the article body instead of using the <!-- PUBLISHER NOTES --> sentinel — it was caught and moved into Publisher Notes automatically, but double-check the body reads correctly starting from its actual first section.');
+    if(!result.contentMemory) warnings.push('Content Memory block missing or unparseable — this article won\'t be recorded in Automation/content-memory/. Not fatal, but future runs lose this article\'s anti-repetition signal.');
     result.warnings = warnings;
     return result;
   }
@@ -1998,6 +2021,7 @@ function parseAndGo(){
   state.seo = result.seo;
   state.bodyHtml = result.bodyHtml;
   state.publisherNotes = result.publisherNotes;
+  state.contentMemory = result.contentMemory;
   saveDraft();
 
   const issuesEl = document.getElementById('parseIssues');
@@ -2282,12 +2306,16 @@ async function unlockGithub(btn){
 }
 
 function buildBundle(){
-  return {
+  const bundle = {
     topic: state.topic, examType: state.examType, subject: state.subject, targetYear: 2026,
     hindiPercent: state.hindiPercent,
     seo: state.seo, bodyHtml: state.bodyHtml, publisherNotes: state.publisherNotes,
     createdAt: new Date().toISOString()
   };
+  // Feeds Automation/content-memory/ — see publish-long-post.yml, which writes
+  // this out as a standalone record after a successful WordPress publish.
+  if(state.contentMemory) bundle.contentMemory = state.contentMemory;
+  return bundle;
 }
 
 function utf8ToBase64(str){
@@ -2457,7 +2485,7 @@ async function addToQueue(btn){
   saveQueueList(q);
   show(m,'ok',`Added "${state.seo.slug}" to the batch queue (${q.length} queued). Start the next note at Step 1, or post the queue when everyone's done.`);
   clearDraft();
-  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null };
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', contentMemory:null, topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null };
   clearImagePreview();
   cur = 0; render();
 }
@@ -2657,7 +2685,7 @@ Image Gen Prompt:    ${state.seo.imagePrompt || ''}`;
 }
 function resetAll(){
   if(!confirm('Clear this note and start over?')) return;
-  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null };
+  state = { parsed:null, seo:{}, bodyHtml:'', publisherNotes:'', contentMemory:null, topic:'', examType:'', subject:'', hindiPercent:70, validation:null, featuredImage:null };
   accumulatedRaw = '';
   clearDraft();
   document.getElementById('promptOut').value='';

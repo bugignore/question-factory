@@ -144,7 +144,47 @@ jobs:
           fi
 
           mkdir -p published-long-posts
+          mkdir -p Automation/content-memory
           failed=0
+
+          # See publish-note.yml for the twin of this function — same
+          # content-memory record shape (Automation/content-memory/README.md),
+          # written here only for long posts. Never fails the publish itself.
+          write_content_memory(){
+            local f="$1" slug="$2" post_id="$3" post_link="$4"
+            local cm
+            cm="$(jq -c '.contentMemory // empty' "$f" 2>/dev/null || true)"
+            [ -z "$cm" ] && return 0
+            jq -n --argjson cm "$cm" --arg id "$slug" --arg topic "$(jq -r '.topic // ""' "$f")" \
+              --arg subject "$(jq -r '.subject // ""' "$f")" --arg exam "$(jq -r '.examType // ""' "$f")" \
+              --arg type "long-post" --arg postId "$post_id" --arg link "$post_link" \
+              --arg published "$(date -u +%FT%TZ)" \
+              '{id:$id, type:$type, topic:$topic, subject:$subject, exam:$exam} + $cm +
+               {postId:$postId, link:$link, published:$published}' \
+              > "Automation/content-memory/$slug.json" 2>/dev/null || {
+                echo "::warning::$slug — failed to write content-memory record (non-fatal, publish already succeeded)."
+                return 0
+              }
+            git add "Automation/content-memory/$slug.json"
+          }
+
+          # See publish-note.yml for the twin of this function — same local,
+          # non-blocking 5-gram similarity check, informational only.
+          write_similarity_note(){
+            local f="$1"
+            local sim_json
+            sim_json="$(node Automation/core/src/similarity-check.mjs "$f" published-long-posts 30 2>/dev/null || true)"
+            [ -z "$sim_json" ] && return 0
+            local sim_note
+            sim_note="$(echo "$sim_json" | jq -r '
+              if (.closest | length) == 0 then empty else
+                "\n\n--- LOCAL CONTENT-DIFFERENTIATION CHECK (informational; not a rejection gate) ---\nCompared against \(.comparedAgainst) recently published long posts using 5-gram overlap.\nClosest matches:\n" +
+                ([.closest[] | "- \(.slug): \((.similarity*100)|floor)% overlap"] | join("\n"))
+              end' 2>/dev/null || true)"
+            [ -z "$sim_note" ] && return 0
+            jq --arg note "$sim_note" '.publisherNotes = ((.publisherNotes // "") + $note)' "$f" > /tmp/pn.json 2>/dev/null \
+              && mv /tmp/pn.json "$f" && git add "$f"
+          }
 
           # Everything that touches one file lives in this function, called as
           # an `if` condition below. This is deliberate, not cosmetic: bash's
@@ -385,6 +425,8 @@ jobs:
                  "$f" > "published-long-posts/$slug.json"
               git rm -q "$f"
               git add "published-long-posts/$slug.json"
+              write_similarity_note "published-long-posts/$slug.json"
+              write_content_memory "published-long-posts/$slug.json" "$slug" "$post_id" "$post_link"
 
               # Maintain a flat index of published slugs — GitHub Pages can't
               # directory-list, so reporting/index.html reads this file to know

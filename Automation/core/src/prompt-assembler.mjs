@@ -1,0 +1,259 @@
+// PROMPT ASSEMBLER — selects and trims Master Prompt modules for one run,
+// so the compact RUNTIME prompt sent to the AI excludes content that is
+// provably irrelevant to THIS topic/exam/subject/level/tool, while the
+// Master Prompt file itself stays large, human-readable, and untouched.
+//
+// Deliberately conservative: any section this file doesn't recognize is
+// passed through UNCHANGED (never silently dropped), and every trim below
+// only removes enumerated alternatives that cannot apply to this run (e.g.
+// the Upper-Primary/Senior-Secondary bullets when the run IS Primary level)
+// — it never rewrites or shortens the content that DOES apply. This is the
+// "smallest safe" trimming pass, not a full rewrite of v13's prose.
+//
+// Two trims are implemented today (see MODULE_RULES): TEACHING LEVEL (keep
+// only the matching level's bullet) and STRUCTURE (keep only the matching
+// subject's bullet). Everything else stays whole.
+//
+// The old "VARIETY ENGINE" section (independent seed-driven rotation of
+// voice/opening/example-domain/card-labels) has been retired from the
+// Master Prompt itself — EDITORIAL FLAVOUR is now the sole differentiation
+// mechanism; the Master Prompt's `## SEED` section keeps only a
+// deterministic seed for tie-breaking/reproducibility. `60_FLAVOURS/legacy-variety`
+// below matches that renamed section so it still gets a stable module id
+// (harmless if the heading text moves again — falls into `(unmapped)` and
+// is included verbatim rather than silently dropped).
+
+import { parseMasterPromptModules } from './master-prompt-modules.mjs';
+
+const LEVEL_BULLET_RE = {
+  primary: /^- \*\*Primary \(Class 1–5\)/,
+  upper_primary_secondary: /^- \*\*Upper Primary\/Secondary \(Class 6–10\)/,
+  senior_secondary_pgt: /^- \*\*Senior Secondary \(Class 11–12\)/,
+};
+const LEVEL_AGNOSTIC_RE = /^- If a topic is genuinely level-agnostic/;
+
+/** Maps getTeachingLevel()'s exact return string to a level key these rules understand. */
+export function levelKeyFromLabel(label) {
+  const s = String(label || '');
+  if (s.startsWith('Primary (Class 1–5)')) return 'primary';
+  if (s.startsWith('Upper Primary/Secondary')) return 'upper_primary_secondary';
+  if (s.startsWith('Senior Secondary')) return 'senior_secondary_pgt';
+  return null; // ambiguous/ungrounded — keep every bullet, the safest default
+}
+
+// Filters a Markdown bullet list, keeping a bullet's WRAPPED CONTINUATION
+// LINES together with it (text on a second line with no leading `- ` still
+// "belongs" to the previous bullet until a new `- ` or a blank line ends
+// the list) — a naive per-line filter leaves orphaned continuation text
+// dangling when its header bullet is removed (e.g. STRUCTURE's CDP/Pedagogy
+// bullet wraps onto a second line with no leading `- `).
+function filterBulletGroups(text, keepBullet) {
+  const lines = text.split('\n');
+  const out = [];
+  let dropping = false;
+  for (const line of lines) {
+    const isBulletHeader = /^- /.test(line);
+    if (isBulletHeader) {
+      dropping = !keepBullet(line);
+      if (!dropping) out.push(line);
+      continue;
+    }
+    if (dropping && line.trim() !== '') continue; // a wrapped continuation of a dropped bullet
+    dropping = false; // blank line or non-bullet prose always ends "dropping" mode
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+function trimTeachingLevel(text, levelKey) {
+  const re = levelKey && LEVEL_BULLET_RE[levelKey];
+  if (!re) return text; // unknown/ambiguous level -> never guess, keep everything
+  return filterBulletGroups(text, line => re.test(line) || LEVEL_AGNOSTIC_RE.test(line));
+}
+
+const SUBJECT_BULLET_RE = {
+  maths: /^- \*\*Maths:\*\*/i,
+  math: /^- \*\*Maths:\*\*/i,
+  science: /^- \*\*EVS\/Science:\*\*/i,
+  evs: /^- \*\*EVS\/Science:\*\*/i,
+  history: /^- \*\*History:\*\*/i,
+  geography: /^- \*\*Geography:\*\*/i,
+  cdp: /^- \*\*CDP\/Pedagogy:\*\*/i,
+  pedagogy: /^- \*\*CDP\/Pedagogy:\*\*/i,
+  hindi: /^- \*\*Language:\*\*/i,
+  english: /^- \*\*Language:\*\*/i,
+  language: /^- \*\*Language:\*\*/i,
+};
+const SUBJECT_OTHER_RE = /^- \*\*Other subjects:\*\*/i;
+
+function trimStructureSubject(text, subject) {
+  const key = String(subject || '').toLowerCase();
+  let matchRe = null;
+  for (const k of Object.keys(SUBJECT_BULLET_RE)) {
+    if (key.includes(k)) { matchRe = SUBJECT_BULLET_RE[k]; break; }
+  }
+  return filterBulletGroups(text, line => (matchRe && matchRe.test(line)) || SUBJECT_OTHER_RE.test(line));
+}
+
+// heading -> {id, tools?, trim?}. `tools`, when present, restricts this
+// module to the listed tool ids (see assembleRuntimePrompt's `ctx.tool`);
+// omitted entirely for a tool not in the list — this only has a live effect
+// once a non-Notes tool starts sourcing prompt text from this same Master
+// Prompt file (see prompt-builder-notes.mjs / notes-factory's own contract).
+const MODULE_RULES = [
+  { match: h => h.startsWith('INPUTS'), id: '00_CORE/inputs' },
+  { match: h => h.startsWith('TEACHING LEVEL'), id: '20_LEVELS', trim: (t, ctx) => trimTeachingLevel(t, ctx.levelKey) },
+  { match: h => h.startsWith('WHO YOU ARE'), id: '00_CORE/roles' },
+  { match: h => h.startsWith('SEED'), id: '60_FLAVOURS/seed-tiebreak' },
+  { match: h => h.startsWith('EDITORIAL FLAVOUR'), id: '60_FLAVOURS/selection' },
+  { match: h => h.startsWith('HARD BANS'), id: '00_CORE/honesty' },
+  { match: h => h.startsWith('LANGUAGE'), id: '00_CORE/language' },
+  { match: h => h.startsWith('RAG / SOURCES'), id: '00_CORE/sources' },
+  { match: h => h.startsWith('LENGTH'), id: '50_EDITORIAL/depth' },
+  { match: h => h.startsWith('STRUCTURE'), id: '30_SUBJECTS', trim: (t, ctx) => trimStructureSubject(t, ctx.subject) },
+  { match: h => h.startsWith('PREMIUM HINT'), id: '50_EDITORIAL/misc' },
+  { match: h => h.startsWith('SEO'), id: '40_SEO' },
+  { match: h => h.startsWith('VISUAL/HTML SYSTEM'), id: '80_NOTES/html', tools: ['notes'] },
+  { match: h => h.startsWith('SVGs'), id: '80_NOTES/svg', tools: ['notes'] },
+  { match: h => h.startsWith('AD SLOTS'), id: '80_NOTES/ads', tools: ['notes'] },
+  { match: h => h.startsWith('QUESTION TYPE DIVERSITY'), id: '50_EDITORIAL/questions' },
+  { match: h => h.startsWith('BEFORE YOU OUTPUT'), id: '90_OUTPUT/prompt-checklist' },
+  { match: h => h.startsWith('OUTPUT FORMAT'), id: '90_OUTPUT/format-pointer' },
+];
+
+// Generic metadata-driven matching: a module opts into this by carrying a
+// `<!-- module: ... -->` comment (see master-prompt-modules.mjs) declaring
+// which subject/exam/level/tool values it applies to. A dimension the
+// module doesn't declare is treated as "applies regardless" (so a module
+// tagged only `subject=maths` still applies at every exam/level/tool). This
+// is what makes GENERIC module selection possible for a future, more
+// granular Master Prompt (or the synthetic scalability test) without
+// requiring a hard-coded rule per exam/subject in this file.
+// 'level' and 'tool' are clean enum-like values (levelKeyFromLabel() and the
+// tool ids callers pass are both fixed strings, e.g. 'upper_primary_secondary')
+// so they need EXACT equality — a substring check would wrongly match
+// 'primary' inside 'upper_primary_secondary'. 'subject'/'exam' are free-text
+// human-entered fields (e.g. examType "BPSC TRE 4.0"), so those stay
+// substring-matched in both directions to tolerate real-world variation.
+const EXACT_MATCH_DIMENSIONS = new Set(['level', 'tool']);
+
+function metaMatchesContext(meta, ctx) {
+  const dims = [['subject', ctx.subject], ['exam', ctx.exam], ['level', ctx.levelKey], ['tool', ctx.tool]];
+  for (const [key, ctxVal] of dims) {
+    if (!meta[key]) continue; // module doesn't constrain this dimension
+    if (!ctxVal) continue; // ctx doesn't specify this dimension -> can't exclude on it
+    const norm = String(ctxVal).toLowerCase();
+    const matches = EXACT_MATCH_DIMENSIONS.has(key)
+      ? meta[key].some(v => norm === v.toLowerCase())
+      : meta[key].some(v => norm.includes(v.toLowerCase()));
+    if (!matches) return false;
+  }
+  return true;
+}
+
+/**
+ * @param {string} masterText the Master Prompt, AFTER any {{PLACEHOLDER}}
+ *   substitutions (REFERENCE_SOURCES_BLOCK / TEACHING_LEVEL / FLAVOUR_ENGINE_BLOCK)
+ *   already applied by the caller — this function only selects/trims sections,
+ *   it never touches placeholder text.
+ * @param {{tool?:string, subject?:string, exam?:string, levelKey?:string|null}} ctx
+ * @returns {{prompt:string, selectedModuleIds:string[], excludedModuleIds:string[], masterLength:number}}
+ */
+export function assembleRuntimePrompt(masterText, ctx = {}) {
+  const modules = parseMasterPromptModules(masterText);
+  const selected = [];
+  const excluded = [];
+  // First pass: resolve which modules are even in play, so `depends_on` can
+  // be honored (a dependency stays included even if nothing else needs it,
+  // as long as SOMETHING selected declares a dependency on it).
+  const byId = new Map();
+  for (const mod of modules) if (mod.meta && mod.meta.id) byId.set(mod.meta.id[0], mod);
+
+  for (const mod of modules) {
+    if (mod.heading === '(preamble)') {
+      // The `# Title` line stays; the human-facing "what changed from v12"
+      // changelog blockquote never needs to reach the AI at runtime.
+      const titleLine = mod.text.split('\n').find(l => l.startsWith('# ')) || '';
+      selected.push({ id: '00_CORE/title', text: titleLine });
+      continue;
+    }
+
+    if (mod.meta) {
+      // Explicit metadata present -> generic matching takes priority over
+      // heading-name pattern rules below.
+      const id = mod.meta.id ? mod.meta.id[0] : mod.heading;
+      if (!metaMatchesContext(mod.meta, ctx)) { excluded.push(id); continue; }
+      selected.push({ id, text: mod.text });
+      continue;
+    }
+
+    const rule = MODULE_RULES.find(r => r.match(mod.heading));
+    if (!rule) {
+      // Unknown/new section this parser doesn't recognize yet — include it
+      // verbatim rather than silently dropping content a human just added.
+      selected.push({ id: '(unmapped): ' + mod.heading, text: mod.text });
+      continue;
+    }
+    if (rule.tools && ctx.tool && !rule.tools.includes(ctx.tool)) {
+      excluded.push(rule.id);
+      continue;
+    }
+    selected.push({ id: rule.id, text: rule.trim ? rule.trim(mod.text, ctx) : mod.text });
+  }
+
+  // Second pass: pull back in any excluded module that a SELECTED
+  // meta-tagged module declares as a dependency (depends_on=ID,ID) — a
+  // module can be excluded from direct relevance but still required as a
+  // foundation for something that IS included.
+  const selectedIds = new Set(selected.map(s => s.id));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const mod of modules) {
+      if (!mod.meta || !mod.meta.depends_on) continue;
+      const id = mod.meta.id ? mod.meta.id[0] : mod.heading;
+      if (!selectedIds.has(id)) continue; // this module itself isn't in play
+      for (const depId of mod.meta.depends_on) {
+        if (selectedIds.has(depId)) continue;
+        const depMod = byId.get(depId);
+        if (!depMod) continue; // dependency declared but no such module exists — ignore rather than crash
+        selected.push({ id: depId, text: depMod.text });
+        selectedIds.add(depId);
+        const exIdx = excluded.indexOf(depId);
+        if (exIdx !== -1) excluded.splice(exIdx, 1);
+        changed = true;
+      }
+    }
+  }
+
+  return {
+    prompt: selected.map(s => s.text).join('\n'),
+    selectedModuleIds: selected.map(s => s.id),
+    excludedModuleIds: excluded,
+    masterLength: masterText.length,
+  };
+}
+
+/**
+ * Renders a human-readable diagnostic report for one assembleRuntimePrompt()
+ * result — MASTER SIZE / SELECTED / EXCLUDED / RUNTIME SIZE — so a real
+ * reduction (or the lack of one) is visible at a glance instead of buried in
+ * an array comparison. Pass the same `result` assembleRuntimePrompt() returns.
+ */
+export function formatDiagnostic(result) {
+  const reduction = result.masterLength
+    ? Math.round((1 - result.prompt.length / result.masterLength) * 100)
+    : 0;
+  const lines = [
+    `MASTER PROMPT SIZE: ${result.masterLength.toLocaleString()} chars`,
+    '',
+    'SELECTED MODULES:',
+    ...result.selectedModuleIds.map(id => `  - ${id}`),
+    '',
+    'EXCLUDED MODULES:' + (result.excludedModuleIds.length ? '' : ' (none)'),
+    ...result.excludedModuleIds.map(id => `  - ${id}`),
+    '',
+    `RUNTIME PROMPT SIZE: ${result.prompt.length.toLocaleString()} chars (${reduction}% smaller than the Master Prompt)`,
+  ];
+  return lines.join('\n');
+}
