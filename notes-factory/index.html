@@ -165,7 +165,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 <main>
 <!-- STEP 1 -->
 <section class="step show" id="step0">
-  <h2>1 · Build &amp; copy the prompt</h2>
+  <h2>✍️ 1 · Build &amp; copy the prompt</h2>
   <p class="hint">Fills your exact TOPIC / EXAM TYPE / SUBJECT into the ExamNotesPDF master prompt (the file itself is never edited) and copies the whole thing — paste it into a new DeepSeek / ChatGPT / Claude chat.</p>
 
   <fieldset>
@@ -249,7 +249,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 
 <!-- STEP 2 -->
 <section class="step" id="step1">
-  <h2>2 · Paste the AI's reply</h2>
+  <h2>🤖 2 · Paste the AI's reply</h2>
   <p class="hint">Paste the whole reply from DeepSeek/ChatGPT/Claude. The parser reads the machine-readable markers first, and falls back to reading the visible SEO panel + HTML if a model ignored them — nothing is ever a dead end.</p>
   <textarea id="rawIn" style="min-height:220px" placeholder="Paste the full AI reply here…"></textarea>
   <label class="btn ghost" style="display:inline-block;cursor:pointer;margin-top:8px">📁 Upload a file instead
@@ -264,7 +264,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 
 <!-- STEP 3 -->
 <section class="step" id="step2">
-  <h2>3 · Review &amp; edit</h2>
+  <h2>✅ 3 · Review &amp; edit</h2>
   <p class="hint">Fix anything the parser missed before handing it off. This is what actually gets published.</p>
 
   <div class="msg show ok" style="font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -314,7 +314,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 
 <!-- STEP 4 -->
 <section class="step" id="step3">
-  <h2>4 · Save to GitHub</h2>
+  <h2>🚀 4 · Save to GitHub</h2>
   <p class="hint">Auto-save pushes the note straight into <code>pending-notes/</code> — GitHub Actions takes it from there and publishes it to WordPress as a draft.</p>
 
   <fieldset id="ghLockBox">
@@ -352,7 +352,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <button class="btn small ghost" onclick="tryRun(copySeoFields,this)">📋 Copy all SEO fields (bulk, for pasting into Rank Math)</button>
   </fieldset>
 
-  <details><summary>Fallback: manual download + GitHub upload page</summary><div>
+  <details><summary>🛟 Fallback: manual download + GitHub upload page</summary><div>
     <button class="btn small ghost" onclick="tryRun(downloadBundle,this)">⬇ Download note file (<span id="dlSlug">note</span>.json)</button>
     <button class="btn small ghost" onclick="tryRun(openGithubUpload,this)">🚀 Open GitHub upload page</button>
     <div class="privacyNote">Drop the downloaded file into <code>pending-notes/</code> on that page and commit.</div>
