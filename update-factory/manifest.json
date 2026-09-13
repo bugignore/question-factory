@@ -1,11 +1,11 @@
 {
-  "name": "Long Post Factory",
-  "short_name": "LPFactory",
-  "description": "Build the long-post master prompt, parse the AI's Markdown reply, and hand it off to WordPress publishing",
+  "name": "Update Factory",
+  "short_name": "UFactory",
+  "description": "Browse published notes and long posts, build a revision prompt, and republish over the same WordPress post",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#F2F4F8",
-  "theme_color": "#0E7C56",
+  "theme_color": "#C77800",
   "icons": [
     {
       "src": "icon.svg",
