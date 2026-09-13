@@ -119,6 +119,22 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   </div>
   <label>Sub-topic</label>
   <input type="text" id="subtopic" placeholder="e.g. Heredity and Environment">
+
+  <details id="topicBankDetails" ontoggle="openTopicBank()" style="margin-top:8px">
+    <summary>📚 Topic bank — pick a subject to browse, click a topic to use it</summary>
+    <div>
+      <p class="hint" style="margin-top:8px">Same research-planned SEO topics used by the notes factory, loaded on demand from the repo's own topic-research CSVs — not bundled into the page, and only the subject you pick is shown, not the whole list at once.</p>
+      <label style="margin-top:4px">Exam source</label>
+      <select id="topicBankSource" onchange="loadTopicBankForSource(this.value)"></select>
+      <select id="topicBankSubject" onchange="renderTopicBank()" style="margin-top:8px">
+        <option value="">Pick a subject to browse…</option>
+      </select>
+      <input type="text" id="topicBankSearch" placeholder="Search within this subject…" oninput="renderTopicBank()" style="margin-top:8px">
+      <div id="topicBankList" style="margin-top:8px;max-height:280px;overflow-y:auto"></div>
+      <div class="msg" id="topicBankMsg"></div>
+    </div>
+  </details>
+
   <button class="btn" onclick="tryRun(copyPrompt,this)">📋 Copy generation prompt</button>
   <div class="msg" id="pMsg"></div>
   <details id="partsWrap"><summary>📱 On phone and the paste comes out cut off? Copy in parts instead</summary><div>
@@ -268,6 +284,126 @@ const PRESETS = {
 };
 function P(){ return PRESETS[document.getElementById('preset').value]; }
 function applyPreset(){ if(P().name) document.getElementById('subject').value = P().name; document.getElementById('promptOut').value=''; }
+
+/* ---------- topic bank (same source CSVs as the notes factory) ---------- */
+const TOPIC_BANK_SOURCES = {
+  'bpsc-tre-4': {
+    label: 'BPSC TRE 4 — Primary Teacher',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/BPSC-TRE-4-Primary-Teacher-SEO-Topics-Hindi-v2.csv',
+    subjectMap: { 'हिंदी':'hindi', 'अंग्रेजी':'english', 'गणित':'math', 'विज्ञान':'gs', 'इतिहास':'gs', 'भूगोल':'gs' },
+  },
+  'dsssb-tgt-cs': {
+    label: 'DSSSB 2026 — TGT Computer Science',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-TGT-Computer-Science-Topics.csv',
+    subjectMap: { 'Hindi':'hindi', 'English':'english' },
+  },
+  'dsssb-domestic-science': {
+    label: 'DSSSB 2026 — Domestic Science Teacher',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-Domestic-Science-Teacher-Topics.csv',
+    subjectMap: { 'Hindi':'hindi', 'English':'english' },
+  },
+  'dsssb-tgt-special-ed': {
+    label: 'DSSSB 2026 — TGT Special Education Teacher',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-TGT-Special-Education-Teacher-Topics.csv',
+    subjectMap: { 'Hindi':'hindi', 'English':'english' },
+  },
+  'dsssb-special-educator-primary': {
+    label: 'DSSSB 2026 — Special Educator (Primary)',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-Special-Educator-Primary-Topics.csv',
+    subjectMap: { 'Hindi':'hindi', 'English':'english' },
+  },
+};
+let topicBankRows = null;
+let topicBankLoadedSource = null;
+function splitCsvLine(line){
+  const out = []; let cur = ''; let inQuotes = false;
+  for(let i=0; i<line.length; i++){
+    const c = line[i];
+    if(inQuotes){
+      if(c === '"'){ if(line[i+1] === '"'){ cur += '"'; i++; } else inQuotes = false; }
+      else cur += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ',') { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+function parseTopicBankCsv(text){
+  const lines = text.replace(/^﻿/,'').split(/\r?\n/).filter(l => l.trim());
+  const header = splitCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+  const subjectIdx = header.indexOf('subject');
+  const topicIdx = header.indexOf('topic');
+  if(subjectIdx === -1 || topicIdx === -1) throw new Error('CSV is missing a Subject or Topic column');
+  return lines.slice(1).map(line => {
+    const c = splitCsvLine(line);
+    return { subjectLabel: (c[subjectIdx]||'').trim(), topic: (c[topicIdx]||'').trim() };
+  }).filter(r => r.topic);
+}
+async function loadTopicBank(sourceKey){
+  if(topicBankLoadedSource === sourceKey && topicBankRows) return topicBankRows;
+  const source = TOPIC_BANK_SOURCES[sourceKey];
+  const res = await fetch(source.url);
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  topicBankRows = parseTopicBankCsv(await res.text());
+  topicBankLoadedSource = sourceKey;
+  return topicBankRows;
+}
+async function openTopicBank(){
+  const details = document.getElementById('topicBankDetails');
+  if(!details.open) return;
+  const sourceSel = document.getElementById('topicBankSource');
+  if(!sourceSel.options.length){
+    sourceSel.innerHTML = Object.entries(TOPIC_BANK_SOURCES).map(([key,s]) => `<option value="${key}">${s.label}</option>`).join('');
+  }
+  await loadTopicBankForSource(sourceSel.value);
+}
+async function loadTopicBankForSource(sourceKey){
+  try{
+    show(msg('topicBankMsg'),'warn','Loading topic bank…');
+    const rows = await loadTopicBank(sourceKey);
+    const subjects = [...new Set(rows.map(r=>r.subjectLabel))];
+    document.getElementById('topicBankSubject').innerHTML = '<option value="">Pick a subject to browse…</option>'
+      + subjects.map(s => `<option value="${s}">${s} (${rows.filter(r=>r.subjectLabel===s).length})</option>`).join('');
+    document.getElementById('topicBankSubject').value = '';
+    document.getElementById('topicBankSearch').value = '';
+    renderTopicBank();
+    show(msg('topicBankMsg'),'ok', rows.length+' topics available — pick a subject above.');
+  }catch(e){
+    show(msg('topicBankMsg'),'bad','Could not load the topic bank: '+e.message);
+  }
+}
+function renderTopicBank(){
+  const listEl = document.getElementById('topicBankList');
+  if(!topicBankRows){ listEl.innerHTML = ''; return; }
+  const subj = document.getElementById('topicBankSubject').value;
+  if(!subj){ listEl.innerHTML = '<p class="hint">Pick a subject above to see its topics.</p>'; return; }
+  const q = document.getElementById('topicBankSearch').value.trim().toLowerCase();
+  const rows = topicBankRows
+    .map((r,i) => ({...r, idx:i}))
+    .filter(r => r.subjectLabel === subj && (!q || r.topic.toLowerCase().includes(q)));
+  listEl.innerHTML = rows.length
+    ? rows.map(r => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+        <span style="flex:1;font-size:13px">${r.topic.replace(/</g,'&lt;')}</span>
+        <button class="btn small ghost" onclick="useTopicBankRow(${r.idx})">Use</button>
+      </div>`).join('')
+    : '<p class="hint">No topics match.</p>';
+}
+function useTopicBankRow(idx){
+  const r = topicBankRows && topicBankRows[idx];
+  if(!r) return;
+  const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
+  document.getElementById('subtopic').value = r.topic;
+  const mappedPreset = source.subjectMap[r.subjectLabel];
+  if(mappedPreset){
+    document.getElementById('preset').value = mappedPreset;
+    applyPreset();
+  }
+  document.getElementById('promptOut').value = '';
+  show(msg('topicBankMsg'),'ok','Sub-topic filled in above — Subject preset set to match.');
+}
 
 function langRules(m){
   if(m==='en') return `LANGUAGE RULE (critical):
