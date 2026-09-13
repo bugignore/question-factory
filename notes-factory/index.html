@@ -252,6 +252,9 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   <h2>2 · Paste the AI's reply</h2>
   <p class="hint">Paste the whole reply from DeepSeek/ChatGPT/Claude. The parser reads the machine-readable markers first, and falls back to reading the visible SEO panel + HTML if a model ignored them — nothing is ever a dead end.</p>
   <textarea id="rawIn" style="min-height:220px" placeholder="Paste the full AI reply here…"></textarea>
+  <label class="btn ghost" style="display:inline-block;cursor:pointer;margin-top:8px">📁 Upload a file instead
+    <input type="file" id="rawInFile" accept=".md,.markdown,.txt,.html,.htm" style="display:none" onchange="loadRawInFromFile(this)">
+  </label>
   <label style="font-weight:500"><input type="checkbox" id="appendMode" style="width:auto;margin-right:6px">This is a continuation — add it to what I already pasted (AI stopped midway)</label>
   <button class="btn" onclick="tryRun(parseAndGo,this)">🔎 Parse</button>
   <button class="btn ghost" onclick="tryRun(copyContinue,this)">📋 Copy "continue" prompt (AI stopped midway)</button>
@@ -900,6 +903,12 @@ function outputContract(){
 
 === PIPELINE OUTPUT CONTRACT (read this after finishing everything above — mandatory, additive only) ===
 Everything specified above still applies in full — every rule, every section, every format, every word-count target. This contract only adds wrapper markers around your final answer so an automated script can extract the pieces; it changes nothing about what you write, only how it is packaged at the very end.
+
+=== DELIVERY METHOD — MANDATORY, CHECK THIS FIRST ===
+The person on the other end is very likely on a MOBILE PHONE, where copying a long chat reply is unreliable or blocked outright by the app. Because of this:
+- If your interface is able to create a downloadable file for the user (a "file" / "canvas" / code-interpreter-style output with a download link/button — ChatGPT and Claude apps both support this), you MUST deliver your entire final answer as ONE downloadable plain-text file, extension \`.txt\`, containing everything specified below (all blocks, markers, and fences, unchanged) as the file's full contents — do not also paste the full content into the chat. After the file, reply in the chat with only one short line confirming it's ready to download — no summary, no preview of the content.
+- If your interface has no file-creation capability at all, this section does not apply — output everything directly in the chat exactly as specified below, unchanged.
+Never split the difference (e.g. a short preview file plus the rest in chat) — it is either the whole thing as one file, or the whole thing in chat.
 
 Output exactly three blocks, in this order, with nothing outside them (no extra commentary before, between, or after).
 
@@ -1643,6 +1652,20 @@ function copyContinue(btn){
 - Resume mid-block: if you stopped inside <<<NOTES_BODY_HTML>>>, continue the HTML from the next element, inside a new \`\`\`html code fence.
 - When the current block is complete, close it with its END marker and continue with the remaining blocks per the original PIPELINE OUTPUT CONTRACT (code fences mandatory).`;
   doCopy(t, btn, msg('parseMsg'), '"Continue" prompt copied — paste it in the SAME chat, then paste the new reply here with the continuation checkbox ticked.');
+}
+function loadRawInFromFile(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const ta = document.getElementById('rawIn');
+    const append = document.getElementById('appendMode').checked && ta.value.trim();
+    ta.value = append ? (ta.value + '\n' + reader.result) : reader.result;
+    show(msg('parseMsg'), 'ok', `Loaded "${file.name}" (${(file.size/1024).toFixed(1)} KB) into the paste box — review it, then tap Parse.`);
+  };
+  reader.onerror = () => show(msg('parseMsg'), 'bad', `Could not read "${file.name}" — try pasting the content instead.`);
+  reader.readAsText(file, 'utf-8');
+  input.value = '';
 }
 function parseAndGo(){
   let raw = document.getElementById('rawIn').value;

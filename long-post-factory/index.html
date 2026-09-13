@@ -941,6 +941,12 @@ Revise weak parts before returning the final answer — this is not an extra ste
 ## OUTPUT FORMAT — ONE Markdown file, code-fenced, NOTHING ELSE
 Two extra SEO fields beyond the frontmatter shape shown: "imageAltText" (starts with the keyphrase, describes the featured image) and "imagePrompt" (a ready-to-paste AI image-gen prompt: loud, high-CTR YouTube-thumbnail style — exaggerated expression on a student/teacher character, bold saturated colors, thick outlines, 16:9, explicitly NO baked-in text).
 
+=== DELIVERY METHOD — MANDATORY, CHECK THIS FIRST ===
+The person on the other end is very likely on a MOBILE PHONE, where copying a long chat reply is unreliable or blocked outright by the app. Because of this:
+- If your interface is able to create a downloadable file for the user (a "file" / "canvas" / code-interpreter-style output with a download link/button — ChatGPT and Claude apps both support this), you MUST deliver your entire response as ONE downloadable plain-text file, extension \`.md\`, containing the exact fenced content specified below (the whole \`\`\`\`markdown ... \`\`\`\` block, unchanged) as the file's full contents — do not also paste it into the chat. After the file, reply in the chat with only one short line confirming it's ready to download — no summary, no preview.
+- If your interface has no file-creation capability at all, this section does not apply — output the fence directly in the chat exactly as specified below, unchanged.
+Never split the difference (e.g. a short preview file plus the rest in chat) — it is either the whole thing as one file, or the whole thing in chat.
+
 **Your ENTIRE response is that one code fence and nothing else.** No "Here's your article:" before it, no summary/"let me know if you'd like changes" after it, no explanation of what you did — this reply gets copy-pasted as a raw file by a script, so a single word outside the fence breaks the pipeline. If you have something to say about the run, put it inside the Publisher Notes section at the end — never outside the fence.
 
 Output the entire file inside ONE fence, in this exact order — frontmatter, then the Markdown body, then a single \`<!-- PUBLISHER NOTES -->\` sentinel line (the one and only place any HTML-style syntax is allowed) followed by the publisher notes, then a single \`<!-- CONTENT MEMORY -->\` sentinel line followed by a \`\`\`json fenced block (see shape below).
