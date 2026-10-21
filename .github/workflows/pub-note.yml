@@ -42,31 +42,44 @@ jobs:
             exit 1
           fi
 
-          # App label -> real taxonomy term name, matching what already exists on the
-          # site (see notes-factory/index.html's EXAM_TYPES/subject <select> for the
-          # full label list). Labels with no mapping here are skipped with a warning
-          # rather than auto-creating a stray near-duplicate term — add a line here
-          # once you decide what term a new label should map to.
-          declare -A EXAM_TERM_MAP=(
-            ["CTET Paper I"]="CTET"
-            ["CTET Paper II"]="CTET"
-            ["PGT"]="PGT"
-            ["TGT"]="TGT"
-            ["KVS"]="KVS"
-            ["NVS"]="NVS"
-            ["DSSSB"]="DSSSB PRT"
-            ["UPTET"]="UPTET"
-            ["BPSC TRE"]="BPSC TRE"
-          )
+          # Exam: notes-factory/index.html now fetches its exam checkbox list
+          # live from this site's own /wp-json/wp/v2/exam at page-load time
+          # (loadLiveExamTypes() — public, unauthenticated, no secret needed),
+          # so a checked label IS already an exact, currently-live `exam` term
+          # name. No remap table needed here any more — resolve_term_id below
+          # does an exact-name search-or-create directly against that label.
+          # (This replaces a static EXAM_TERM_MAP that had drifted stale: it
+          # only covered 9 labels against a generic "DSSSB"→"DSSSB PRT" and
+          # "BPSC TRE" with no "BPSC TRE 4" variant, while the real `exam`
+          # taxonomy had grown to 8 terms including DSSSB PRT - Special
+          # Educator, DSSSB TGT and BPSC TRE 4 — notes kept landing on the
+          # wrong, too-generic term or with no exam term at all.)
+
+          # Subject stays a small curated map on purpose: notes-factory's
+          # Subject <select> is deliberately scoped to the ~9 CTET/general
+          # families this tool targets, not the full ~190-term `subject`
+          # taxonomy (that's the separate B.Ed/D.Ed content-writer-mcp
+          # pipeline's job — see course-structure notes). These values were
+          # found wrong on 2026-10-21: CDP/Maths/English pointed at term
+          # names that don't exist on the live site (the real terms are
+          # prefixed, e.g. "CTET-Mathematics" not "Maths"), so resolve_term_id
+          # was silently auto-creating stray duplicate terms instead of
+          # reusing the real ones, and "Employability Skills" (a real,
+          # already-used term + a real option in the <select>) had no entry
+          # at all, so it was always left unassigned. Fixed to the exact
+          # current live term names below — if this list and the live
+          # `subject` taxonomy drift again, that's the bug to fix, not a
+          # reason to delete the map.
           declare -A SUBJECT_TERM_MAP=(
-            ["CDP"]="Child Development & Pedagogy"
+            ["CDP"]="CTET-Child Development & Pedagogy"
             ["Geography"]="Geography"
             ["History"]="History"
             ["Science"]="Science"
-            ["Maths"]="Maths"
+            ["Maths"]="CTET-Mathematics"
             ["Hindi"]="Hindi"
-            ["English"]="English"
+            ["English"]="CTET ENGLISH"
             ["EVS"]="EVS"
+            ["Employability Skills"]="Employability Skills"
           )
           # "Auto-detect" is intentionally unmapped — the app never resolves what
           # subject it auto-detected to, so there's nothing reliable to assign.
@@ -214,12 +227,7 @@ jobs:
               for raw_label in "${exam_labels[@]}"; do
                 label="$(echo "$raw_label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
                 [ -z "$label" ] && continue
-                mapped="${EXAM_TERM_MAP[$label]:-}"
-                if [ -z "$mapped" ]; then
-                  echo "::warning::$slug — no exam-taxonomy mapping for \"$label\", leaving unassigned."
-                  continue
-                fi
-                tid="$(resolve_term_id exam "$mapped")"
+                tid="$(resolve_term_id exam "$label")"
                 [ -n "$tid" ] && exam_ids+=("$tid")
               done
             fi

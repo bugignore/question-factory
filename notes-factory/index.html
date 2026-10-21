@@ -270,6 +270,10 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 
   <label>Exam type (select one or more)</label>
   <div id="examTypes"></div>
+  <p class="hint" style="margin-top:2px">
+    <span id="examTypesSync">loading…</span> ·
+    <a href="#" onclick="refreshExamTypes();return false;">Refresh from site</a>
+  </p>
 
   <label>Subject</label>
   <select id="subject" onchange="renderRefUrlList()">
@@ -580,7 +584,63 @@ const CDP_TOPICS = [
 "Major Psychologists & Their Theories",
 "Important CTET Pedagogy Concepts"
 ];
-const EXAM_TYPES = ["CTET Paper I","CTET Paper II","PGT","TGT","KVS","NVS","DSSSB","UPTET","BPSC TRE","D.El.Ed","D.El.Ed Special Educator","D.El.Ed Special Educator - MD","DELED REGULAR"];
+/* Last-resort list only — used if the live fetch below fails AND there's no
+   cached copy yet (first-ever run, offline, WP down). Never the primary
+   source: a hand-maintained list here is exactly how this UI and the real
+   `exam` taxonomy on examnotespdf.in drifted apart before (missing variants
+   like "DSSSB PRT - Special Educator"/"DSSSB TGT"/"BPSC TRE 4", and stale
+   entries like "D.El.Ed..." that moved to the separate `course` taxonomy on
+   2026-10-07 and were never removed here). See loadLiveExamTypes() below. */
+const FALLBACK_EXAM_TYPES = ["CTET","DSSSB","DSSSB PRT","UPTET","BPSC TRE"];
+
+/* Live exam list, fetched from the site's own public REST API — no auth,
+   no secret, this endpoint is deliberately CORS-open (see
+   buildInternalLinksBlock()'s identical comment below). This is the ONLY
+   thing that can't drift from production, because it reads production
+   directly, every time the page loads. Falls back to the last successful
+   fetch (localStorage) if the network/WP is unavailable, and only falls all
+   the way back to FALLBACK_EXAM_TYPES if there's truly nothing cached yet. */
+const EXAM_TAXONOMY_URL = 'https://examnotespdf.in/wp-json/wp/v2/exam?per_page=100&_fields=id,name,slug&orderby=name&order=asc';
+const EXAM_TAXONOMY_CACHE_KEY = 'enp_exam_taxonomy_cache_v1';
+let EXAM_TYPES = FALLBACK_EXAM_TYPES.slice(); // replaced once loadLiveExamTypes() resolves; checkbox-building code always reads this var, never the const above
+let examTaxonomySource = 'fallback'; // 'live' | 'cache' | 'fallback' — surfaced in the UI so a stale list is never silent
+
+async function fetchAllExamTerms(){
+  let terms = [];
+  let page = 1, totalPages = 1;
+  while(page <= totalPages && page <= 5){
+    const res = await fetch(`${EXAM_TAXONOMY_URL}&page=${page}`);
+    if(!res.ok) break;
+    const tp = Number(res.headers.get('X-WP-TotalPages'));
+    if(tp) totalPages = tp;
+    const batch = await res.json();
+    if(!Array.isArray(batch) || !batch.length) break;
+    terms = terms.concat(batch);
+    page++;
+  }
+  return terms;
+}
+
+async function loadLiveExamTypes(){
+  let cached = null;
+  try{ cached = JSON.parse(localStorage.getItem(EXAM_TAXONOMY_CACHE_KEY) || 'null'); }catch(e){}
+  try{
+    const terms = await fetchAllExamTerms();
+    if(!terms.length) throw new Error('empty response');
+    const names = terms.map(t => t.name).filter(Boolean);
+    try{ localStorage.setItem(EXAM_TAXONOMY_CACHE_KEY, JSON.stringify({ names, fetchedAt: Date.now() })); }catch(e){}
+    EXAM_TYPES = names;
+    examTaxonomySource = 'live';
+  }catch(e){
+    if(cached && Array.isArray(cached.names) && cached.names.length){
+      EXAM_TYPES = cached.names;
+      examTaxonomySource = 'cache:' + new Date(cached.fetchedAt).toLocaleString();
+    } else {
+      EXAM_TYPES = FALLBACK_EXAM_TYPES.slice();
+      examTaxonomySource = 'fallback';
+    }
+  }
+}
 
 /* ---------- Topic bank (research CSVs, multiple exam sources) ----------
    Deliberately NOT baked into the page like CDP_TOPICS above: each source
@@ -914,11 +974,29 @@ function checkTopicAgainstPublished(){
   }, 400);
 }
 
-function initSelectors(){
+function renderExamTypeCheckboxes(previouslyChecked){
+  const wrap = document.getElementById('examTypes');
+  wrap.innerHTML = EXAM_TYPES.map((e,i)=>`<label style="font-weight:500"><input type="checkbox" class="examChk" value="${e}" ${previouslyChecked ? (previouslyChecked.includes(e)?'checked':'') : (i===0?'checked':'')} style="width:auto;margin-right:6px">${e}</label>`).join('');
+  const statusEl = document.getElementById('examTypesSync');
+  if(statusEl){
+    const label = examTaxonomySource === 'live' ? 'synced from examnotespdf.in just now'
+      : examTaxonomySource.startsWith('cache:') ? `using cached list from ${examTaxonomySource.slice(6)} (site unreachable)`
+      : 'using built-in fallback list (site unreachable, no cache yet) — results may not match a real exam tag';
+    statusEl.textContent = label;
+    statusEl.style.color = examTaxonomySource === 'live' ? 'var(--ink3, #888)' : '#b32d2e';
+  }
+}
+async function refreshExamTypes(){
+  const previouslyChecked = [...document.querySelectorAll('.examChk:checked')].map(c=>c.value);
+  await loadLiveExamTypes();
+  renderExamTypeCheckboxes(previouslyChecked);
+}
+async function initSelectors(){
   const topicList = document.getElementById('topicSuggestions');
   topicList.innerHTML = CDP_TOPICS.map(t=>`<option value="${t}"></option>`).join('');
-  const wrap = document.getElementById('examTypes');
-  wrap.innerHTML = EXAM_TYPES.map((e,i)=>`<label style="font-weight:500"><input type="checkbox" class="examChk" value="${e}" ${i===0?'checked':''} style="width:auto;margin-right:6px">${e}</label>`).join('');
+  renderExamTypeCheckboxes(); // paint immediately with fallback/cache so the UI is never blank, then refresh once live data lands
+  await loadLiveExamTypes();
+  renderExamTypeCheckboxes();
   renderRefUrlList();
 }
 // NOTE: initSelectors() is invoked *below* the reference-source registry, not
@@ -1738,14 +1816,17 @@ REMINDER: the slug in your new SEO panel MUST be exactly "${oldSeo.slug || ''}" 
 `;
 }
 
-// Hard ceiling for the assembled prompt, enforced here rather than via
-// chunking: the Master Prompt (v14) was sized specifically so the full
-// assembled prompt should normally clear this on its own -- if it doesn't,
-// that's a real signal the prompt assembly grew (a longer Editorial
-// Signature, a subject with extra reference sources, etc.), not something
-// to silently paper over by splitting into parts. No truncation, no
-// splitting, no partial copy -- build again after reducing scope (e.g. a
-// lighter subject's reference sources) if this fires.
+// Soft target for the assembled prompt, NOT a hard copy ceiling. The Master
+// Prompt (v14) was sized so the full assembled prompt should normally clear
+// this on its own -- going over it is a real signal the prompt assembly grew
+// (a longer Editorial Signature, a subject with extra reference sources,
+// etc.) and is surfaced as a warning so a human notices and can trim scope.
+// It must NOT block copying, though: "Copy the prompt in parts" (below)
+// already splits on a word-count budget sized for mobile clipboards and
+// works at any length, so refusing to populate it (or the PC whole-copy
+// path) past this number only breaks a working, already-oversized prompt
+// for no benefit -- confirmed 2026-10-22, this used to hard-block both copy
+// paths and leave the user stuck with no way to get the prompt out at all.
 const MAX_COPY_PROMPT_CHARS = 18000;
 
 async function copyPrompt(btn){
@@ -1762,15 +1843,6 @@ async function copyPrompt(btn){
   const full = await buildPrompt();
   const words = full.trim().split(/\s+/).length;
   document.getElementById('pStats').innerHTML = `<div class="stat"><b>${words.toLocaleString()}</b>words in prompt</div><div class="stat"><b>${full.length.toLocaleString()}</b>chars in prompt</div><div class="stat"><b>${state.examType}</b>exam type</div><div class="stat"><b>${state.hindiPercent}% / ${100-state.hindiPercent}%</b>Hindi / English</div>`;
-  if(full.length > MAX_COPY_PROMPT_CHARS){
-    // Leave promptOut empty too, not just builtPromptText — nav(1)'s only
-    // gate checks promptOut.value.trim(), so a stale non-empty value here
-    // would let the user tap "Next" past an oversized/unusable prompt.
-    builtPromptText = null;
-    out.value = '';
-    show(msg('pMsg'),'bad',`Prompt is ${full.length.toLocaleString()} characters — over the ${MAX_COPY_PROMPT_CHARS.toLocaleString()}-char limit, so it will NOT be copied (this prevents a silently truncated paste). Reduce scope for this run — a different SUBJECT pulls in fewer reference sources — then tap "Build prompt" again.`);
-    return;
-  }
   out.value = full;
   builtPromptText = full;
   // Mobile has no working "Copy whole prompt" path (that button is PC-only —
@@ -1778,11 +1850,18 @@ async function copyPrompt(btn){
   // parts accordion is the only real way a phone user gets this prompt out
   // of the page. Populate + open it here rather than leaving it for the user
   // to discover and expand manually, matching what its own summary text
-  // already promises ("opens automatically after building").
+  // already promises ("opens automatically after building"). This runs
+  // regardless of MAX_COPY_PROMPT_CHARS — that's a soft size warning, not a
+  // gate, and "Copy the prompt in parts" splits on a word-count budget that
+  // works at any length.
   renderCopyParts('partsButtons', full, 'pMsg');
   const partsWrap = document.getElementById('partsWrap');
   if(partsWrap) partsWrap.open = true;
-  show(msg('pMsg'),'ok',`Prompt built (${words.toLocaleString()} words, ${full.length.toLocaleString()} chars — under the ${MAX_COPY_PROMPT_CHARS.toLocaleString()}-char limit). On PC, tap "Copy whole prompt" above — on mobile, use "Copy the prompt in parts" below (now open).`);
+  if(full.length > MAX_COPY_PROMPT_CHARS){
+    show(msg('pMsg'),'warn',`Prompt built (${words.toLocaleString()} words, ${full.length.toLocaleString()} chars — over the usual ${MAX_COPY_PROMPT_CHARS.toLocaleString()}-char target, worth a look at why prompt assembly grew this run, e.g. SUBJECT pulling in extra reference sources). Still fully copyable — use "Copy the prompt in parts" below (now open) or "Copy whole prompt" above.`);
+  } else {
+    show(msg('pMsg'),'ok',`Prompt built (${words.toLocaleString()} words, ${full.length.toLocaleString()} chars — under the ${MAX_COPY_PROMPT_CHARS.toLocaleString()}-char target). On PC, tap "Copy whole prompt" above — on mobile, use "Copy the prompt in parts" below (now open).`);
+  }
 }
 async function copyWholePrompt(btn){
   if(!builtPromptText){
