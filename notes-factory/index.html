@@ -270,6 +270,10 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 
   <label>Exam type (select one or more)</label>
   <div id="examTypes"></div>
+  <p class="hint" style="margin-top:2px">
+    <span id="examTypesSync">loading…</span> ·
+    <a href="#" onclick="refreshExamTypes();return false;">Refresh from site</a>
+  </p>
 
   <label>Subject</label>
   <select id="subject" onchange="renderRefUrlList()">
@@ -580,7 +584,63 @@ const CDP_TOPICS = [
 "Major Psychologists & Their Theories",
 "Important CTET Pedagogy Concepts"
 ];
-const EXAM_TYPES = ["CTET Paper I","CTET Paper II","PGT","TGT","KVS","NVS","DSSSB","UPTET","BPSC TRE","D.El.Ed","D.El.Ed Special Educator","D.El.Ed Special Educator - MD","DELED REGULAR"];
+/* Last-resort list only — used if the live fetch below fails AND there's no
+   cached copy yet (first-ever run, offline, WP down). Never the primary
+   source: a hand-maintained list here is exactly how this UI and the real
+   `exam` taxonomy on examnotespdf.in drifted apart before (missing variants
+   like "DSSSB PRT - Special Educator"/"DSSSB TGT"/"BPSC TRE 4", and stale
+   entries like "D.El.Ed..." that moved to the separate `course` taxonomy on
+   2026-10-07 and were never removed here). See loadLiveExamTypes() below. */
+const FALLBACK_EXAM_TYPES = ["CTET","DSSSB","DSSSB PRT","UPTET","BPSC TRE"];
+
+/* Live exam list, fetched from the site's own public REST API — no auth,
+   no secret, this endpoint is deliberately CORS-open (see
+   buildInternalLinksBlock()'s identical comment below). This is the ONLY
+   thing that can't drift from production, because it reads production
+   directly, every time the page loads. Falls back to the last successful
+   fetch (localStorage) if the network/WP is unavailable, and only falls all
+   the way back to FALLBACK_EXAM_TYPES if there's truly nothing cached yet. */
+const EXAM_TAXONOMY_URL = 'https://examnotespdf.in/wp-json/wp/v2/exam?per_page=100&_fields=id,name,slug&orderby=name&order=asc';
+const EXAM_TAXONOMY_CACHE_KEY = 'enp_exam_taxonomy_cache_v1';
+let EXAM_TYPES = FALLBACK_EXAM_TYPES.slice(); // replaced once loadLiveExamTypes() resolves; checkbox-building code always reads this var, never the const above
+let examTaxonomySource = 'fallback'; // 'live' | 'cache' | 'fallback' — surfaced in the UI so a stale list is never silent
+
+async function fetchAllExamTerms(){
+  let terms = [];
+  let page = 1, totalPages = 1;
+  while(page <= totalPages && page <= 5){
+    const res = await fetch(`${EXAM_TAXONOMY_URL}&page=${page}`);
+    if(!res.ok) break;
+    const tp = Number(res.headers.get('X-WP-TotalPages'));
+    if(tp) totalPages = tp;
+    const batch = await res.json();
+    if(!Array.isArray(batch) || !batch.length) break;
+    terms = terms.concat(batch);
+    page++;
+  }
+  return terms;
+}
+
+async function loadLiveExamTypes(){
+  let cached = null;
+  try{ cached = JSON.parse(localStorage.getItem(EXAM_TAXONOMY_CACHE_KEY) || 'null'); }catch(e){}
+  try{
+    const terms = await fetchAllExamTerms();
+    if(!terms.length) throw new Error('empty response');
+    const names = terms.map(t => t.name).filter(Boolean);
+    try{ localStorage.setItem(EXAM_TAXONOMY_CACHE_KEY, JSON.stringify({ names, fetchedAt: Date.now() })); }catch(e){}
+    EXAM_TYPES = names;
+    examTaxonomySource = 'live';
+  }catch(e){
+    if(cached && Array.isArray(cached.names) && cached.names.length){
+      EXAM_TYPES = cached.names;
+      examTaxonomySource = 'cache:' + new Date(cached.fetchedAt).toLocaleString();
+    } else {
+      EXAM_TYPES = FALLBACK_EXAM_TYPES.slice();
+      examTaxonomySource = 'fallback';
+    }
+  }
+}
 
 /* ---------- Topic bank (research CSVs, multiple exam sources) ----------
    Deliberately NOT baked into the page like CDP_TOPICS above: each source
@@ -914,11 +974,29 @@ function checkTopicAgainstPublished(){
   }, 400);
 }
 
-function initSelectors(){
+function renderExamTypeCheckboxes(previouslyChecked){
+  const wrap = document.getElementById('examTypes');
+  wrap.innerHTML = EXAM_TYPES.map((e,i)=>`<label style="font-weight:500"><input type="checkbox" class="examChk" value="${e}" ${previouslyChecked ? (previouslyChecked.includes(e)?'checked':'') : (i===0?'checked':'')} style="width:auto;margin-right:6px">${e}</label>`).join('');
+  const statusEl = document.getElementById('examTypesSync');
+  if(statusEl){
+    const label = examTaxonomySource === 'live' ? 'synced from examnotespdf.in just now'
+      : examTaxonomySource.startsWith('cache:') ? `using cached list from ${examTaxonomySource.slice(6)} (site unreachable)`
+      : 'using built-in fallback list (site unreachable, no cache yet) — results may not match a real exam tag';
+    statusEl.textContent = label;
+    statusEl.style.color = examTaxonomySource === 'live' ? 'var(--ink3, #888)' : '#b32d2e';
+  }
+}
+async function refreshExamTypes(){
+  const previouslyChecked = [...document.querySelectorAll('.examChk:checked')].map(c=>c.value);
+  await loadLiveExamTypes();
+  renderExamTypeCheckboxes(previouslyChecked);
+}
+async function initSelectors(){
   const topicList = document.getElementById('topicSuggestions');
   topicList.innerHTML = CDP_TOPICS.map(t=>`<option value="${t}"></option>`).join('');
-  const wrap = document.getElementById('examTypes');
-  wrap.innerHTML = EXAM_TYPES.map((e,i)=>`<label style="font-weight:500"><input type="checkbox" class="examChk" value="${e}" ${i===0?'checked':''} style="width:auto;margin-right:6px">${e}</label>`).join('');
+  renderExamTypeCheckboxes(); // paint immediately with fallback/cache so the UI is never blank, then refresh once live data lands
+  await loadLiveExamTypes();
+  renderExamTypeCheckboxes();
   renderRefUrlList();
 }
 // NOTE: initSelectors() is invoked *below* the reference-source registry, not
