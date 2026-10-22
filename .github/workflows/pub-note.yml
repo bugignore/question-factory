@@ -100,10 +100,10 @@ jobs:
             fi
             if [ -n "$id" ]; then
               echo "$id"
-            else
-              echo "::warning::Exact WordPress term not found: $tax / \"$name\" (HTTP ${http:-unknown}); no term was created and this assignment is skipped." >&2
+              return 0
             fi
-            return 0
+            echo "::error::Exact WordPress term not found: $tax / \"$name\" (HTTP ${http:-unknown}); no term was created. Fix the taxonomy or selected label and retry." >&2
+            return 1
           }
 
           shopt -s nullglob
@@ -220,7 +220,7 @@ jobs:
               for raw_label in "${exam_labels[@]}"; do
                 label="$(echo "$raw_label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
                 [ -z "$label" ] && continue
-                tid="$(resolve_term_id exam "$label")"
+                tid="$(resolve_term_id exam "$label")" || return 1
                 [ -n "$tid" ] && exam_ids+=("$tid")
               done
             fi
@@ -232,10 +232,11 @@ jobs:
             if [ -n "$raw_subject" ] && [ "$raw_subject" != "Auto-detect" ]; then
               mapped="${SUBJECT_TERM_MAP[$raw_subject]:-}"
               if [ -n "$mapped" ]; then
-                tid="$(resolve_term_id subject "$mapped")"
+                tid="$(resolve_term_id subject "$mapped")" || return 1
                 [ -n "$tid" ] && subject_ids_json="[$tid]"
               else
-                echo "::warning::$slug — no subject-taxonomy mapping for \"$raw_subject\", leaving unassigned."
+                echo "::error::$slug — no subject-taxonomy mapping for \"$raw_subject\". Refusing to publish without a verified taxonomy assignment." >&2
+                return 1
               fi
             fi
 
