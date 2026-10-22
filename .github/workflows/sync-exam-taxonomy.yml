@@ -1,0 +1,84 @@
+name: Sync WordPress exam taxonomy snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-exam-taxonomy
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch and validate current exam taxonomy
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const https = require('node:https');
+          const siteUrl = 'https://examnotespdf.in';
+          const endpoint = siteUrl + '/wp-json/wp/v2/exam';
+          const get = url => new Promise((resolve, reject) => {
+            https.get(url, { headers: { 'User-Agent': 'question-factory-taxonomy-sync/1.0' } }, res => {
+              let body = '';
+              res.setEncoding('utf8');
+              res.on('data', chunk => body += chunk);
+              res.on('end', () => {
+                if (res.statusCode !== 200) return reject(new Error('WordPress returned HTTP ' + res.statusCode));
+                try { resolve({ body: JSON.parse(body), pages: Number(res.headers['x-wp-totalpages']) || 1 }); }
+                catch (error) { reject(new Error('WordPress returned invalid JSON')); }
+              });
+            }).on('error', reject);
+          });
+          (async () => {
+            const terms = [];
+            let page = 1, totalPages = 1;
+            do {
+              const url = new URL(endpoint);
+              url.searchParams.set('per_page', '100');
+              url.searchParams.set('_fields', 'id,name,slug,parent');
+              url.searchParams.set('orderby', 'name');
+              url.searchParams.set('order', 'asc');
+              url.searchParams.set('page', String(page));
+              const result = await get(url.toString());
+              if (!Array.isArray(result.body)) throw new Error('Taxonomy response is not an array');
+              if (page === 1) totalPages = result.pages;
+              terms.push(...result.body);
+              page++;
+              if (page > 101) throw new Error('Taxonomy exceeded 100 pages');
+            } while (page <= totalPages);
+            const normalized = terms.filter(t => t && Number.isInteger(Number(t.id)) && String(t.name || '').trim())
+              .map(t => ({ id: Number(t.id), name: String(t.name).trim(), slug: String(t.slug || ''), parent: Number(t.parent || 0) }));
+            if (!normalized.length) throw new Error('Refusing to replace snapshot with an empty taxonomy');
+            const ids = new Set(), names = new Set();
+            for (const term of normalized) {
+              if (ids.has(term.id) || names.has(term.name)) throw new Error('Duplicate taxonomy ID or exact name; refusing snapshot update');
+              ids.add(term.id); names.add(term.name);
+            }
+            const snapshot = { schemaVersion: 1, siteUrl, taxonomy: 'exam', syncedAt: new Date().toISOString(), terms: normalized };
+            fs.writeFileSync('shared/data/exam-taxonomy.json', JSON.stringify(snapshot, null, 2) + '\n');
+            console.log('Validated ' + normalized.length + ' exam terms from WordPress.');
+          })().catch(error => { console.error(error.message); process.exit(1); });
+          NODE
+
+      - name: Commit snapshot only when changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- shared/data/exam-taxonomy.json; then
+            echo "Taxonomy is unchanged; no commit needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add shared/data/exam-taxonomy.json
+          git commit -m "chore: sync verified WordPress exam taxonomy"
+          git push
