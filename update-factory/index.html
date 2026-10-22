@@ -1299,6 +1299,7 @@ async function buildEditorialSignatureBlock(topic, examType, subject){
 }
 
 async function buildLongPostPrompt(topic, examType, subject, hindiPercent, year){
+  if (!window.liveExamTaxonomyReady) throw new Error('Live WordPress exam taxonomy is unavailable. Refresh and retry before generating a publishable post.');
   const profile = getExamProfile(examType);
   const seed = Array.from(topic+examType).reduce((a,c)=>a+c.charCodeAt(0),0) % 999 + 1;
   const flavourBlock = await buildFlavourBlock(topic, examType, subject);
@@ -1747,6 +1748,7 @@ In Publisher Notes, list exactly what you changed and why, one line per fix — 
 `;
 }
 async function buildNoteRevisionPrompt(topic, examType, subject, hindiPercent){
+  if (!window.liveExamTaxonomyReady) throw new Error('Live WordPress exam taxonomy is unavailable. Refresh and retry before generating a publishable note.');
   let master = await loadMasterPrompt();
   // v13.md's {{REFERENCE_SOURCES_BLOCK}} slot is left empty here — update-factory
   // already prepends its own reference-sources block separately (see buildPrompt()
@@ -3835,6 +3837,7 @@ render();
 </script>
 <script>
 (function(){
+  window.liveExamTaxonomyReady = false;
   async function syncExamTaxonomySuggestions(){
     const input = document.getElementById('examType');
     const list = document.getElementById('examSuggestions');
@@ -3843,11 +3846,13 @@ render();
     try {
       const terms = await window.WordPressTaxonomy.fetchTerms('exam');
       list.innerHTML = terms.map(t => '<option value="'+window.WordPressTaxonomy.escapeHtml(t.name)+'"></option>').join('');
+      window.liveExamTaxonomyReady = true;
       status.textContent = 'Live WordPress exam terms loaded ('+terms.length+'). Choose an exact term for reliable publishing.';
       status.style.color = 'var(--ink-soft)';
     } catch(error) {
       list.innerHTML = '';
-      status.textContent = 'Could not load live WordPress exam terms: '+(error.message || String(error))+'. Publishing will not create missing terms.';
+      window.liveExamTaxonomyReady = false;
+      status.textContent = 'Could not load live WordPress exam terms: '+(error.message || String(error))+'. Prompt generation is blocked until sync succeeds.';
       status.style.color = '#b32d2e';
     }
   }
@@ -3855,5 +3860,6 @@ render();
   else syncExamTaxonomySuggestions();
 })();
 </script>
+
 </body>
 </html>
