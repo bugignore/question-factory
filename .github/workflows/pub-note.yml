@@ -84,31 +84,23 @@ jobs:
           # "Auto-detect" is intentionally unmapped — the app never resolves what
           # subject it auto-detected to, so there's nothing reliable to assign.
 
-          # Look up a term by exact name in a taxonomy; create it if missing.
-          # Prints the term ID on success, prints nothing (just a ::warning::) on failure.
-          # Never propagates a hard failure (network hiccup, non-2xx, unparseable
-          # response) up via set -e/pipefail — a term-assignment miss must degrade
-          # to a warning for this one term, not abort the whole publish run.
+          # Exact-match lookup only. WordPress owns the taxonomy; a miss must
+          # never create a near-duplicate term. A missing term is reported and
+          # left unassigned so the taxonomy can be corrected deliberately.
           resolve_term_id(){
             local tax="$1" name="$2" enc id http
             enc="$(jq -rn --arg n "$name" '$n|@uri')"
             http="$(curl -sS -o /tmp/term-search.json -w "%{http_code}" \
                       "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}?search=${enc}&per_page=100" \
-                      -u "$WP_USERNAME:$WP_APP_PASSWORD" || echo "000")"
+                      -u "$WP_USERNAME:$WP_APP_PASSWORD" || true)"
             id=""
             if [ "$http" = "200" ]; then
               id="$(jq -r --arg n "$name" '[.[] | select(.name==$n)] | .[0].id // empty' /tmp/term-search.json 2>/dev/null || true)"
             fi
-            if [ -n "$id" ]; then echo "$id"; return 0; fi
-            http="$(curl -sS -o /tmp/term-resp.json -w "%{http_code}" \
-                      -X POST "${WP_SITE_URL%/}/wp-json/wp/v2/${tax}" \
-                      -H "Content-Type: application/json" \
-                      -u "$WP_USERNAME:$WP_APP_PASSWORD" \
-                      --data-binary "$(jq -n --arg n "$name" '{name:$n}')" || echo "000")"
-            if [ "$http" = "201" ]; then
-              jq -r '.id' /tmp/term-resp.json 2>/dev/null || true
+            if [ -n "$id" ]; then
+              echo "$id"
             else
-              echo "::warning::Could not find or create $tax term \"$name\" (HTTP $http) — skipping this term assignment." >&2
+              echo "::warning::Exact WordPress term not found: $tax / \"$name\" (HTTP ${http:-unknown}); no term was created and this assignment is skipped." >&2
             fi
             return 0
           }
