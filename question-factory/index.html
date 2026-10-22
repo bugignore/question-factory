@@ -580,6 +580,8 @@ function buildPrompt(){
   const n    = Math.min(50, Math.max(5, parseInt(document.getElementById('count').value)||15));
   document.getElementById('count').value = n;
   const exams= document.getElementById('exams').value.trim();
+  const invalidExamLabels = exams ? exams.split(',').map(v=>v.trim()).filter(v=>v && !window.questionExamTermNames.includes(v)) : [];
+  if (invalidExamLabels.length) throw new Error('Use exact live WordPress exam term names only: '+invalidExamLabels.join(', ')+'. Refresh taxonomy sync and select valid labels.');
   return `You are an expert paper setter for Indian Teacher Recruitment Exams (${exams}).
 
 Generate EXACTLY ${n} original, high-quality MCQs.
@@ -1145,6 +1147,7 @@ render();
 <script>
 (function(){
   window.questionExamTaxonomyReady = false;
+  window.questionExamTermNames = [];
   async function syncQuestionExamTaxonomy(){
     const input = document.getElementById('exams');
     const list = document.getElementById('examStyleSuggestions');
@@ -1153,7 +1156,8 @@ render();
     try {
       const terms = await window.WordPressTaxonomy.fetchTerms('exam');
       list.innerHTML = terms.map(t => '<option value="'+window.WordPressTaxonomy.escapeHtml(t.name)+'"></option>').join('');
-      input.value = terms.map(t => t.name).join(',');
+      window.questionExamTermNames = terms.map(t => t.name);
+      input.value = window.questionExamTermNames.join(',');
       input.placeholder = 'Comma-separated live WordPress exam terms';
       window.questionExamTaxonomyReady = true;
       status.textContent = 'Synced from WordPress: '+terms.length+' live exam terms. Labels are exact; term IDs, slugs and parent IDs are available from the shared taxonomy client.';
@@ -1163,6 +1167,7 @@ render();
       input.placeholder = 'Unavailable — live WordPress taxonomy required';
       list.innerHTML = '';
       window.questionExamTaxonomyReady = false;
+      window.questionExamTermNames = [];
       status.textContent = 'Could not load live WordPress exam terms: '+(error.message || String(error))+'. Prompt generation is blocked until sync succeeds.';
       status.style.color = '#b32d2e';
     }
