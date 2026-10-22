@@ -598,7 +598,9 @@ async function loadLiveExamTypes(){
   examTaxonomyError = '';
   EXAM_TERMS = await window.WordPressTaxonomy.fetchTerms('exam');
   EXAM_TYPES = EXAM_TERMS.map(term => term.name);
-  examTaxonomySource = 'live';
+  const sync = window.WordPressTaxonomy.getStatus();
+  examTaxonomySource = EXAM_TYPES.length ? sync.source : 'unavailable';
+  examTaxonomyError = EXAM_TYPES.length ? '' : 'No verified taxonomy snapshot exists yet.';
 }
 
 /* ---------- Topic bank (research CSVs, multiple exam sources) ----------
@@ -936,7 +938,7 @@ function checkTopicAgainstPublished(){
 function renderExamTypeCheckboxes(previouslyChecked){
   const wrap = document.getElementById('examTypes');
   if (!EXAM_TYPES.length) {
-    wrap.innerHTML = '<p class="hint">Exam taxonomy is unavailable. Use “Refresh from site” after WordPress is reachable; generation is blocked until live terms load.</p>';
+    wrap.innerHTML = '<p class="hint">Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.</p>';
   } else {
     wrap.innerHTML = EXAM_TYPES.map((e,i)=>{
       const safe = window.WordPressTaxonomy.escapeHtml(e);
@@ -946,11 +948,14 @@ function renderExamTypeCheckboxes(previouslyChecked){
   }
   const statusEl = document.getElementById('examTypesSync');
   if(statusEl){
+    const sync = window.WordPressTaxonomy.getStatus();
     statusEl.textContent = examTaxonomySource === 'live'
       ? 'synced from live WordPress taxonomy ('+EXAM_TERMS.length+' terms)'
-      : examTaxonomySource === 'loading' ? 'loading live WordPress taxonomy…'
-      : 'sync failed — '+(examTaxonomyError || 'WordPress taxonomy is unavailable');
-    statusEl.style.color = examTaxonomySource === 'live' ? 'var(--ink3, #888)' : '#b32d2e';
+      : examTaxonomySource === 'snapshot'
+        ? 'WordPress unavailable — using verified snapshot ('+EXAM_TERMS.length+' terms; last sync '+sync.syncedAt+')'
+        : examTaxonomySource === 'loading' ? 'loading WordPress taxonomy…'
+        : 'taxonomy unavailable — generation is paused until verified terms are available';
+    statusEl.style.color = EXAM_TYPES.length ? 'var(--ink3, #888)' : '#b32d2e';
   }
 }
 async function refreshExamTypes(){
