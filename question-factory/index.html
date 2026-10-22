@@ -726,29 +726,17 @@ function exportRows(rws){
 function norm(s){ return String(s).toLowerCase().replace(/\s+/g,' ').replace(/[^\w\u0900-\u097F ]/g,'').trim(); }
 const DEV=/[\u0900-\u097F]/;
 
-/* ---------- exam style normalization ---------- */
+/* ---------- exact WordPress exam taxonomy normalization ---------- */
 function examList(){
-  const l=document.getElementById('exams').value.split(',').map(x=>x.trim().toUpperCase().replace(/[^A-Z]/g,'')).filter(Boolean);
-  return l.length? l : ['CTET'];
+  return Array.isArray(window.questionExamTermNames) ? window.questionExamTermNames.slice() : [];
 }
 function fixExam(v){
-  // Only keep exam_type_year if DeepSeek gave a genuine, recognizable exam-style prefix from
-  // the user's own list. We NEVER trust a year from DeepSeek (it can't know if a question really
-  // appeared in a real exam) and we NEVER invent a label out of thin air either — if there's no
-  // real match, the field is left BLANK on purpose rather than filled with a random guess.
-  let s = String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-  const list = examList();
-  const m = s.match(/^([A-Z]{2,12})(\d{4})?$/);
-  if(m && list.includes(m[1])) return m[1] + pick(yearRange()); // valid prefix -> keep it, year still tool-assigned
-  return ''; // no genuine match (e.g. "GENERIC", garbage, empty) -> leave blank, show nothing
+  // Accept only an exact live/snapshot WordPress taxonomy term. Never synthesize a year,
+  // strip a label down to a prefix, or invent a taxonomy value.
+  const candidate = String(v || '').trim();
+  const match = examList().find(term => term === candidate);
+  return match || '';
 }
-function yearRange(){
-  const m = String(document.getElementById('years').value||'2022-2025').match(/(\d{4})\s*-\s*(\d{4})/);
-  const a = m? +m[1]:2022, b = m? +m[2]:2025, out=[];
-  for(let y=Math.min(a,b);y<=Math.max(a,b);y++) out.push(String(y));
-  return out;
-}
-function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
 /* ---------- option shuffle ---------- */
 function shuffleRow(f){
