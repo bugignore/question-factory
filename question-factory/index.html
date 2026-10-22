@@ -409,9 +409,9 @@ function renderTopicBank(){
     .map((r,i) => ({...r, idx:i}))
     .filter(r => r.subjectLabel === subj && (!q || r.topic.toLowerCase().includes(q)));
   listEl.innerHTML = rows.length
-    ? rows.map(r => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
-        <span style="flex:1;font-size:13px">${r.topic.replace(/</g,'&lt;')}</span>
-        <button class="btn small ghost" onclick="useTopicBankRow(${r.idx})">Use</button>
+    ? rows.map(r => `<div role="group" aria-label="Topic: ${r.topic.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+        <button type="button" class="btn small ghost" style="flex:1;justify-content:flex-start;text-align:left;margin-top:0;white-space:normal" onclick="useTopicBankRow(${r.idx})">${r.topic.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</button>
+        <button type="button" class="btn small" style="margin-top:0;flex:none" onclick="useTopicBankRow(${r.idx})" aria-label="Use topic">✓ Use</button>
       </div>`).join('')
     : '<p class="hint">No topics match.</p>';
 }
@@ -525,14 +525,22 @@ async function pushTopicBankAdditions(){
 
 function useTopicBankRow(idx){
   const r = topicBankRows && topicBankRows[idx];
-  if(!r) return;
+  if(!r){ show(msg('topicBankMsg'),'bad','That topic could not be selected. Reload the topic bank and try again.'); return; }
   const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
-  document.getElementById('subtopic').value = r.topic;
-  // Topic-bank selection sets the subject label directly and never applies a preset.
-  document.getElementById('subject').value = `${source.fallbackLabel} - ${r.subjectLabel}`;
+  if(!source){ show(msg('topicBankMsg'),'bad','The exam source is not loaded yet. Choose the exam source again.'); return; }
+  const subject = document.getElementById('subject');
+  const subtopic = document.getElementById('subtopic');
+  // Update both fields synchronously so the selection is immediately visible on mobile.
+  subject.value = `${source.fallbackLabel} - ${r.subjectLabel}`;
+  subtopic.value = r.topic;
+  subject.dispatchEvent(new Event('input', {bubbles:true}));
+  subject.dispatchEvent(new Event('change', {bubbles:true}));
+  subtopic.dispatchEvent(new Event('input', {bubbles:true}));
+  subtopic.dispatchEvent(new Event('change', {bubbles:true}));
   document.getElementById('topicBankSubject').value = r.subjectLabel;
   document.getElementById('promptOut').value = '';
-  show(msg('topicBankMsg'),'ok', 'Topic selected. Website subject label and sub-topic filled automatically; no taxonomy entry is needed.');
+  show(msg('topicBankMsg'),'ok', 'Selected: '+r.topic+'. Website subject label and sub-topic are now filled.');
+  subject.scrollIntoView({behavior:'smooth', block:'center'});
 }
 
 function langRules(m){
