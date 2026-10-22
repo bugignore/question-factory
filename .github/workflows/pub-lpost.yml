@@ -77,9 +77,8 @@ jobs:
           # Factory uses, so an exact-match lookup in EXAM_TERM_MAP silently
           # drops any exam not typed exactly as one of the keys above — this
           # normalizes by substring family match instead, falling back to the
-          # raw label itself (resolve_term_id auto-creates a WP term if it
-          # doesn't exist yet, so an unrecognized exam name still gets a real
-          # taxonomy term rather than being left unassigned).
+          # raw label itself. The resolver performs an exact lookup only; an
+          # unknown label fails this file instead of creating a near-duplicate.
           map_exam_label(){
             local label="$1" lc
             lc="$(echo "$label" | tr '[:upper:]' '[:lower:]')"
@@ -114,10 +113,10 @@ jobs:
             fi
             if [ -n "$id" ]; then
               echo "$id"
-            else
-              echo "::warning::Exact WordPress term not found: $tax / \"$name\" (HTTP ${http:-unknown}); no term was created and this assignment is skipped." >&2
+              return 0
             fi
-            return 0
+            echo "::error::Exact WordPress term not found: $tax / \"$name\" (HTTP ${http:-unknown}); no term was created. Fix the taxonomy or selected label and retry." >&2
+            return 1
           }
 
           shopt -s nullglob
@@ -225,7 +224,7 @@ jobs:
                 label="$(echo "$raw_label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
                 [ -z "$label" ] && continue
                 mapped="${EXAM_TERM_MAP[$label]:-$(map_exam_label "$label")}"
-                tid="$(resolve_term_id exam "$mapped")"
+                tid="$(resolve_term_id exam "$mapped")" || return 1
                 [ -n "$tid" ] && exam_ids+=("$tid")
               done
             fi
@@ -237,10 +236,11 @@ jobs:
             if [ -n "$raw_subject" ] && [ "$raw_subject" != "Auto-detect" ]; then
               mapped="${SUBJECT_TERM_MAP[$raw_subject]:-}"
               if [ -n "$mapped" ]; then
-                tid="$(resolve_term_id subject "$mapped")"
+                tid="$(resolve_term_id subject "$mapped")" || return 1
                 [ -n "$tid" ] && subject_ids_json="[$tid]"
               else
-                echo "::warning::$slug — no subject-taxonomy mapping for \"$raw_subject\", leaving unassigned."
+                echo "::error::$slug — no subject-taxonomy mapping for \"$raw_subject\". Refusing to publish without a verified taxonomy assignment." >&2
+                return 1
               fi
             fi
 
