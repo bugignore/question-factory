@@ -1159,16 +1159,21 @@ render();
       window.questionExamTermNames = terms.map(t => t.name);
       input.value = window.questionExamTermNames.join(',');
       input.placeholder = 'Comma-separated live WordPress exam terms';
-      window.questionExamTaxonomyReady = true;
-      status.textContent = 'Synced from WordPress: '+terms.length+' live exam terms. Labels are exact; term IDs, slugs and parent IDs are available from the shared taxonomy client.';
-      status.style.color = 'var(--ink-soft, #777)';
+      const sync = window.WordPressTaxonomy.getStatus();
+      window.questionExamTaxonomyReady = terms.length > 0;
+      status.textContent = terms.length
+        ? (sync.source === 'snapshot'
+          ? 'WordPress is temporarily unavailable. Using the last verified snapshot ('+terms.length+' terms; last sync '+sync.syncedAt+').'
+          : 'Synced from WordPress: '+terms.length+' live exam terms. Labels are exact; term IDs, slugs and parent IDs are available from the shared taxonomy client.')
+        : 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
+      status.style.color = terms.length ? 'var(--ink-soft, #777)' : '#b32d2e';
     } catch(error) {
       input.value = '';
       input.placeholder = 'Unavailable — live WordPress taxonomy required';
       list.innerHTML = '';
       window.questionExamTaxonomyReady = false;
       window.questionExamTermNames = [];
-      status.textContent = 'Could not load live WordPress exam terms: '+(error.message || String(error))+'. Prompt generation is blocked until sync succeeds.';
+      status.textContent = 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
       status.style.color = '#b32d2e';
     }
   }
