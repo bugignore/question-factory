@@ -1644,6 +1644,9 @@ async function buildEditorialSignatureBlock(topic, examType, subject){
 }
 
 async function buildPrompt(){
+  if (examTaxonomySource !== 'live' || !EXAM_TYPES.length) {
+    throw new Error('Live WordPress exam taxonomy is unavailable. Use “Refresh from site” and retry; no fallback exam list will be used.');
+  }
   const topic = document.getElementById('topic').value;
   const examType = [...document.querySelectorAll('.examChk:checked')].map(c=>c.value).join(' / ') || 'CTET Paper I';
   const subject = document.getElementById('subject').value;
