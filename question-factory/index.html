@@ -96,7 +96,32 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);
     font:inherit;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);opacity:.92}
   #themeToggle:hover{opacity:1}
-  @media (max-width:420px){ #themeToggle{top:6px;right:6px;padding:5px 8px;font-size:11px} }
+  /* Mobile ergonomics: responsive fields, larger tap targets, safe-area navigation. */
+  button,input,select,textarea,summary{touch-action:manipulation}
+  button,input,select{min-height:44px}
+  main,.step,.step *{min-width:0}
+  .top{padding-right:112px}
+  textarea{max-width:100%;overflow-wrap:anywhere}
+  @media(max-width:600px){
+    main{padding:12px 12px calc(104px + env(safe-area-inset-bottom))}
+    .top{padding:12px 104px 10px 12px}
+    .top h1{font-size:16px}
+    .row2{grid-template-columns:minmax(0,1fr);gap:2px}
+    label{font-size:13px;margin-top:13px}
+    input[type=text],input[type=number],input[type=password],textarea,select{padding:12px;border-radius:10px}
+    textarea{min-height:130px;font-size:14px}
+    .btn{min-height:48px;padding:13px 12px}
+    .btn.small{width:100%;min-height:44px}
+    summary{min-height:44px;display:flex;align-items:center;padding:11px 12px;line-height:1.35}
+    details>div{padding:0 10px 12px}
+    nav.bot{gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+    nav.bot button{min-height:48px;padding:10px 8px;font-size:14px}
+    #themeToggle{top:7px;right:7px;max-width:94px;white-space:nowrap}
+    .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .stat,.issues{overflow-wrap:anywhere}
+    .issues{max-height:200px}
+  }
+  @media(max-width:360px){main{padding-left:9px;padding-right:9px}.top{padding-left:9px}nav.bot{gap:6px;padding-left:7px;padding-right:7px}nav.bot button{font-size:12px}}
 </style>
 <script src="../shared/wordpress-taxonomy.js"></script>
 </head>
@@ -111,22 +136,17 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 <section class="step show" id="step0">
   <h2>1 · Build &amp; copy prompt</h2>
   <p class="hint">Paste it in a new DeepSeek chat. नई DeepSeek चैट में डालें।</p>
-  <label>Subject preset</label>
-  <select id="preset" onchange="applyPreset()">
-    <option value="pedagogy">Pedagogy / CDP — bilingual</option>
-    <option value="math">Mathematics — bilingual + formulas</option>
-    <option value="reasoning">Logical Reasoning — bilingual</option>
-    <option value="gs">General Studies / EVS — bilingual</option>
-    <option value="english">English — English only</option>
-    <option value="hindi">Hindi — हिंदी only</option>
-    <option value="custom">Custom — bilingual</option>
-  </select>
+  <p class="hint">Enter your subject directly and choose the output language. No subject presets or hidden defaults are applied.</p>
   <div class="row2">
-    <div><label>Topic column value (exactly as your website expects, e.g. "CTET - Pedagogy")</label><input type="text" id="subject" value="CTET - Pedagogy"></div>
-    <div><label>Questions (5–50)</label><input type="number" id="count" value="15" min="5" max="50"></div>
+    <div><label>Subject / topic column value (exactly as your website expects)</label><input type="text" id="subject" placeholder="Enter the exact subject label" autocomplete="off" required></div>
+    <div><label>Questions (5–50)</label><input type="number" id="count" value="15" min="5" max="50" inputmode="numeric"></div>
   </div>
   <label>Sub-topic</label>
-  <input type="text" id="subtopic" placeholder="e.g. Heredity and Environment">
+  <input type="text" id="subtopic" placeholder="e.g. Heredity and Environment" autocomplete="off">
+  <div class="row2">
+    <div><label>Output language</label><select id="language"><option value="bi">Bilingual — English + Hindi</option><option value="en">English only</option><option value="hi">Hindi only</option></select></div>
+    <div><label>Question style / coverage (optional)</label><input type="text" id="questionMix" placeholder="e.g. scenario-based, assertion-reason"></div>
+  </div>
 
   <details id="topicBankDetails" ontoggle="openTopicBank()" style="margin-top:8px">
     <summary>📚 Topic bank — pick a subject to browse, click a topic to use it</summary>
@@ -306,19 +326,6 @@ function okRows(){ return rows.filter(r=>r.status==='ok'); }
 function msg(id){ return document.getElementById(id); }
 function show(el,type,text){ el.className='msg show '+type; el.textContent=text; }
 function stat(id,pairs){ const el=document.getElementById(id); el.innerHTML=pairs.map(p=>'<div class="stat"><b>'+p[1]+'</b>'+p[0]+'</div>').join(''); }
-
-/* ---------- presets ---------- */
-const PRESETS = {
-  pedagogy:{name:"Pedagogy",lang:"bi",mix:"conceptual, classroom-scenario, teacher decision-making, child development, assertion-reason, statement-based, match-the-following, NEP 2020 / NCF / RTE / Bloom's taxonomy, learning theories, inclusive education. Natural CTET-like mix."},
-  math:{name:"Mathematics",lang:"bi",mix:"arithmetic, number system, geometry, mensuration, fractions, percentage, data interpretation (data written inside the question text), plus maths PEDAGOGY (how to teach maths, error analysis, Van Hiele levels, NCF position). About 60% content + 40% pedagogy like real CTET."},
-  reasoning:{name:"Logical Reasoning",lang:"bi",mix:"number series, letter series, coding-decoding, blood relations, direction sense, syllogisms, analogies, classification, small text-only seating arrangements, calendar/clock."},
-  gs:{name:"General Studies",lang:"bi",mix:"Indian polity, history, geography, general science, Indian constitution, environment; EVS pedagogy where relevant. Timeless facts only, nothing that changes month to month."},
-  english:{name:"English",lang:"en",mix:"grammar (tenses, voice, narration, articles, prepositions), vocabulary (synonyms, antonyms, one-word substitution, idioms), short reading comprehension (repeat the 3-5 sentence passage inside every question that uses it), English PEDAGOGY (language teaching methods, LSRW, basic phonetics)."},
-  hindi:{name:"Hindi",lang:"hi",mix:"व्याकरण (संधि, समास, अलंकार, रस, छंद, मुहावरे, लोकोक्तियाँ, पर्यायवाची, विलोम, वर्तनी), अपठित गद्यांश (छोटा गद्यांश हर प्रश्न में दोहराएँ), हिंदी शिक्षणशास्त्र (भाषा शिक्षण विधियाँ, कौशल)."},
-  custom:{name:"",lang:"bi",mix:"a natural exam-like mix of conceptual, application-based, assertion-reason, statement-based and match-the-following questions."}
-};
-function P(){ return PRESETS[document.getElementById('preset').value]; }
-function applyPreset(){ if(P().name) document.getElementById('subject').value = P().name; document.getElementById('promptOut').value=''; }
 
 /* ---------- topic bank (same source registry as notes-factory) ----------
    Lives in Automation/core/src/topic-bank-sources.mjs and is shared with
@@ -525,24 +532,10 @@ function useTopicBankRow(idx){
   if(!r) return;
   const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
   document.getElementById('subtopic').value = r.topic;
-  const mappedPreset = source.questionPresetMap[r.subjectLabel];
-  if(mappedPreset){
-    document.getElementById('preset').value = mappedPreset;
-    applyPreset();
-  } else {
-    // No bilingual preset fits this row's subject (e.g. DSSSB's own
-    // "Special Education"/"General Awareness"/"Reasoning" columns aren't
-    // Hindi or English). Always overwrite the Topic column value with an
-    // exam-qualified label instead of leaving whatever was typed for a
-    // previous exam, which used to silently mis-tag DSSSB/BPSC questions
-    // as the last CTET subject used.
-    document.getElementById('preset').value = 'custom';
-    document.getElementById('subject').value = `${source.fallbackLabel} - ${r.subjectLabel}`;
-  }
+  // Topic-bank selection sets the subject label directly and never applies a preset.
+  document.getElementById('subject').value = `${source.fallbackLabel} - ${r.subjectLabel}`;
   document.getElementById('promptOut').value = '';
-  show(msg('topicBankMsg'),'ok', mappedPreset
-    ? 'Sub-topic filled in above — Subject preset set to match.'
-    : `Sub-topic filled in above — Topic column value set to "${document.getElementById('subject').value}" (no bilingual preset matches this subject, so Custom was selected — edit it if your site expects a different exact value).`);
+  show(msg('topicBankMsg'),'ok', 'Sub-topic filled in above and subject label set to "'+document.getElementById('subject').value+'". Choose the output language explicitly if needed.');
 }
 
 function langRules(m){
@@ -556,32 +549,29 @@ function langRules(m){
 - _en fields in natural English, _hi fields in natural Hindi (keep standard technical terms in brackets).
 - Numbers, series, equations and proper names IDENTICAL in both languages.`;
 }
-function formatRules(k){
-  if(k==='math'||k==='reasoning'||k==='gs') return `
-FORMULA & DATA RULES (critical — plain text only):
-- NO LaTeX, NO markdown, NO images, NO [GRAPH]/[TABLE]/[IMAGE] placeholders. Students see raw text.
-- Maths in plain Unicode: x², y³, √16, ½, ¾, 22/7, π, 45°, ×, ÷, ≠, ≤, ≥, Δ, θ. Fractions as a/b.
-- Data-interpretation questions must contain their data INSIDE the question text.
-  Example: "Books read in a month: Amit 12, Binu 18, Chetan 9, Divya 15, Esha 6. What is the median?"
-- Small tables as text lines: "Day: Mon Tue Wed | Absent: 4 7 2".
-- Every question fully answerable from its own text alone.`;
-  if(k==='english'||k==='hindi') return `
-PASSAGE RULE:
-- Reading-comprehension passages must be SHORT (3-5 sentences) and repeated in full at the start of EVERY question using them, because each row displays independently.`;
-  return "";
+function formatRules(){
+  return `
+PLAIN-TEXT AND SELF-CONTAINED QUESTION RULES:
+- No LaTeX, Markdown formatting, images, or placeholder tags.
+- Use plain Unicode symbols when relevant; put any required data directly inside the question.
+- Every question must be fully answerable from its own text.
+- If a reading passage is needed, repeat the short passage in every question that depends on it.
+`;
 }
 function buildPrompt(){
   if (!window.questionExamTaxonomyReady) {
-    throw new Error('Live WordPress exam taxonomy is not available. Refresh the page when examnotespdf.in is reachable; no hardcoded exam list will be used.');
+    throw new Error('Verified WordPress exam terms are not available yet. Try again when the site or a verified snapshot is available.');
   }
-  const k = document.getElementById('preset').value, pre = P();
-  const subj = document.getElementById('subject').value.trim() || pre.name || "Pedagogy";
+  const subj = document.getElementById('subject').value.trim();
+  if (!subj) throw new Error('Enter the exact subject label expected by your website.');
+  const language = document.getElementById('language').value;
+  const questionMix = document.getElementById('questionMix').value.trim() || 'a balanced mix of conceptual, application-based, scenario-based and exam-appropriate questions';
   const sub  = document.getElementById('subtopic').value.trim() || subj;
   const n    = Math.min(50, Math.max(5, parseInt(document.getElementById('count').value)||15));
   document.getElementById('count').value = n;
   const exams= document.getElementById('exams').value.trim();
   const invalidExamLabels = exams ? exams.split(',').map(v=>v.trim()).filter(v=>v && !window.questionExamTermNames.includes(v)) : [];
-  if (invalidExamLabels.length) throw new Error('Use exact live WordPress exam term names only: '+invalidExamLabels.join(', ')+'. Refresh taxonomy sync and select valid labels.');
+  if (invalidExamLabels.length) throw new Error('These exam labels are not exact verified WordPress terms: '+invalidExamLabels.join(', ')+'. Remove them or choose an exact suggestion.');
   return `You are an expert paper setter for Indian Teacher Recruitment Exams (${exams}).
 
 Generate EXACTLY ${n} original, high-quality MCQs.
@@ -595,11 +585,11 @@ METHOD (strict, for EVERY question):
 4. Re-solve the finished question from scratch. If your fresh answer does not match the "correct" number, REWRITE that question. Never output a row you are not 100% sure of.
 5. If you cannot fit all ${n} rows, output fewer COMPLETE rows — never a half row.
 
-QUESTION MIX: ${pre.mix}
-No previous-year copies. No duplicate concepts. Latest CTET / state-TET difficulty.
+QUESTION MIX: ${questionMix}
+No previous-year copies. No duplicate concepts. Match the stated subject and exam context; avoid unsupported claims about current exam patterns.
 
-${langRules(pre.lang)}
-${formatRules(k)}
+${langRules(language)}
+${formatRules()}
 
 CSV RULES:
 - Output ONLY one markdown code block containing valid UTF-8 CSV. No text before or after it.
@@ -1157,18 +1147,23 @@ render();
       const terms = await window.WordPressTaxonomy.fetchTerms('exam');
       list.innerHTML = terms.map(t => '<option value="'+window.WordPressTaxonomy.escapeHtml(t.name)+'"></option>').join('');
       window.questionExamTermNames = terms.map(t => t.name);
-      input.value = window.questionExamTermNames.join(',');
-      input.placeholder = 'Comma-separated live WordPress exam terms';
-      window.questionExamTaxonomyReady = true;
-      status.textContent = 'Synced from WordPress: '+terms.length+' live exam terms. Labels are exact; term IDs, slugs and parent IDs are available from the shared taxonomy client.';
-      status.style.color = 'var(--ink-soft, #777)';
+      input.value = '';
+      input.placeholder = 'Optional — choose an exact WordPress term';
+      const sync = window.WordPressTaxonomy.getStatus();
+      window.questionExamTaxonomyReady = terms.length > 0;
+      status.textContent = terms.length
+        ? (sync.source === 'snapshot'
+          ? 'WordPress is temporarily unavailable. Using the last verified snapshot ('+terms.length+' terms; last sync '+sync.syncedAt+').'
+          : 'Synced from WordPress: '+terms.length+' live exam terms. Labels are exact; term IDs, slugs and parent IDs are available from the shared taxonomy client.')
+        : 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
+      status.style.color = terms.length ? 'var(--ink-soft, #777)' : '#b32d2e';
     } catch(error) {
       input.value = '';
       input.placeholder = 'Unavailable — live WordPress taxonomy required';
       list.innerHTML = '';
       window.questionExamTaxonomyReady = false;
       window.questionExamTermNames = [];
-      status.textContent = 'Could not load live WordPress exam terms: '+(error.message || String(error))+'. Prompt generation is blocked until sync succeeds.';
+      status.textContent = 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
       status.style.color = '#b32d2e';
     }
   }

@@ -3301,13 +3301,18 @@ render();
     try {
       const terms = await window.WordPressTaxonomy.fetchTerms('exam');
       list.innerHTML = terms.map(t => '<option value="'+window.WordPressTaxonomy.escapeHtml(t.name)+'"></option>').join('');
-      window.liveExamTaxonomyReady = true;
-      status.textContent = 'Live WordPress exam terms loaded ('+terms.length+'). Choose an exact term for reliable publishing.';
-      status.style.color = 'var(--ink-soft)';
+      const sync = window.WordPressTaxonomy.getStatus();
+      window.liveExamTaxonomyReady = terms.length > 0;
+      status.textContent = terms.length
+        ? (sync.source === 'snapshot'
+          ? 'WordPress is temporarily unavailable. Using the last verified exam snapshot ('+terms.length+' terms; last sync '+sync.syncedAt+').'
+          : 'Live WordPress exam terms loaded ('+terms.length+'). Choose an exact term for reliable publishing.')
+        : 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
+      status.style.color = terms.length ? 'var(--ink-soft)' : '#b32d2e';
     } catch(error) {
       list.innerHTML = '';
       window.liveExamTaxonomyReady = false;
-      status.textContent = 'Could not load live WordPress exam terms: '+(error.message || String(error))+'. Prompt generation is blocked until sync succeeds.';
+      status.textContent = 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
       status.style.color = '#b32d2e';
     }
   }
