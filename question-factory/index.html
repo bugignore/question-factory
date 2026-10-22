@@ -98,6 +98,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   #themeToggle:hover{opacity:1}
   @media (max-width:420px){ #themeToggle{top:6px;right:6px;padding:5px 8px;font-size:11px} }
 </style>
+<script src="../shared/wordpress-taxonomy.js"></script>
 </head>
 <body>
 <div class="top">
@@ -172,8 +173,10 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <textarea id="promptOut" style="min-height:220px" placeholder="Tap the copy button above — the prompt appears here too."></textarea>
   </div></details>
   <details><summary>Advanced: exam style labels</summary><div>
-    <label>Styles used for exam_type_year</label>
-    <input type="text" id="exams" value="CTET,KVS,DSSSB,REET,HTET,UPTET,SUPERTET,BPSCTRE,NVS">
+    <label>Live WordPress exam terms used for exam_type_year</label>
+    <input type="text" id="exams" list="examStyleSuggestions" placeholder="Loading live WordPress exam terms…" autocomplete="off">
+    <datalist id="examStyleSuggestions"></datalist>
+    <p class="hint" id="examTaxonomySync" style="margin-top:4px">Loading live WordPress exam taxonomy…</p>
     <label>Years range</label>
     <input type="text" id="years" value="2022-2025">
   </div></details>
@@ -568,6 +571,9 @@ PASSAGE RULE:
   return "";
 }
 function buildPrompt(){
+  if (!window.questionExamTaxonomyReady) {
+    throw new Error('Live WordPress exam taxonomy is not available. Refresh the page when examnotespdf.in is reachable; no hardcoded exam list will be used.');
+  }
   const k = document.getElementById('preset').value, pre = P();
   const subj = document.getElementById('subject').value.trim() || pre.name || "Pedagogy";
   const sub  = document.getElementById('subtopic').value.trim() || subj;
@@ -602,7 +608,7 @@ topic,question_en,question_hi,option1_en,option1_hi,option2_en,option2_hi,option
 - No commas problems: since every field is quoted, commas inside text are fine.
 - correct = 1, 2, 3 or 4 only. No blank fields.
 - Keep each option under 200 characters and each explanation under 2 sentences (website database limit).
-- exam_type_year: leave this field COMPLETELY BLANK ("") unless the question genuinely and specifically matches the style of one real exam far better than the others. Blank is the expected, normal answer for most questions — do not feel obliged to fill it. NEVER write a year under any circumstances (you cannot know if a question "appeared" in a real exam, and a year would be a false historical claim). If, and only if, one exam style clearly fits best, write just its short name with no year and no punctuation (e.g. CTET, DSSSB). When unsure, leave it blank rather than guessing.
+- exam_type_year: leave this field COMPLETELY BLANK ("") unless the question genuinely and specifically matches one of the live WordPress exam terms listed above. Blank is the expected, normal answer for most questions. NEVER write a year or invent a label. If, and only if, one exam term clearly fits best, use its exact WordPress term name, with no year or punctuation added. When unsure, leave it blank.
 - Explanation: 1-2 sentences on why the correct option is right (maths: show the quick calculation).`;
 }
 function copyPrompt(btn){
@@ -1134,6 +1140,35 @@ render();
     apply(current());
   }
   document.readyState==='loading' ? document.addEventListener('DOMContentLoaded',mount) : mount();
+})();
+</script>
+<script>
+(function(){
+  window.questionExamTaxonomyReady = false;
+  async function syncQuestionExamTaxonomy(){
+    const input = document.getElementById('exams');
+    const list = document.getElementById('examStyleSuggestions');
+    const status = document.getElementById('examTaxonomySync');
+    if(!input || !list || !status) return;
+    try {
+      const terms = await window.WordPressTaxonomy.fetchTerms('exam');
+      list.innerHTML = terms.map(t => '<option value="'+window.WordPressTaxonomy.escapeHtml(t.name)+'"></option>').join('');
+      input.value = terms.map(t => t.name).join(',');
+      input.placeholder = 'Comma-separated live WordPress exam terms';
+      window.questionExamTaxonomyReady = true;
+      status.textContent = 'Synced from WordPress: '+terms.length+' live exam terms. Labels are exact; term IDs, slugs and parent IDs are available from the shared taxonomy client.';
+      status.style.color = 'var(--ink-soft, #777)';
+    } catch(error) {
+      input.value = '';
+      input.placeholder = 'Unavailable — live WordPress taxonomy required';
+      list.innerHTML = '';
+      window.questionExamTaxonomyReady = false;
+      status.textContent = 'Could not load live WordPress exam terms: '+(error.message || String(error))+'. Prompt generation is blocked until sync succeeds.';
+      status.style.color = '#b32d2e';
+    }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncQuestionExamTaxonomy);
+  else syncQuestionExamTaxonomy();
 })();
 </script>
 </body>
