@@ -161,6 +161,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#F7F7F9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0B0C0F" media="(prefers-color-scheme: dark)">
+<script src="../shared/wordpress-taxonomy.js"></script>
 </head>
 <body>
 <div class="top">
@@ -239,7 +240,9 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <label>Topic</label>
     <input type="text" id="topic" oninput="this.classList.remove('fieldErr')">
     <label>Exam</label>
-    <input type="text" id="examType">
+    <input type="text" id="examType" list="examSuggestions">
+    <datalist id="examSuggestions"></datalist>
+    <p class="hint" id="examTaxonomySync" style="margin-top:4px">Loading live WordPress exam taxonomy…</p>
     <label>Subject</label>
     <select id="subject">
       <option>Auto-detect</option>
@@ -1296,6 +1299,7 @@ async function buildEditorialSignatureBlock(topic, examType, subject){
 }
 
 async function buildLongPostPrompt(topic, examType, subject, hindiPercent, year){
+  if (!window.liveExamTaxonomyReady) throw new Error('Live WordPress exam taxonomy is unavailable. Refresh and retry before generating a publishable post.');
   const profile = getExamProfile(examType);
   const seed = Array.from(topic+examType).reduce((a,c)=>a+c.charCodeAt(0),0) % 999 + 1;
   const flavourBlock = await buildFlavourBlock(topic, examType, subject);
@@ -1744,6 +1748,7 @@ In Publisher Notes, list exactly what you changed and why, one line per fix — 
 `;
 }
 async function buildNoteRevisionPrompt(topic, examType, subject, hindiPercent){
+  if (!window.liveExamTaxonomyReady) throw new Error('Live WordPress exam taxonomy is unavailable. Refresh and retry before generating a publishable note.');
   let master = await loadMasterPrompt();
   // v13.md's {{REFERENCE_SOURCES_BLOCK}} slot is left empty here — update-factory
   // already prepends its own reference-sources block separately (see buildPrompt()
@@ -3830,5 +3835,31 @@ render();
   document.readyState==='loading' ? document.addEventListener('DOMContentLoaded',mount) : mount();
 })();
 </script>
+<script>
+(function(){
+  window.liveExamTaxonomyReady = false;
+  async function syncExamTaxonomySuggestions(){
+    const input = document.getElementById('examType');
+    const list = document.getElementById('examSuggestions');
+    const status = document.getElementById('examTaxonomySync');
+    if(!input || !list || !status) return;
+    try {
+      const terms = await window.WordPressTaxonomy.fetchTerms('exam');
+      list.innerHTML = terms.map(t => '<option value="'+window.WordPressTaxonomy.escapeHtml(t.name)+'"></option>').join('');
+      window.liveExamTaxonomyReady = true;
+      status.textContent = 'Live WordPress exam terms loaded ('+terms.length+'). Choose an exact term for reliable publishing.';
+      status.style.color = 'var(--ink-soft)';
+    } catch(error) {
+      list.innerHTML = '';
+      window.liveExamTaxonomyReady = false;
+      status.textContent = 'Could not load live WordPress exam terms: '+(error.message || String(error))+'. Prompt generation is blocked until sync succeeds.';
+      status.style.color = '#b32d2e';
+    }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncExamTaxonomySuggestions);
+  else syncExamTaxonomySuggestions();
+})();
+</script>
+
 </body>
 </html>
