@@ -280,7 +280,23 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
      mirrored by gen-topic-bank-sources-browser.mjs) — window.TopicBankSources.
      Shared with notes-factory, update-factory and reporting/index.html so
      there is exactly one place to add a new exam/CSV. -->
-<script src="../shared/topic-bank-sources.js"></script>
+<script>
+/* Load the shared registry using the repository-root URL. Relative paths can
+   resolve incorrectly when this page is opened from a nested GitHub Pages URL. */
+(function(){
+  const registryUrl = '/question-factory/shared/topic-bank-sources.js';
+  const script = document.createElement('script');
+  script.src = registryUrl + '?v=20261022a';
+  script.onerror = function(){
+    console.error('Topic bank registry failed to load:', script.src);
+    const source = document.getElementById('topicBankSource');
+    if(source) source.innerHTML = '<option value="">Topic bank registry failed to load — reload the page</option>';
+    const status = document.getElementById('topicBankMsg');
+    if(status){ status.className='msg show bad'; status.textContent='Could not load topic bank registry. Check that shared/topic-bank-sources.js is deployed on GitHub Pages.'; }
+  };
+  document.head.appendChild(script);
+})();
+</script>
 <script>
 "use strict";
 const HEADER =["topic","question_en","question_hi","option1_en","option1_hi","option2_en","option2_hi","option3_en","option3_hi","option4_en","option4_hi","correct","explanation_en","explanation_hi","exam_type_year"];
@@ -376,8 +392,14 @@ async function openTopicBank(){
   const details = document.getElementById('topicBankDetails');
   if(!details.open) return;
   const sourceSel = document.getElementById('topicBankSource');
-  if(!sourceSel.options.length){
-    sourceSel.innerHTML = Object.entries(TOPIC_BANK_SOURCES).map(([key,s]) => `<option value="${key}">${s.label}</option>`).join('');
+  const sources = window.TopicBankSources && window.TopicBankSources.TOPIC_BANK_SOURCES;
+  if(!sources || !Object.keys(sources).length){
+    sourceSel.innerHTML = '<option value="">Topic bank registry unavailable</option>';
+    show(msg('topicBankMsg'),'bad','Topic bank source registry did not load. Reload this page; if it persists, the shared registry path or Pages deployment is failing.');
+    return;
+  }
+  if(!sourceSel.options.length || !sourceSel.value){
+    sourceSel.innerHTML = Object.entries(sources).map(([key,s]) => `<option value="${key}">${s.label}</option>`).join('');
   }
   await loadTopicBankForSource(sourceSel.value);
 }
