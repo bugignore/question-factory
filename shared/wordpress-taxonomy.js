@@ -21,7 +21,7 @@
     let page = 1;
     let totalPages = null;
 
-    while (page <= (totalPages || 1) || (totalPages === null && page === 1)) {
+    while (page <= 100) {
       const url = new URL(API_ROOT + '/' + encodeURIComponent(tax));
       url.searchParams.set('per_page', String(perPage));
       url.searchParams.set('_fields', fields);
@@ -51,11 +51,8 @@
       }
 
       all.push.apply(all, batch);
-      if (totalPages !== null) {
-        if (page >= totalPages) break;
-      } else if (batch.length < perPage) {
-        break;
-      }
+      if (totalPages !== null && page >= totalPages) break;
+      if (totalPages === null && batch.length < perPage) break;
       page += 1;
       if (page > 100) throw new Error('Taxonomy "' + tax + '" exceeded the safety limit of 100 pages.');
     }
