@@ -46,8 +46,9 @@ jobs:
           # live from this site's own /wp-json/wp/v2/exam at page-load time
           # (loadLiveExamTypes() — public, unauthenticated, no secret needed),
           # so a checked label IS already an exact, currently-live `exam` term
-          # name. No remap table needed here any more — resolve_term_id below
-          # does an exact-name search-or-create directly against that label.
+          # name. No remap table is needed here. resolve_term_id below performs
+          # an exact-name lookup only; if a label is absent from WordPress, it is
+          # warned about and skipped rather than creating a duplicate term.
           # (This replaces a static EXAM_TERM_MAP that had drifted stale: it
           # only covered 9 labels against a generic "DSSSB"→"DSSSB PRT" and
           # "BPSC TRE" with no "BPSC TRE 4" variant, while the real `exam`
