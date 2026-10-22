@@ -136,9 +136,9 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 <section class="step show" id="step0">
   <h2>1 · Build &amp; copy prompt</h2>
   <p class="hint">Paste it in a new DeepSeek chat. नई DeepSeek चैट में डालें।</p>
-  <p class="hint">Enter your subject directly and choose the output language. No subject presets or hidden defaults are applied.</p>
+  <p class="hint">Choose an exam source, subject and topic from the topic bank. The website subject label is filled automatically; you do not type taxonomy or subject names.</p>
   <div class="row2">
-    <div><label>Subject / topic column value (exactly as your website expects)</label><input type="text" id="subject" placeholder="Enter the exact subject label" autocomplete="off" required></div>
+    <div><label>Website subject label (filled from Topic bank)</label><input type="text" id="subject" placeholder="Choose a topic below to fill this automatically" readonly aria-readonly="true"></div>
     <div><label>Questions (5–50)</label><input type="number" id="count" value="15" min="5" max="50" inputmode="numeric"></div>
   </div>
   <label>Sub-topic</label>
@@ -192,13 +192,9 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   <details><summary>View / edit prompt (optional)</summary><div>
     <textarea id="promptOut" style="min-height:220px" placeholder="Tap the copy button above — the prompt appears here too."></textarea>
   </div></details>
-  <details><summary>Advanced: exam style labels</summary><div>
-    <label>Live WordPress exam terms used for exam_type_year</label>
-    <input type="text" id="exams" list="examStyleSuggestions" placeholder="Loading live WordPress exam terms…" autocomplete="off">
-    <datalist id="examStyleSuggestions"></datalist>
-    <p class="hint" id="examTaxonomySync" style="margin-top:4px">Loading live WordPress exam taxonomy…</p>
-    <label>Years range</label>
-    <input type="text" id="years" value="2022-2025">
+  <details><summary>Website taxonomy status</summary><div>
+    <p class="hint" id="examTaxonomySync" style="margin-top:4px">Loading verified WordPress exam terms…</p>
+    <p class="hint">Question Factory loads the exact exam_type_year labels from WordPress automatically. The prompt includes these labels; leave classification to the generator. No taxonomy names need to be entered.</p>
   </div></details>
 </section>
 
@@ -534,8 +530,9 @@ function useTopicBankRow(idx){
   document.getElementById('subtopic').value = r.topic;
   // Topic-bank selection sets the subject label directly and never applies a preset.
   document.getElementById('subject').value = `${source.fallbackLabel} - ${r.subjectLabel}`;
+  document.getElementById('topicBankSubject').value = r.subjectLabel;
   document.getElementById('promptOut').value = '';
-  show(msg('topicBankMsg'),'ok', 'Sub-topic filled in above and subject label set to "'+document.getElementById('subject').value+'". Choose the output language explicitly if needed.');
+  show(msg('topicBankMsg'),'ok', 'Topic selected. Website subject label and sub-topic filled automatically; no taxonomy entry is needed.');
 }
 
 function langRules(m){
@@ -563,16 +560,21 @@ function buildPrompt(){
     throw new Error('Verified WordPress exam terms are not available yet. Try again when the site or a verified snapshot is available.');
   }
   const subj = document.getElementById('subject').value.trim();
-  if (!subj) throw new Error('Enter the exact subject label expected by your website.');
+  if (!subj) throw new Error('Open Topic bank, choose a subject, then tap Use on a topic. The website subject label will fill automatically.');
   const language = document.getElementById('language').value;
   const questionMix = document.getElementById('questionMix').value.trim() || 'a balanced mix of conceptual, application-based, scenario-based and exam-appropriate questions';
   const sub  = document.getElementById('subtopic').value.trim() || subj;
   const n    = Math.min(50, Math.max(5, parseInt(document.getElementById('count').value)||15));
   document.getElementById('count').value = n;
-  const exams= document.getElementById('exams').value.trim();
-  const invalidExamLabels = exams ? exams.split(',').map(v=>v.trim()).filter(v=>v && !window.questionExamTermNames.includes(v)) : [];
-  if (invalidExamLabels.length) throw new Error('These exam labels are not exact verified WordPress terms: '+invalidExamLabels.join(', ')+'. Remove them or choose an exact suggestion.');
-  return `You are an expert paper setter for Indian Teacher Recruitment Exams (${exams}).
+  const taxonomyTerms = window.questionExamTermNames.slice();
+  if (!taxonomyTerms.length) throw new Error('Verified WordPress exam terms are unavailable. Try again when WordPress or the verified snapshot is reachable.');
+  const taxonomyRules = taxonomyTerms.map(term => '- "' + term + '"').join(String.fromCharCode(10));
+  return `You are an expert paper setter for Indian Teacher Recruitment Exams.
+
+VERIFIED WORDPRESS exam_type_year TERMS (use exact spelling only):
+${taxonomyRules}
+
+
 
 Generate EXACTLY ${n} original, high-quality MCQs.
 Subject: ${subj}
@@ -600,7 +602,7 @@ topic,question_en,question_hi,option1_en,option1_hi,option2_en,option2_hi,option
 - No commas problems: since every field is quoted, commas inside text are fine.
 - correct = 1, 2, 3 or 4 only. No blank fields.
 - Keep each option under 200 characters and each explanation under 2 sentences (website database limit).
-- exam_type_year: leave this field COMPLETELY BLANK ("") unless the question genuinely and specifically matches one of the live WordPress exam terms listed above. Blank is the expected, normal answer for most questions. NEVER write a year or invent a label. If, and only if, one exam term clearly fits best, use its exact WordPress term name, with no year or punctuation added. When unsure, leave it blank.
+- exam_type_year: leave this field COMPLETELY BLANK ("") unless the question genuinely and specifically matches one of the verified WordPress terms listed above. Blank is the expected, normal answer for most questions. NEVER invent a label or add a year/punctuation. If one term clearly fits, use its exact name. When unsure, leave it blank.
 - Explanation: 1-2 sentences on why the correct option is right (maths: show the quick calculation).`;
 }
 function copyPrompt(btn){
@@ -724,29 +726,17 @@ function exportRows(rws){
 function norm(s){ return String(s).toLowerCase().replace(/\s+/g,' ').replace(/[^\w\u0900-\u097F ]/g,'').trim(); }
 const DEV=/[\u0900-\u097F]/;
 
-/* ---------- exam style normalization ---------- */
+/* ---------- exact WordPress exam taxonomy normalization ---------- */
 function examList(){
-  const l=document.getElementById('exams').value.split(',').map(x=>x.trim().toUpperCase().replace(/[^A-Z]/g,'')).filter(Boolean);
-  return l.length? l : ['CTET'];
+  return Array.isArray(window.questionExamTermNames) ? window.questionExamTermNames.slice() : [];
 }
 function fixExam(v){
-  // Only keep exam_type_year if DeepSeek gave a genuine, recognizable exam-style prefix from
-  // the user's own list. We NEVER trust a year from DeepSeek (it can't know if a question really
-  // appeared in a real exam) and we NEVER invent a label out of thin air either — if there's no
-  // real match, the field is left BLANK on purpose rather than filled with a random guess.
-  let s = String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-  const list = examList();
-  const m = s.match(/^([A-Z]{2,12})(\d{4})?$/);
-  if(m && list.includes(m[1])) return m[1] + pick(yearRange()); // valid prefix -> keep it, year still tool-assigned
-  return ''; // no genuine match (e.g. "GENERIC", garbage, empty) -> leave blank, show nothing
+  // Accept only an exact live/snapshot WordPress taxonomy term. Never synthesize a year,
+  // strip a label down to a prefix, or invent a taxonomy value.
+  const candidate = String(v || '').trim();
+  const match = examList().find(term => term === candidate);
+  return match || '';
 }
-function yearRange(){
-  const m = String(document.getElementById('years').value||'2022-2025').match(/(\d{4})\s*-\s*(\d{4})/);
-  const a = m? +m[1]:2022, b = m? +m[2]:2025, out=[];
-  for(let y=Math.min(a,b);y<=Math.max(a,b);y++) out.push(String(y));
-  return out;
-}
-function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
 /* ---------- option shuffle ---------- */
 function shuffleRow(f){
@@ -1139,31 +1129,24 @@ render();
   window.questionExamTaxonomyReady = false;
   window.questionExamTermNames = [];
   async function syncQuestionExamTaxonomy(){
-    const input = document.getElementById('exams');
-    const list = document.getElementById('examStyleSuggestions');
     const status = document.getElementById('examTaxonomySync');
-    if(!input || !list || !status) return;
+    if(!status) return;
+    status.textContent = 'Loading verified WordPress exam terms…';
     try {
       const terms = await window.WordPressTaxonomy.fetchTerms('exam');
-      list.innerHTML = terms.map(t => '<option value="'+window.WordPressTaxonomy.escapeHtml(t.name)+'"></option>').join('');
       window.questionExamTermNames = terms.map(t => t.name);
-      input.value = '';
-      input.placeholder = 'Optional — choose an exact WordPress term';
       const sync = window.WordPressTaxonomy.getStatus();
       window.questionExamTaxonomyReady = terms.length > 0;
       status.textContent = terms.length
         ? (sync.source === 'snapshot'
           ? 'WordPress is temporarily unavailable. Using the last verified snapshot ('+terms.length+' terms; last sync '+sync.syncedAt+').'
-          : 'Synced from WordPress: '+terms.length+' live exam terms. Labels are exact; term IDs, slugs and parent IDs are available from the shared taxonomy client.')
-        : 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
+          : 'Loaded '+terms.length+' verified exam_type_year terms from live WordPress. They are inserted into the generation prompt automatically.')
+        : 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; prompt generation is paused.';
       status.style.color = terms.length ? 'var(--ink-soft, #777)' : '#b32d2e';
     } catch(error) {
-      input.value = '';
-      input.placeholder = 'Unavailable — live WordPress taxonomy required';
-      list.innerHTML = '';
       window.questionExamTaxonomyReady = false;
       window.questionExamTermNames = [];
-      status.textContent = 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
+      status.textContent = 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; prompt generation is paused.';
       status.style.color = '#b32d2e';
     }
   }
