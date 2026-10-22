@@ -568,7 +568,7 @@ function buildPrompt(){
   document.getElementById('count').value = n;
   const taxonomyTerms = window.questionExamTermNames.slice();
   if (!taxonomyTerms.length) throw new Error('Verified WordPress exam terms are unavailable. Try again when WordPress or the verified snapshot is reachable.');
-  const taxonomyRules = taxonomyTerms.map(term => '- \"' + term + '\"').join('\\n');
+  const taxonomyRules = taxonomyTerms.map(term => '- "' + term + '"').join(String.fromCharCode(10));
   return `You are an expert paper setter for Indian Teacher Recruitment Exams.
 
 VERIFIED WORDPRESS exam_type_year TERMS (use exact spelling only):
