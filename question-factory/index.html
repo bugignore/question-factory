@@ -1141,31 +1141,24 @@ render();
   window.questionExamTaxonomyReady = false;
   window.questionExamTermNames = [];
   async function syncQuestionExamTaxonomy(){
-    const input = document.getElementById('exams');
-    const list = document.getElementById('examStyleSuggestions');
     const status = document.getElementById('examTaxonomySync');
-    if(!input || !list || !status) return;
+    if(!status) return;
+    status.textContent = 'Loading verified WordPress exam terms…';
     try {
       const terms = await window.WordPressTaxonomy.fetchTerms('exam');
-      list.innerHTML = terms.map(t => '<option value="'+window.WordPressTaxonomy.escapeHtml(t.name)+'"></option>').join('');
       window.questionExamTermNames = terms.map(t => t.name);
-      input.value = '';
-      input.placeholder = 'Optional — choose an exact WordPress term';
       const sync = window.WordPressTaxonomy.getStatus();
       window.questionExamTaxonomyReady = terms.length > 0;
       status.textContent = terms.length
         ? (sync.source === 'snapshot'
           ? 'WordPress is temporarily unavailable. Using the last verified snapshot ('+terms.length+' terms; last sync '+sync.syncedAt+').'
-          : 'Synced from WordPress: '+terms.length+' live exam terms. Labels are exact; term IDs, slugs and parent IDs are available from the shared taxonomy client.')
-        : 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
+          : 'Loaded '+terms.length+' verified exam_type_year terms from live WordPress. They are inserted into the generation prompt automatically.')
+        : 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; prompt generation is paused.';
       status.style.color = terms.length ? 'var(--ink-soft, #777)' : '#b32d2e';
     } catch(error) {
-      input.value = '';
-      input.placeholder = 'Unavailable — live WordPress taxonomy required';
-      list.innerHTML = '';
       window.questionExamTaxonomyReady = false;
       window.questionExamTermNames = [];
-      status.textContent = 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; exam-dependent generation is paused.';
+      status.textContent = 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; prompt generation is paused.';
       status.style.color = '#b32d2e';
     }
   }
