@@ -161,6 +161,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#F7F7F9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0B0C0F" media="(prefers-color-scheme: dark)">
+<script src="../shared/wordpress-taxonomy.js"></script>
 </head>
 <body>
 <div class="top">
@@ -239,7 +240,9 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <label>Topic</label>
     <input type="text" id="topic" oninput="this.classList.remove('fieldErr')">
     <label>Exam</label>
-    <input type="text" id="examType">
+    <input type="text" id="examType" list="examSuggestions">
+    <datalist id="examSuggestions"></datalist>
+    <p class="hint" id="examTaxonomySync" style="margin-top:4px">Loading live WordPress exam taxonomy…</p>
     <label>Subject</label>
     <select id="subject">
       <option>Auto-detect</option>
@@ -3828,6 +3831,28 @@ render();
     apply(current());
   }
   document.readyState==='loading' ? document.addEventListener('DOMContentLoaded',mount) : mount();
+})();
+</script>
+<script>
+(function(){
+  async function syncExamTaxonomySuggestions(){
+    const input = document.getElementById('examType');
+    const list = document.getElementById('examSuggestions');
+    const status = document.getElementById('examTaxonomySync');
+    if(!input || !list || !status) return;
+    try {
+      const terms = await window.WordPressTaxonomy.fetchTerms('exam');
+      list.innerHTML = terms.map(t => '<option value="'+window.WordPressTaxonomy.escapeHtml(t.name)+'"></option>').join('');
+      status.textContent = 'Live WordPress exam terms loaded ('+terms.length+'). Choose an exact term for reliable publishing.';
+      status.style.color = 'var(--ink-soft)';
+    } catch(error) {
+      list.innerHTML = '';
+      status.textContent = 'Could not load live WordPress exam terms: '+(error.message || String(error))+'. Publishing will not create missing terms.';
+      status.style.color = '#b32d2e';
+    }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncExamTaxonomySuggestions);
+  else syncExamTaxonomySuggestions();
 })();
 </script>
 </body>
