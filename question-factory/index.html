@@ -54,7 +54,10 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   h2{font-size:16px;margin:0 0 2px}
   .hint{color:var(--ink-soft);font-size:12.5px;margin:0 0 12px}
   label{display:block;font-weight:600;font-size:12.5px;margin:11px 0 4px}
-  input[type=text],input[type=number],input[type=password],textarea,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;color:var(--ink);background:var(--card);font-size:15px}
+  input[type=text],input[type=number],input[type=password],textarea,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;color:var(--ink);background-color:var(--card);font-size:15px}
+  /* Keep native select controls usable on mobile browsers; custom theme styling must not suppress the OS popup. */
+  select{-webkit-appearance:auto;appearance:auto;position:relative;z-index:2;touch-action:manipulation;pointer-events:auto;color-scheme:light dark}
+  select option{color:CanvasText;background:Canvas}
   textarea{min-height:110px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12px}
   input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -153,8 +156,8 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <div>
       <p class="hint" style="margin-top:8px">Same research-planned SEO topics used by the notes factory, loaded on demand from the repo's own topic-research CSVs — not bundled into the page, and only the subject you pick is shown, not the whole list at once.</p>
       <label style="margin-top:4px">Exam source</label>
-      <select id="topicBankSource" onchange="loadTopicBankForSource(this.value)"></select>
-      <select id="topicBankSubject" onchange="renderTopicBank()" style="margin-top:8px">
+      <select id="topicBankSource" aria-label="Exam source" autocomplete="off" onchange="loadTopicBankForSource(this.value)"></select>
+      <select id="topicBankSubject" aria-label="Subject" autocomplete="off" onchange="renderTopicBank()" style="margin-top:8px">
         <option value="">Pick a subject to browse…</option>
       </select>
       <input type="text" id="topicBankSearch" placeholder="Search within this subject…" oninput="renderTopicBank()" style="margin-top:8px">
@@ -372,9 +375,10 @@ async function loadTopicBank(sourceKey){
   topicBankLoadedSource = sourceKey;
   return topicBankRows;
 }
+let topicBankLoadRequest = 0;
 async function openTopicBank(){
   const details = document.getElementById('topicBankDetails');
-  if(!details.open) return;
+  if(!details || !details.open) return;
   const sourceSel = document.getElementById('topicBankSource');
   const sources = window.TopicBankSources && window.TopicBankSources.TOPIC_BANK_SOURCES;
   if(!sources || !Object.keys(sources).length){
@@ -382,15 +386,19 @@ async function openTopicBank(){
     show(msg('topicBankMsg'),'bad','Topic bank source registry did not load. Reload this page; if it persists, the shared registry path or Pages deployment is failing.');
     return;
   }
-  if(!sourceSel.options.length || !sourceSel.value){
+  if(!sourceSel.options.length){
     sourceSel.innerHTML = Object.entries(sources).map(([key,s]) => `<option value="${key}">${s.label}</option>`).join('');
   }
-  await loadTopicBankForSource(sourceSel.value);
+  if(sourceSel.value && topicBankLoadedSource !== sourceSel.value) await loadTopicBankForSource(sourceSel.value);
 }
 async function loadTopicBankForSource(sourceKey){
+  const requestId = ++topicBankLoadRequest;
   try{
+    const sources = window.TopicBankSources && window.TopicBankSources.TOPIC_BANK_SOURCES;
+    if(!sourceKey || !sources || !sources[sourceKey]) throw new Error('Choose a valid exam source.');
     show(msg('topicBankMsg'),'warn','Loading topic bank…');
     const rows = await loadTopicBank(sourceKey);
+    if(requestId !== topicBankLoadRequest || document.getElementById('topicBankSource').value !== sourceKey) return;
     const subjects = [...new Set(rows.map(r=>r.subjectLabel))];
     document.getElementById('topicBankSubject').innerHTML = '<option value="">Pick a subject to browse…</option>'
       + subjects.map(s => `<option value="${s}">${s} (${rows.filter(r=>r.subjectLabel===s).length})</option>`).join('');
