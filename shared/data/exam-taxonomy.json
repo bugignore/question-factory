@@ -2,6 +2,61 @@
   "schemaVersion": 1,
   "siteUrl": "https://examnotespdf.in",
   "taxonomy": "exam",
-  "syncedAt": null,
-  "terms": []
+  "syncedAt": "2026-10-23T08:28:54.699Z",
+  "terms": [
+    {
+      "id": 202,
+      "name": "BPSC TRE",
+      "slug": "bpsc-tre",
+      "parent": 0
+    },
+    {
+      "id": 51,
+      "name": "BPSC TRE 4",
+      "slug": "bpsc-tre-4",
+      "parent": 0
+    },
+    {
+      "id": 21,
+      "name": "CTET",
+      "slug": "ctet",
+      "parent": 0
+    },
+    {
+      "id": 53,
+      "name": "DSSSB",
+      "slug": "dsssb",
+      "parent": 0
+    },
+    {
+      "id": 22,
+      "name": "DSSSB PRT",
+      "slug": "dsssb-prt",
+      "parent": 53
+    },
+    {
+      "id": 59,
+      "name": "DSSSB PRT - Special Educator",
+      "slug": "dsssb-prt-special-educator",
+      "parent": 22
+    },
+    {
+      "id": 54,
+      "name": "DSSSB TGT",
+      "slug": "dsssb-tgt",
+      "parent": 53
+    },
+    {
+      "id": 204,
+      "name": "PGT",
+      "slug": "pgt",
+      "parent": 53
+    },
+    {
+      "id": 24,
+      "name": "Upcoming Exams",
+      "slug": "upcoming-teaching_exam-in-2026",
+      "parent": 0
+    }
+  ]
 }
