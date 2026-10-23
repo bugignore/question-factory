@@ -376,21 +376,34 @@ async function loadTopicBank(sourceKey){
   return topicBankRows;
 }
 let topicBankLoadRequest = 0;
+function populateTopicBankSources(){
+  const sourceSel = document.getElementById('topicBankSource');
+  const sources = window.TopicBankSources && window.TopicBankSources.TOPIC_BANK_SOURCES;
+  if(!sourceSel) return false;
+  if(!sources || !Object.keys(sources).length){
+    sourceSel.innerHTML = '<option value="">Topic bank registry unavailable</option>';
+    show(msg('topicBankMsg'),'bad','Topic bank registry did not load. Check shared/topic-bank-sources.js.');
+    return false;
+  }
+  // Populate synchronously at page startup, not only from <details> toggle events.
+  if(!sourceSel.options.length){
+    sourceSel.innerHTML = '<option value="">Choose an exam source…</option>' +
+      Object.entries(sources).map(([key,s]) => `<option value="${key}">${s.label}</option>`).join('');
+  }
+  return true;
+}
 async function openTopicBank(){
   const details = document.getElementById('topicBankDetails');
   if(!details || !details.open) return;
+  if(!populateTopicBankSources()) return;
   const sourceSel = document.getElementById('topicBankSource');
-  const sources = window.TopicBankSources && window.TopicBankSources.TOPIC_BANK_SOURCES;
-  if(!sources || !Object.keys(sources).length){
-    sourceSel.innerHTML = '<option value="">Topic bank registry unavailable</option>';
-    show(msg('topicBankMsg'),'bad','Topic bank source registry did not load. Reload this page; if it persists, the shared registry path or Pages deployment is failing.');
-    return;
-  }
-  if(!sourceSel.options.length){
-    sourceSel.innerHTML = Object.entries(sources).map(([key,s]) => `<option value="${key}">${s.label}</option>`).join('');
+  if(!sourceSel.value){
+    const first = sourceSel.options.length > 1 ? sourceSel.options[1].value : '';
+    if(first) sourceSel.value = first;
   }
   if(sourceSel.value && topicBankLoadedSource !== sourceSel.value) await loadTopicBankForSource(sourceSel.value);
 }
+document.addEventListener('DOMContentLoaded', populateTopicBankSources);
 async function loadTopicBankForSource(sourceKey){
   const requestId = ++topicBankLoadRequest;
   try{
