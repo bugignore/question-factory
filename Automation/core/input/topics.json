@@ -9,5 +9,16 @@
     "slug": null,
     "error": null,
     "attempts": 0
+  },
+  {
+    "id": "mcp-9390496752",
+    "exam": "content-writer-mcp test",
+    "topic": "verification test row - safe to delete",
+    "subject": "test",
+    "hindiPercent": 70,
+    "status": "pending",
+    "slug": null,
+    "error": null,
+    "attempts": 0
   }
 ]
