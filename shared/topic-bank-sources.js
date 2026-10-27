@@ -46,6 +46,26 @@
 //                        bilingual PRESET key. Subjects with no entry here
 //                        fall back to Custom + fallbackLabel above.
 const TOPIC_BANK_SOURCES = {
+  'ctet-paper-1': {
+    label: 'CTET 2026 — Paper I (Primary, Classes 1-5)',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/CTET-2026-Paper-1-Topics.csv',
+    csvPath: 'Automation/input sylabuss/CTET-2026-Paper-1-Topics.csv',
+    examMatch: 'CTET Paper I',
+    examChkFilter: 'CTET Paper I',
+    fallbackLabel: 'CTET Paper I',
+    notesSubjectMap: { 'Child Development & Pedagogy': 'CDP', 'Mathematics': 'Maths', 'EVS': 'EVS', 'English': 'English', 'Hindi': 'Hindi' },
+    questionPresetMap: { 'Child Development & Pedagogy': 'pedagogy', 'Mathematics': 'math', 'EVS': 'gs', 'English': 'english', 'Hindi': 'hindi' },
+  },
+  'ctet-paper-2': {
+    label: 'CTET 2026 — Paper II (Elementary, Classes 6-8)',
+    url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/CTET-2026-Paper-2-Topics.csv',
+    csvPath: 'Automation/input sylabuss/CTET-2026-Paper-2-Topics.csv',
+    examMatch: 'CTET Paper II',
+    examChkFilter: 'CTET Paper II',
+    fallbackLabel: 'CTET Paper II',
+    notesSubjectMap: { 'Child Development & Pedagogy': 'CDP', 'English': 'English', 'Hindi': 'Hindi', 'Science': 'Science', 'History': 'History', 'Geography': 'Geography' },
+    questionPresetMap: { 'Child Development & Pedagogy': 'pedagogy', 'English': 'english', 'Hindi': 'hindi', 'Science': 'gs', 'History': 'gs', 'Geography': 'gs' },
+  },
   'bpsc-tre-4': {
     label: 'BPSC TRE 4 — Primary Teacher',
     url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/BPSC-TRE-4-Primary-Teacher-SEO-Topics-Hindi-v2.csv',
@@ -63,8 +83,8 @@ const TOPIC_BANK_SOURCES = {
     examMatch: 'DSSSB',
     examChkFilter: 'DSSSB',
     fallbackLabel: 'DSSSB TGT Computer Science',
-    notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English' },
-    questionPresetMap: { 'Hindi': 'hindi', 'English': 'english' },
+    notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English', 'Numerical Ability': 'Maths' },
+    questionPresetMap: { 'Hindi': 'hindi', 'English': 'english', 'General Awareness': 'gs', 'Numerical Ability': 'math', 'Reasoning': 'reasoning' },
   },
   'dsssb-domestic-science': {
     label: 'DSSSB 2026 — Domestic Science Teacher',
@@ -73,8 +93,8 @@ const TOPIC_BANK_SOURCES = {
     examMatch: 'DSSSB',
     examChkFilter: 'DSSSB',
     fallbackLabel: 'DSSSB Domestic Science',
-    notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English' },
-    questionPresetMap: { 'Hindi': 'hindi', 'English': 'english' },
+    notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English', 'Numerical Ability': 'Maths' },
+    questionPresetMap: { 'Hindi': 'hindi', 'English': 'english', 'General Awareness': 'gs', 'Numerical Ability': 'math', 'Reasoning': 'reasoning' },
   },
   'dsssb-tgt-special-ed': {
     label: 'DSSSB 2026 — TGT Special Education Teacher',
@@ -83,8 +103,8 @@ const TOPIC_BANK_SOURCES = {
     examMatch: 'DSSSB',
     examChkFilter: 'DSSSB',
     fallbackLabel: 'DSSSB TGT Special Education',
-    notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English' },
-    questionPresetMap: { 'Hindi': 'hindi', 'English': 'english' },
+    notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English', 'Numerical Ability': 'Maths' },
+    questionPresetMap: { 'Hindi': 'hindi', 'English': 'english', 'General Awareness': 'gs', 'Numerical Ability': 'math', 'Reasoning': 'reasoning' },
   },
   'dsssb-special-educator-primary': {
     label: 'DSSSB 2026 — Special Educator (Primary)',
@@ -93,8 +113,8 @@ const TOPIC_BANK_SOURCES = {
     examMatch: 'DSSSB',
     examChkFilter: 'DSSSB',
     fallbackLabel: 'DSSSB Special Educator',
-    notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English' },
-    questionPresetMap: { 'Hindi': 'hindi', 'English': 'english' },
+    notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English', 'Numerical Ability': 'Maths' },
+    questionPresetMap: { 'Hindi': 'hindi', 'English': 'english', 'General Awareness': 'gs', 'Numerical Ability': 'math', 'Reasoning': 'reasoning' },
   },
 };
 
