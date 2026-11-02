@@ -42,6 +42,33 @@
 <div class="warn">
   After pasting the blob into both files and committing, <b>clear this page's inputs</b> (just reload the page) and never store the raw token anywhere else — this encrypted blob is the only copy that should live in the repo.
 </div>
+
+<hr style="margin:28px 0;border:none;border-top:1.5px solid #D8DEE9">
+
+<h1>🔒 Admin: Encrypt a Page-Lock Password</h1>
+<div class="warn">
+  Same local-only encryption as above, reused for a different purpose: gates <code>index.html</code>
+  (the Content Factory hub page) behind a password instead of protecting a GitHub token. Choose a
+  password below, click Encrypt, then paste the output into <code>index.html</code>'s
+  <code>ENCRYPTED_PAGE_PASSWORD</code> constant. Leaving that constant blank (the shipped default)
+  keeps the hub page fully open, exactly as before — this is opt-in.
+  <br><br>
+  <b>This only hides the page from a casual visitor.</b> It is static HTML with no server: anyone who
+  opens their browser's dev tools can still read the page's source and the four tools it links to are
+  separately reachable by their own URLs regardless of this gate. Use it to keep the hub off search
+  engines and out of casual hands, not as real access control.
+</div>
+
+<label>Password to require for this page (share it with whoever needs it, never commit it anywhere)</label>
+<input type="password" id="pageLockPassword" placeholder="choose a password" autocomplete="off">
+
+<button onclick="doEncryptPageLock()">🔒 Encrypt</button>
+
+<div class="ok" id="pageLockOkBox">
+  <b>Paste this into index.html as the ENCRYPTED_PAGE_PASSWORD constant:</b>
+  <textarea id="pageLockOutput" readonly onclick="this.select()"></textarea>
+</div>
+<div class="bad" id="pageLockBadBox"></div>
 </main>
 <script>
 function b64(bytes){ let s=''; bytes.forEach(b=>s+=String.fromCharCode(b)); return btoa(s); }
@@ -71,6 +98,34 @@ async function doEncrypt(){
     combined.set(iv, salt.length);
     combined.set(new Uint8Array(ctBuf), salt.length + iv.length);
     document.getElementById('output').value = b64(combined);
+    okBox.style.display = 'block';
+  }catch(e){
+    badBox.textContent = 'Encryption failed: ' + e.message;
+    badBox.style.display = 'block';
+  }
+}
+
+// Fixed plaintext (never a secret itself -- just something to decrypt and
+// compare) so index.html's unlock check only needs to confirm decryption
+// produced this exact string, the same way a wrong password already fails
+// AES-GCM's own authentication tag before ever reaching this comparison.
+const PAGE_LOCK_CANARY = 'content-factory-unlocked';
+
+async function doEncryptPageLock(){
+  const okBox = document.getElementById('pageLockOkBox'), badBox = document.getElementById('pageLockBadBox');
+  okBox.style.display = 'none'; badBox.style.display = 'none';
+  const password = document.getElementById('pageLockPassword').value;
+  if(!password){ badBox.textContent = 'Choose a password first.'; badBox.style.display='block'; return; }
+  try{
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(password, salt);
+    const ctBuf = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(PAGE_LOCK_CANARY));
+    const combined = new Uint8Array(salt.length + iv.length + ctBuf.byteLength);
+    combined.set(salt, 0);
+    combined.set(iv, salt.length);
+    combined.set(new Uint8Array(ctBuf), salt.length + iv.length);
+    document.getElementById('pageLockOutput').value = b64(combined);
     okBox.style.display = 'block';
   }catch(e){
     badBox.textContent = 'Encryption failed: ' + e.message;

@@ -16,6 +16,15 @@
 /* Applied before paint so a saved theme never flashes the wrong colours. */
 (function(){try{var t=localStorage.getItem('enp-theme');
 if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+/* Blank ENCRYPTED_PAGE_PASSWORD (the shipped default) means no gate at all --
+   this constant lives here, not just in the body script, so the open/locked
+   decision is made before paint and the real content never flashes visible
+   first. See admin-encrypt-token.html's second section to generate a blob. */
+var ENCRYPTED_PAGE_PASSWORD = '';
+(function(){try{
+  var open = !ENCRYPTED_PAGE_PASSWORD || sessionStorage.getItem('cfPageUnlocked')==='1';
+  document.documentElement.setAttribute('data-gate', open ? 'open' : 'locked');
+}catch(e){ document.documentElement.setAttribute('data-gate','open'); }})();
 </script>
 <style>
   :root{
@@ -57,14 +66,39 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     font:inherit;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);opacity:.92}
   #themeToggle:hover{opacity:1}
   @media (max-width:420px){ #themeToggle{top:6px;right:6px;padding:5px 8px;font-size:11px} }
+
+  /* Gate: closed by default only once ENCRYPTED_PAGE_PASSWORD is set (see
+     head script). [data-gate="open"] (the shipped default, blank password)
+     never touches layout -- #lockScreen stays display:none and .gatedContent
+     is never hidden, so this is fully inert until opted into. */
+  #lockScreen{display:none}
+  html[data-gate="locked"] #lockScreen{display:flex}
+  html[data-gate="locked"] .gatedContent{display:none}
+  #lockScreen{min-height:100%;align-items:center;justify-content:center;padding:24px}
+  #lockScreen .box{max-width:340px;width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:24px;text-align:center}
+  #lockScreen h1{font-size:18px;margin:0 0 6px}
+  #lockScreen p{color:var(--ink-soft);font-size:13px;margin:0 0 16px}
+  #lockScreen input{width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid var(--line);border-radius:9px;font:inherit;font-size:15px;background:var(--card);color:var(--ink)}
+  #lockScreen button{display:block;width:100%;padding:13px;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font:inherit;font-weight:700;font-size:15px;cursor:pointer;margin-top:12px}
+  #lockScreen .err{color:#B3362B;font-size:12.5px;margin-top:10px;display:none}
+  #lockScreen .err.show{display:block}
 </style>
 </head>
 <body>
-<div class="top">
+<div id="lockScreen">
+  <div class="box">
+    <h1>🔒 Content Factory</h1>
+    <p>Enter the password to continue.</p>
+    <input type="password" id="gatePassword" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')tryUnlockGate()">
+    <button onclick="tryUnlockGate()">Unlock</button>
+    <div class="err" id="gateErr">Wrong password — try again.</div>
+  </div>
+</div>
+<div class="top gatedContent">
   <h1>Content Factory</h1>
   <p>Free tools that build exam-prep content, hosted entirely on GitHub Pages</p>
 </div>
-<main>
+<main class="gatedContent">
   <a class="card" href="question-factory/">
     <span class="emoji">📝</span>
     <h2>Question Factory</h2>
@@ -90,7 +124,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <span class="go">Open tool →</span>
   </a>
 </main>
-<footer>No servers, no accounts, no data leaves your device except what you choose to paste elsewhere.</footer>
+<footer class="gatedContent">No servers, no accounts, no data leaves your device except what you choose to paste elsewhere.</footer>
 <script>
 /* Three-state theme switch: system -> light -> dark -> system.
    "system" removes the attribute so the prefers-color-scheme media query
@@ -117,6 +151,44 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   }
   document.readyState==='loading' ? document.addEventListener('DOMContentLoaded',mount) : mount();
 })();
+</script>
+<script>
+/* Page-lock gate -- same local-only PBKDF2+AES-GCM scheme as question-factory's
+   GitHub-token unlock (see unlockQfGithub() there), reused here to gate page
+   content instead of a GitHub token. A correct password decrypts
+   ENCRYPTED_PAGE_PASSWORD (set in the head script) back to the fixed canary
+   string admin-encrypt-token.html encrypted it from -- a wrong password fails
+   AES-GCM's own authentication check before ever reaching that comparison.
+   Entirely inert (this script never runs the check) when
+   ENCRYPTED_PAGE_PASSWORD is blank, the shipped default. */
+function b64ToBytes(b64){ return Uint8Array.from(atob(b64), c => c.charCodeAt(0)); }
+async function deriveGateKey(password, salt){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations:200000, hash:'SHA-256' },
+    keyMaterial, { name:'AES-GCM', length:256 }, false, ['decrypt']
+  );
+}
+async function tryUnlockGate(){
+  const err = document.getElementById('gateErr');
+  const password = document.getElementById('gatePassword').value;
+  err.classList.remove('show');
+  if(!password) return;
+  try{
+    const raw = b64ToBytes(ENCRYPTED_PAGE_PASSWORD);
+    const salt = raw.slice(0,16), iv = raw.slice(16,28), ct = raw.slice(28);
+    const key = await deriveGateKey(password, salt);
+    const ptBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+    if(new TextDecoder().decode(ptBuf) !== 'content-factory-unlocked') throw new Error('mismatch');
+    try{ sessionStorage.setItem('cfPageUnlocked','1'); }catch(e){}
+    document.documentElement.setAttribute('data-gate','open');
+  }catch(e){
+    err.classList.add('show');
+    document.getElementById('gatePassword').value = '';
+    document.getElementById('gatePassword').focus();
+  }
+}
 </script>
 </body>
 </html>
