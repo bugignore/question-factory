@@ -403,6 +403,33 @@ async function populateTopicBankSources(){
   return true;
 }
 document.addEventListener('DOMContentLoaded', populateTopicBankSources);
+// Builds an "⚠ Unscoped" <optgroup> of live WordPress subject terms that
+// aren't deliberately tied to any one exam (examnotepdf-core.php's
+// enp_subject_scope(), exposed via the enp_scope REST field -- see
+// syncQuestionSubjectScope() near the end of this file) -- these apply to
+// every exam, not just whichever CSV happens to already list them, e.g.
+// Pedagogy or Mathematics. rawSubjectLabels is this exam's own CSV subject
+// list, used (together with their quizSubjectMap alias, if any) to exclude a
+// WP term that's already reachable through the exam's own CSV -- so e.g.
+// CTET sources (which already resolve Pedagogy via "Child Development &
+// Pedagogy") don't show it a second time here. Renders nothing if the scope
+// fetch hasn't finished or found nothing.
+function unscopedSubjectOptionsHtml(rawSubjectLabels){
+  const terms = window.questionSubjectTerms || [];
+  const scope = window.questionSubjectScope || new Map();
+  const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
+  const shown = new Set();
+  rawSubjectLabels.forEach(s => {
+    shown.add(String(s).trim().toLowerCase());
+    const alias = source && source.quizSubjectMap && source.quizSubjectMap[s];
+    if(alias) shown.add(String(alias).trim().toLowerCase());
+  });
+  const unscoped = terms.filter(t => scope.get(t.id) === null && !shown.has(String(t.name).trim().toLowerCase()));
+  if(!unscoped.length) return '';
+  return '<optgroup label="⚠ Unscoped">'
+    + unscoped.map(t => `<option value="__unscoped__:${t.slug}">${t.name}</option>`).join('')
+    + '</optgroup>';
+}
 async function loadTopicBankForSource(sourceKey){
   const requestId = ++topicBankLoadRequest;
   try{
@@ -421,7 +448,8 @@ async function loadTopicBankForSource(sourceKey){
       + subjects.map(s => {
           const wpLabel = (source.quizSubjectMap && source.quizSubjectMap[s]) || s;
           return `<option value="${s}">${wpLabel} (${rows.filter(r=>r.subjectLabel===s).length})</option>`;
-        }).join('');
+        }).join('')
+      + unscopedSubjectOptionsHtml(subjects);
     document.getElementById('topicBankSubject').value = '';
     document.getElementById('topicBankSearch').value = '';
     document.getElementById('tbSubjectSuggest').innerHTML = subjects.map(s => `<option value="${s.replace(/"/g,'&quot;')}">`).join('');
@@ -453,6 +481,19 @@ function onTopicBankSubjectChange(){
     return;
   }
   const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
+  // An "⚠ Unscoped" pick (see unscopedSubjectOptionsHtml above) is a direct
+  // live WordPress term match, not an aliased raw-CSV label -- resolve it
+  // straight from the term instead of going through quizSubjectMap, which
+  // has no entry for it by definition.
+  if(subjectLabel.startsWith('__unscoped__:')){
+    const slug = subjectLabel.slice('__unscoped__:'.length);
+    const term = (window.questionSubjectTerms || []).find(t => t.slug === slug);
+    quizTagExam = source.quizExamKey || '';
+    quizTagSubject = term ? quizSubjectKeyFromSlug(term.slug) : '';
+    document.getElementById('subject').value = term ? `${source.fallbackLabel} - ${term.name}` : '';
+    renderTopicBank();
+    return;
+  }
   document.getElementById('subject').value = `${source.fallbackLabel} - ${subjectLabel}`;
   const resolved = resolveQuizTags(source, subjectLabel);
   quizTagExam = resolved.exam;
@@ -464,6 +505,10 @@ function renderTopicBank(){
   if(!topicBankRows){ listEl.innerHTML = ''; return; }
   const subj = document.getElementById('topicBankSubject').value;
   if(!subj){ listEl.innerHTML = '<p class="hint">Pick a subject above to see its topics.</p>'; return; }
+  if(subj.startsWith('__unscoped__:')){
+    listEl.innerHTML = '<p class="hint">No pre-written topics for this subject yet — type your own Topic below.</p>';
+    return;
+  }
   const q = document.getElementById('topicBankSearch').value.trim().toLowerCase();
   const rows = topicBankRows
     .map((r,i) => ({...r, idx:i}))
@@ -1288,6 +1333,57 @@ render();
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncQuestionSubjectTaxonomy);
   else syncQuestionSubjectTaxonomy();
+})();
+// Supplementary, best-effort fetch of which subject terms are "Unscoped" in
+// the admin's Subjects screen (examnotepdf-core.php's enp_subject_scope()),
+// exposed via a custom REST field (2026-11-02). Deliberately NOT folded into
+// shared/wordpress-taxonomy.js above -- that client is shared by all four
+// tools and hard-whitelists id/name/slug/parent; enp_scope is a subject-only,
+// question-factory-only concept. No snapshot fallback: this is a nice-to-have
+// layered on the already-correct baseline subject resolution above, never
+// required for it -- a failure here (old WordPress without the field yet,
+// network error) just means no "Unscoped" group is offered, nothing else
+// changes. A subject only counts as unscoped if the field was actually
+// present and null -- a MISSING field (old WordPress) is treated as unknown,
+// never as unscoped, so this can't make every subject look unscoped during
+// the gap before the field is deployed.
+(function(){
+  window.questionSubjectScope = new Map();
+  async function syncQuestionSubjectScope(){
+    try {
+      const perPage = 100;
+      let page = 1, totalPages = null;
+      const all = [];
+      while(page <= 20){
+        const url = new URL(window.WordPressTaxonomy.apiRoot + '/subject');
+        url.searchParams.set('_fields', 'id,enp_scope');
+        url.searchParams.set('per_page', String(perPage));
+        url.searchParams.set('page', String(page));
+        const res = await fetch(url.toString(), {method:'GET', credentials:'omit', cache:'no-store'});
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const batch = await res.json();
+        if(!Array.isArray(batch)) throw new Error('invalid response');
+        if(totalPages === null){
+          const count = Number(res.headers.get('X-WP-TotalPages'));
+          totalPages = Number.isFinite(count) && count > 0 ? count : null;
+        }
+        all.push(...batch);
+        if(totalPages !== null && page >= totalPages) break;
+        if(totalPages === null && batch.length < perPage) break;
+        page++;
+      }
+      const map = new Map();
+      for(const t of all){
+        if(!t || !Number.isInteger(Number(t.id)) || !('enp_scope' in t)) continue;
+        map.set(Number(t.id), t.enp_scope || null);
+      }
+      window.questionSubjectScope = map;
+    } catch(e) {
+      window.questionSubjectScope = new Map();
+    }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncQuestionSubjectScope);
+  else syncQuestionSubjectScope();
 })();
 </script>
 </body>
