@@ -452,12 +452,20 @@ async function loadTopicBankForSource(sourceKey){
   try{
     const sources = window.TopicBankSources && window.TopicBankSources.TOPIC_BANK_SOURCES;
     if(!sourceKey || !sources || !sources[sourceKey]) throw new Error('Choose a valid exam source.');
+    const source = sources[sourceKey];
     show(msg('topicBankMsg'),'warn','Loading topic bank…');
     const rows = await loadTopicBank(sourceKey);
     if(requestId !== topicBankLoadRequest || document.getElementById('topicBankSource').value !== sourceKey) return;
     const subjects = [...new Set(rows.map(r=>r.subjectLabel))];
+    // Show the live WordPress subject name (via quizSubjectMap) as the visible
+    // label when one exists, so this dropdown reads the same as WordPress --
+    // the <option value> stays the raw CSV label, so filtering/useTopicBankRow
+    // and resolveQuizTags (which key off the raw label) are unaffected.
     document.getElementById('topicBankSubject').innerHTML = '<option value="">Pick a subject to browse…</option>'
-      + subjects.map(s => `<option value="${s}">${s} (${rows.filter(r=>r.subjectLabel===s).length})</option>`).join('')
+      + subjects.map(s => {
+          const wpLabel = (source.quizSubjectMap && source.quizSubjectMap[s]) || s;
+          return `<option value="${s}">${wpLabel} (${rows.filter(r=>r.subjectLabel===s).length})</option>`;
+        }).join('')
       + unscopedSubjectOptionsHtml(subjects);
     document.getElementById('topicBankSubject').value = '';
     document.getElementById('topicBankSearch').value = '';
