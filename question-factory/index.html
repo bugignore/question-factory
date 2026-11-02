@@ -283,12 +283,23 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
      mirrored by gen-topic-bank-sources-browser.mjs) — window.TopicBankSources.
      Shared with notes-factory, update-factory and reporting/index.html so
      there is exactly one place to add a new exam/CSV. -->
-<script src="/question-factory/shared/topic-bank-sources.js?v=20261022a"></script>
+<script src="/question-factory/shared/topic-bank-sources.js?v=20261102a"></script>
 <script>
 "use strict";
-const HEADER =["topic","question_en","question_hi","option1_en","option1_hi","option2_en","option2_hi","option3_en","option3_hi","option4_en","option4_hi","correct","explanation_en","explanation_hi","exam_type_year"];
+const HEADER =["topic","question_en","question_hi","option1_en","option1_hi","option2_en","option2_hi","option3_en","option3_hi","option4_en","option4_hi","correct","explanation_en","explanation_hi","exam_type_year","cognitive_level","exam","subject"];
 var rows = [];
 var cur = 0;
+// Deterministic custom-quiz guardrail tags for the CURRENT batch, resolved once
+// per Topic Bank selection (useTopicBankRow) from topic-bank-sources.mjs's
+// quizExamKey/quizSubjectMap — never asked of DeepSeek, since they describe
+// which syllabus/subject the whole batch belongs to, not a per-question
+// judgment. Blank/blank when the raw subject has no matching WordPress
+// subject term yet (see topic-bank-sources.mjs comment) — leaving both blank
+// together, never one alone, matters: a non-blank exam paired with a blank
+// subject is REJECTED outright by the website's guardrail, worse than the
+// self-learned-topic-tag fallback leaving both blank gets.
+var quizTagExam = '';
+var quizTagSubject = '';
 
 /* ---------- global resilience ---------- */
 function tryRun(fn, btn){
@@ -550,6 +561,40 @@ async function pushTopicBankAdditions(){
   }
 }
 
+// WordPress subject-term slug ("child-development-pedagogy") -> the
+// UPPERCASE_WITH_UNDERSCORES form the quiz CSV's `subject` column expects
+// and custom-quiz's cqp_validate_exam_subject_taxonomy() re-slugifies back
+// down to a real term (cqp_slugify_key: lowercase, '_'/' ' -> '-').
+function quizSubjectKeyFromSlug(slug){
+  return String(slug || '').toUpperCase().replace(/-/g, '_');
+}
+
+// Resolves this raw CSV subject to the custom-quiz guardrail tags by
+// looking up topic-bank-sources.mjs's quizSubjectMap alias (the WP subject
+// term's current display NAME to search for -- usually identical to the
+// raw label itself, only different where the raw syllabus wording and the
+// WordPress term name have deliberately diverged, e.g. "Child Development
+// & Pedagogy" -> "Pedagogy") against window.questionSubjectTerms, the
+// live/synced snapshot loaded once at page load (see the sync IIFE near
+// the end of this file). Never guesses: blank/blank whenever the alias is
+// missing, the taxonomy hasn't loaded, or the aliased name no longer
+// exists (e.g. merged into something else) -- the same "leave both blank
+// together" fallback topic-bank-sources.mjs already documents, now reached
+// automatically on drift instead of only when a human remembered to leave
+// an entry out.
+function resolveQuizTags(source, rawSubjectLabel){
+  const alias = source.quizSubjectMap && source.quizSubjectMap[rawSubjectLabel];
+  if(!alias || !window.questionSubjectTaxonomyReady) return {exam:'', subject:''};
+  // Case-insensitive on purpose: a term being renamed in capitalization only
+  // (e.g. "Computer science" -> "Computer Science") shouldn't need an alias
+  // edit to keep resolving -- a genuine wording change still won't match and
+  // correctly falls back to blank below.
+  const target = String(alias).trim().toLowerCase();
+  const term = (window.questionSubjectTerms || []).find(t => String(t.name).trim().toLowerCase() === target);
+  if(!term) return {exam:'', subject:''};
+  return {exam: source.quizExamKey || '', subject: quizSubjectKeyFromSlug(term.slug)};
+}
+
 function useTopicBankRow(idx){
   const r = topicBankRows && topicBankRows[idx];
   if(!r){ show(msg('topicBankMsg'),'bad','That topic could not be selected. Reload the topic bank and try again.'); return; }
@@ -560,6 +605,11 @@ function useTopicBankRow(idx){
   // Update both fields synchronously so the selection is immediately visible on mobile.
   subject.value = `${source.fallbackLabel} - ${r.subjectLabel}`;
   subtopic.value = r.topic;
+  // Resolve the custom-quiz exam/subject guardrail tags for this exact raw
+  // subject, live against WordPress -- see resolveQuizTags() above.
+  const resolved = resolveQuizTags(source, r.subjectLabel);
+  quizTagExam = resolved.exam;
+  quizTagSubject = resolved.subject;
   subject.dispatchEvent(new Event('input', {bubbles:true}));
   subject.dispatchEvent(new Event('change', {bubbles:true}));
   subtopic.dispatchEvent(new Event('input', {bubbles:true}));
@@ -631,13 +681,17 @@ ${formatRules()}
 CSV RULES:
 - Output ONLY one markdown code block containing valid UTF-8 CSV. No text before or after it.
 - First line exactly:
-topic,question_en,question_hi,option1_en,option1_hi,option2_en,option2_hi,option3_en,option3_hi,option4_en,option4_hi,correct,explanation_en,explanation_hi,exam_type_year
+topic,question_en,question_hi,option1_en,option1_hi,option2_en,option2_hi,option3_en,option3_hi,option4_en,option4_hi,correct,explanation_en,explanation_hi,exam_type_year,cognitive_level
 - topic column is ALWAYS exactly: ${sub}  (the sub-topic — never "${subj}", never a subject/exam label)
 - EVERY field wrapped in straight double quotes ("), inner quotes doubled. Use only straight quotes, never curly quotes.
 - No commas problems: since every field is quoted, commas inside text are fine.
 - correct = 1, 2, 3 or 4 only. No blank fields.
 - Keep each option under 200 characters and each explanation under 2 sentences (website database limit).
 - exam_type_year: leave this field COMPLETELY BLANK ("") unless the question genuinely and specifically matches one of the verified WordPress terms listed above. Blank is the expected, normal answer for most questions. NEVER invent a label or add a year/punctuation. If one term clearly fits, use its exact name. When unsure, leave it blank.
+- cognitive_level: classify EVERY question as exactly 1, 2 or 3 — never blank, never any other value:
+  1 = Recall (a direct fact, date, name or definition, answerable from memory alone)
+  2 = Conceptual (requires understanding or applying a principle, not just recalling it)
+  3 = Case-study (a scenario/classroom situation the candidate must reason through)
 - Explanation: 1-2 sentences on why the correct option is right (maths: show the quick calculation).`;
 }
 function copyPrompt(btn){
@@ -805,7 +859,7 @@ function checkCsv(){
   if(!parsed.length){ show(m,'bad','Could not read any rows.'); return; }
   if(norm(parsed[0][0])==='topic') parsed.shift();
 
-  const pre = P(), lang = pre.lang;
+  const lang = document.getElementById('language').value;
   const subj = document.getElementById('subject').value.trim();
   const sub  = document.getElementById('subtopic').value.trim() || subj;
   if(!subj){ show(m,'bad','Open Topic bank, choose a subject, then tap Use on a topic, before pasting a CSV.'); return; }
@@ -830,7 +884,7 @@ function checkCsv(){
   parsed.forEach((r,ri)=>{
     if(r.length<3){ return; } // stray text line around the CSV — ignore silently
     const issues=[];
-    if(r.length!==15){ problems.push('Row '+(ri+1)+': '+r.length+' columns (needs 15) — excluded'); badN++; return; }
+    if(r.length!==16){ problems.push('Row '+(ri+1)+': '+r.length+' columns (needs 16) — excluded'); badN++; return; }
     const f = r.map(x=>String(x).replace(/\s+/g,' ').trim());
     if(f[0]!==sub){ f[0]=sub; fixedTopic++; }
     // language auto-fix
@@ -840,7 +894,8 @@ function checkCsv(){
     const fx = fixExam(f[14]); if(fx!==f[14]){ f[14]=fx; fixedExam++; }
     // validations
     if(!/^[1-4]$/.test(f[11])) issues.push('correct = "'+f[11]+'"');
-    f.forEach((v,i)=>{ if(v==='' && i!==14) issues.push(HEADER[i]+' blank'); }); // exam_type_year (14) is allowed to be blank on purpose
+    if(!/^[1-3]$/.test(f[15])) issues.push('cognitive_level = "'+f[15]+'" (must be 1, 2 or 3)');
+    f.forEach((v,i)=>{ if(v==='' && i!==14 && i!==15) issues.push(HEADER[i]+' blank'); }); // exam_type_year (14) is allowed to be blank on purpose; cognitive_level (15) has its own message above
     if(f[1].length<10) issues.push('question too short');
     if(f[1].length>1200 || f[2].length>1200) issues.push('question too long for website DB');
     for(let i=3;i<=10;i++){ if(f[i].length>280){ issues.push(HEADER[i]+' too long ('+f[i].length+' chars) — website DB limit'); break; } }
@@ -855,6 +910,7 @@ function checkCsv(){
     const ok = issues.length===0;
     if(ok) shuffleRow(f);
     else problems.push('Row '+(ri+1)+': '+issues.join('; '));
+    f.push(quizTagExam, quizTagSubject); // deterministic guardrail tags for this batch — see quizTagExam/quizTagSubject comment near HEADER
     rows.push({fields:f, status: ok?'ok':'bad', issues, verified:null, checkerAns:null});
     ok? added++ : badN++;
   });
@@ -926,11 +982,11 @@ function compareAnswers(){
 function unresolved(){ return okRows().filter(r=>r.verified!==true); }
 function buildResolver(){
   const bad = unresolved();
-  const pre=P();
+  const lang = document.getElementById('language').value;
   let p = `You are a senior question-paper reviewer for Indian teacher exams. For each MCQ below, two different reviews disagreed about the answer. Decide the FINAL correct option with full care — solve/verify from first principles.
 
 Reply with ONE line per question in EXACTLY this format (pipe-separated):
-QUESTIONNUMBER=FINALOPTION | corrected English explanation (1-2 sentences) | ${pre.lang==='en'?'same English explanation again':'उसी की हिंदी व्याख्या'}
+QUESTIONNUMBER=FINALOPTION | corrected English explanation (1-2 sentences) | ${lang==='en'?'same English explanation again':'उसी की हिंदी व्याख्या'}
 If the question itself is flawed (no single correct option), reply: QUESTIONNUMBER=0 | flawed | flawed
 No other text.
 
@@ -960,7 +1016,7 @@ function applyResolve(){
     if(a===0){ r.verified=false; r.status='bad'; r.issues.push('flawed question'); dropped++; return; }
     r.fields[11]=String(a);
     const en=(x[3]||'').trim(), hi=(x[4]||'').trim();
-    if(en){ r.fields[12]=en; r.fields[13]= hi || (P().lang==='en'? en : r.fields[13]); }
+    if(en){ r.fields[12]=en; r.fields[13]= hi || (document.getElementById('language').value==='en'? en : r.fields[13]); }
     r.verified=true; fixed++;
   });
   if(!any){ show(m,'bad','Could not read the reply — expected lines like 3=2 | explanation | व्याख्या'); return; }
@@ -1125,7 +1181,7 @@ async function autoSaveQuestionsToGithub(btn){
 }
 function resetAll(){
   if(!confirm('Clear all questions and start fresh?')) return;
-  rows=[]; cur=0;
+  rows=[]; cur=0; quizTagExam=''; quizTagSubject='';
   ['csvIn','oldCsv','verifyIn','verifyPrompt','resolveIn','resolvePrompt','finalOut','promptOut'].forEach(id=>document.getElementById(id).value='');
   document.querySelectorAll('.msg').forEach(e=>e.className='msg');
   document.querySelectorAll('.stats').forEach(e=>e.innerHTML='');
@@ -1189,6 +1245,27 @@ render();
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncQuestionExamTaxonomy);
   else syncQuestionExamTaxonomy();
+})();
+// Loaded silently (no visible status row, unlike exam above) since this
+// only feeds the quiz CSV's exam/subject guardrail tags -- a WordPress
+// outage or a not-yet-created term just means resolveQuizTags() above
+// leaves both blank, the same safe fallback topic-bank-sources.mjs already
+// documents, not a user-facing error.
+(function(){
+  window.questionSubjectTaxonomyReady = false;
+  window.questionSubjectTerms = [];
+  async function syncQuestionSubjectTaxonomy(){
+    try {
+      const terms = await window.WordPressTaxonomy.fetchTerms('subject');
+      window.questionSubjectTerms = terms;
+      window.questionSubjectTaxonomyReady = terms.length > 0;
+    } catch(error) {
+      window.questionSubjectTaxonomyReady = false;
+      window.questionSubjectTerms = [];
+    }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncQuestionSubjectTaxonomy);
+  else syncQuestionSubjectTaxonomy();
 })();
 </script>
 </body>

@@ -1,7 +1,14 @@
-name: Sync WordPress exam taxonomy snapshot
+name: Sync WordPress taxonomy snapshots
 
 on:
   workflow_dispatch:
+  # Fired by the WordPress term-change hook (examnotepdf-core.php) within
+  # ~30s of an exam/subject/course term being created, edited, or deleted
+  # on production -- see that file's enp_trigger_taxonomy_sync_event().
+  # The nightly schedule below stays as a safety net for any dispatch that
+  # never arrives (e.g. GitHub was unreachable at the moment of the edit).
+  repository_dispatch:
+    types: [taxonomy-changed]
   schedule:
     - cron: "17 3 * * *"
 
@@ -9,24 +16,37 @@ permissions:
   contents: write
 
 concurrency:
-  group: sync-exam-taxonomy
+  group: sync-taxonomy-snapshots
   cancel-in-progress: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1 # serialize commits to main -- avoids 3 simultaneous pushes racing each other
+      matrix:
+        taxonomy: [exam, subject, course]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # pull the latest commit each time through the matrix, since the
+          # previous taxonomy's step may have just pushed to main
+          ref: main
 
-      - name: Fetch and validate current exam taxonomy
+      - name: Fetch and validate current ${{ matrix.taxonomy }} taxonomy
+        env:
+          TAXONOMY: ${{ matrix.taxonomy }}
         run: |
           set -euo pipefail
           node <<'NODE'
           const fs = require('node:fs');
           const https = require('node:https');
           const siteUrl = 'https://examnotespdf.in';
-          const endpoint = siteUrl + '/wp-json/wp/v2/exam';
+          const taxonomy = process.env.TAXONOMY;
+          if (!/^[a-z0-9_-]+$/i.test(taxonomy)) throw new Error('Invalid taxonomy name');
+          const endpoint = siteUrl + '/wp-json/wp/v2/' + taxonomy;
+          const outFile = 'shared/data/' + taxonomy + '-taxonomy.json';
           const get = url => new Promise((resolve, reject) => {
             https.get(url, { headers: { 'User-Agent': 'question-factory-taxonomy-sync/1.0' } }, res => {
               let body = '';
@@ -64,21 +84,25 @@ jobs:
               if (ids.has(term.id) || names.has(term.name)) throw new Error('Duplicate taxonomy ID or exact name; refusing snapshot update');
               ids.add(term.id); names.add(term.name);
             }
-            const snapshot = { schemaVersion: 1, siteUrl, taxonomy: 'exam', syncedAt: new Date().toISOString(), terms: normalized };
-            fs.writeFileSync('shared/data/exam-taxonomy.json', JSON.stringify(snapshot, null, 2) + '\n');
-            console.log('Validated ' + normalized.length + ' exam terms from WordPress.');
+            const snapshot = { schemaVersion: 1, siteUrl, taxonomy, syncedAt: new Date().toISOString(), terms: normalized };
+            fs.writeFileSync(outFile, JSON.stringify(snapshot, null, 2) + '\n');
+            console.log('Validated ' + normalized.length + ' ' + taxonomy + ' terms from WordPress.');
           })().catch(error => { console.error(error.message); process.exit(1); });
           NODE
 
       - name: Commit snapshot only when changed
+        env:
+          TAXONOMY: ${{ matrix.taxonomy }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- shared/data/exam-taxonomy.json; then
-            echo "Taxonomy is unchanged; no commit needed."
+          out="shared/data/${TAXONOMY}-taxonomy.json"
+          if git diff --quiet -- "$out"; then
+            echo "$TAXONOMY taxonomy is unchanged; no commit needed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add shared/data/exam-taxonomy.json
-          git commit -m "chore: sync verified WordPress exam taxonomy"
+          git add "$out"
+          git commit -m "chore: sync verified WordPress $TAXONOMY taxonomy"
+          git pull --rebase origin main
           git push

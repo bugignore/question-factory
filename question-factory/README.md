@@ -8,7 +8,7 @@ A single-page tool for generating verified, bilingual exam MCQs (CTET / KVS / DS
 ## What it does
 
 1. **Build prompt** — pick a subject preset (Pedagogy, Mathematics, Reasoning, GS, English-only, Hindi-only). It generates a strict prompt for DeepSeek: topic column locked, formulas in plain Unicode, data-interpretation questions self-contained in text, correct language rules per subject.
-2. **Check, fix & shuffle** — paste DeepSeek's CSV. The tool validates all 15 columns, fixes the topic column, normalizes `exam_type_year`, enforces the language rules, removes duplicates, and **shuffles answer positions locally** so correct answers are evenly spread across options 1–4.
+2. **Check, fix & shuffle** — paste DeepSeek's CSV. The tool validates all 16 columns (including `cognitive_level`), fixes the topic column, normalizes `exam_type_year`, enforces the language rules, removes duplicates, appends the deterministic `exam`/`subject` guardrail tags for the Topic Bank selection, and **shuffles answer positions locally** so correct answers are evenly spread across options 1–4.
 3. **Verify** — a checker prompt (questions only, answers stripped) goes into a *new* DeepSeek chat. The tool compares both passes; mismatches can be fixed via a third "resolver" pass that also rewrites the explanation, or discarded.
 4. **Export** — copy the final verified CSV to clipboard (mobile-friendly), download it as a file, or unlock with the app password (once per browser) and tap **"Auto-save to GitHub"** to push it straight into `pending-questions/` in this repo — no GitHub login or token needed by whoever's using the tool.
 
@@ -25,7 +25,9 @@ POSTs the CSV to https://yoursite.com/wp-json/quiz/v1/import
   (authenticated with a WordPress Application Password + a shared secret key,
    both required — see "Password protection" below)
                              ↓
-Rows are validated and inserted as status=draft (never live automatically)
+Rows are validated (16-column shape, cognitive_level 1-3, and the
+exam/subject publish guardrail — see "CSV format" below) and inserted
+as status=draft (never live automatically)
                              ↓
 File moves to published-questions/<name>.csv + a .result.json with the
 import counts; you still open Quiz App → Preview and publish manually.
@@ -59,13 +61,39 @@ If it fails (bad WordPress credentials, network issue, a malformed CSV), the fil
 - Every imported row lands as **`status = draft`** — nothing an automated import writes can appear on the live site without a human opening Quiz App → Preview and publishing it.
 - If the key ever leaks, edit the constant in `wp-config.php` to a new random value and update the `QUIZ_IMPORT_SECRET` GitHub secret to match — the old key stops working immediately, no plugin/database change needed.
 
+## Keeping the exam/subject/course taxonomy snapshots in sync (owner setup, one time)
+
+`shared/data/{exam,subject,course}-taxonomy.json` are this repo's offline fallback for `shared/wordpress-taxonomy.js` (used by Notes/Question/Long-Post/Update Factory alike) — WordPress itself is always consulted live first; these files only matter when that live request fails. `.github/workflows/sync-taxonomy-snapshots.yml` keeps them current three ways: a nightly cron, a manual **Run workflow** button, and — once set up below — automatically within ~30-60s of an exam/subject/course term actually being created, renamed, merged, or deleted on production WordPress (2026-11-02: added after a same-day rename sat unreflected for hours).
+
+1. **GitHub token** — a fine-grained Personal Access Token scoped to *this repo only*, permission **Contents: Read and write** is enough since it only fires a `repository_dispatch` (Settings → Developer settings → Personal access tokens → Fine-grained tokens, on whichever GitHub account owns this repo).
+2. **wp-config.php constant** — added via SSH only, same convention as `QUIZ_IMPORT_SECRET` above (never in wp-admin, never in git), and **only ever on production** — this snapshot is meant to mirror production, not whatever staging happens to contain:
+   ```php
+   define( 'GH_TAXONOMY_SYNC_TOKEN', 'the-token-from-step-1' );
+   ```
+   Leaving this undefined (e.g. on staging) makes the WordPress-side hook a safe no-op — it logs and returns, nothing else changes.
+3. That's it — no GitHub Actions secret needed for this one, since the token lives only in WordPress, which is the caller. If it ever leaks, revoke it on GitHub and replace the `wp-config.php` constant with a newly generated one.
+
 ## CSV format
+
+DeepSeek is asked to output 16 columns (the tool validates these):
 
 ```
 topic,question_en,question_hi,option1_en,option1_hi,option2_en,option2_hi,
 option3_en,option3_hi,option4_en,option4_hi,correct,explanation_en,
-explanation_hi,exam_type_year
+explanation_hi,exam_type_year,cognitive_level
 ```
+
+- `exam_type_year` — leave blank unless the question matches a verified WordPress `exam_type_year` term exactly; blank is normal and expected for most questions.
+- `cognitive_level` — every row must be exactly `1` (Recall), `2` (Conceptual) or `3` (Case-study); never blank. The generation prompt asks DeepSeek to self-classify each question, the same way it classifies `exam_type_year`.
+
+Before export, the tool appends two more columns itself — never asked of DeepSeek, since they describe which syllabus/subject the whole batch belongs to, not a per-question judgment — making the final CSV 18 columns:
+
+```
+...,exam_type_year,cognitive_level,exam,subject
+```
+
+- `exam` / `subject` — the custom-quiz plugin's publish guardrail (added 2026-10-24) rejects a brand-new topic (one with no `exam`/`subject` tag that was never imported+tagged before) outright. The tool resolves these two columns once per Topic Bank selection: `quizExamKey` in [`Automation/core/src/topic-bank-sources.mjs`](../Automation/core/src/topic-bank-sources.mjs) is a plain literal; `subject` is resolved **live** — `quizSubjectMap` there gives the WordPress `subject` term's current display name to search for (keyed by the exact raw "Subject" value of the chosen syllabus CSV), which the tool looks up against `window.questionSubjectTerms` (fetched live from WordPress on page load, falling back to the synced `shared/data/subject-taxonomy.json` snapshot if WordPress is unreachable — see `shared/wordpress-taxonomy.js`), then converts that term's current slug into the guardrail's expected key. A rename/merge on the WordPress side (e.g. the 2026-11-01 CDP → Pedagogy merge) resolves correctly on the next page load, with no code change needed — only the alias in `quizSubjectMap` itself ever needs editing, and only when the raw syllabus wording and the WordPress term's name genuinely diverge.
+- If the chosen subject has no WordPress `subject` taxonomy term yet (as of 2026-10-31: Reasoning, Science, Geography, Numerical Ability, Domestic Science), or the alias no longer matches any live term, **both** columns are left blank together — never `exam` alone, since a non-blank `exam` with a blank `subject` is rejected outright, worse than leaving both blank (which falls back to the site's self-learned topic-tag matching, the pre-guardrail behaviour).
 
 ## Hosting setup (one time, ~3 minutes, works from a phone)
 

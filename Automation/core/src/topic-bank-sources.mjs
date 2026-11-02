@@ -40,6 +40,44 @@
 //   questionPresetMap  - raw CSV "Subject" value -> question-factory's
 //                        bilingual PRESET key. Subjects with no entry here
 //                        fall back to Custom + fallbackLabel above.
+//   quizExamKey        - the custom-quiz plugin's `exam` guardrail key for
+//                        this source (e.g. 'CTET'), verified to slugify
+//                        (lowercase, '_'/' ' -> '-') to a real, currently-
+//                        existing WordPress `exam` taxonomy term slug. Used
+//                        to tag question-factory's CSV export so new topics
+//                        pass custom-quiz's exam+subject publish guardrail
+//                        (added 2026-10-24) instead of being silently
+//                        rejected on import. Exam names rarely change, and
+//                        the server already self-validates this via
+//                        term_exists() at import time, so this stays a
+//                        plain literal.
+//   quizSubjectMap     - raw CSV "Subject" value -> the WordPress `subject`
+//                        taxonomy term's current display NAME to search for
+//                        (2026-11-02: changed from a frozen final guardrail
+//                        key to this live-resolved alias — see
+//                        resolveQuizTags() in question-factory/index.html,
+//                        which looks this name up against
+//                        window.questionSubjectTerms, the live/synced
+//                        snapshot, and derives the actual guardrail key from
+//                        whatever that term's slug currently is). Usually
+//                        identical to the raw CSV label itself; only
+//                        written differently where the raw syllabus wording
+//                        and the WordPress term's name have deliberately
+//                        diverged (e.g. "Child Development & Pedagogy" here
+//                        -> the WordPress term actually named "Pedagogy").
+//                        A raw subject with NO entry here has no matching
+//                        WordPress subject term at all yet (e.g. Reasoning,
+//                        Science, Geography, Numerical Ability) — leave it
+//                        out entirely rather than guess; question-factory
+//                        then leaves BOTH exam and subject blank for it
+//                        (never quizExamKey alone, since the guardrail
+//                        rejects a non-blank exam paired with a blank
+//                        subject outright, worse than leaving both blank,
+//                        which falls back to self-learned topic tags, same
+//                        as before this guardrail existed). An alias that
+//                        no longer matches any live term (deleted/renamed
+//                        again) resolves to blank the same way — fails
+//                        safe, never guesses.
 export const TOPIC_BANK_SOURCES = {
   'ctet-paper-1': {
     label: 'CTET 2026 — Paper I (Primary, Classes 1-5)',
@@ -50,6 +88,8 @@ export const TOPIC_BANK_SOURCES = {
     fallbackLabel: 'CTET Paper I',
     notesSubjectMap: { 'Child Development & Pedagogy': 'CDP', 'Mathematics': 'Maths', 'EVS': 'EVS', 'English': 'English', 'Hindi': 'Hindi' },
     questionPresetMap: { 'Child Development & Pedagogy': 'pedagogy', 'Mathematics': 'math', 'EVS': 'gs', 'English': 'english', 'Hindi': 'hindi' },
+    quizExamKey: 'CTET',
+    quizSubjectMap: { 'Child Development & Pedagogy': 'Pedagogy', 'Mathematics': 'Mathematics', 'EVS': 'EVS', 'English': 'CTET ENGLISH', 'Hindi': 'Hindi' },
   },
   'ctet-paper-2': {
     label: 'CTET 2026 — Paper II (Elementary, Classes 6-8)',
@@ -60,6 +100,9 @@ export const TOPIC_BANK_SOURCES = {
     fallbackLabel: 'CTET Paper II',
     notesSubjectMap: { 'Child Development & Pedagogy': 'CDP', 'English': 'English', 'Hindi': 'Hindi', 'Science': 'Science', 'History': 'History', 'Geography': 'Geography' },
     questionPresetMap: { 'Child Development & Pedagogy': 'pedagogy', 'English': 'english', 'Hindi': 'hindi', 'Science': 'gs', 'History': 'gs', 'Geography': 'gs' },
+    quizExamKey: 'CTET',
+    // Science/Geography have no matching WordPress `subject` term yet — omitted on purpose, see quizSubjectMap comment above.
+    quizSubjectMap: { 'Child Development & Pedagogy': 'Pedagogy', 'English': 'CTET ENGLISH', 'Hindi': 'Hindi', 'History': 'History' },
   },
   'bpsc-tre-4': {
     label: 'BPSC TRE 4 — Primary Teacher',
@@ -70,6 +113,11 @@ export const TOPIC_BANK_SOURCES = {
     fallbackLabel: 'BPSC TRE 4',
     notesSubjectMap: { 'हिंदी': 'Hindi', 'अंग्रेजी': 'English', 'गणित': 'Maths', 'विज्ञान': 'Science', 'इतिहास': 'History', 'भूगोल': 'Geography' },
     questionPresetMap: { 'हिंदी': 'hindi', 'अंग्रेजी': 'english', 'गणित': 'math', 'विज्ञान': 'gs', 'इतिहास': 'gs', 'भूगोल': 'gs' },
+    // BPSC_TRE_4 (not the legacy BPSC_GENERAL_AWARENESS key) — slugifies directly
+    // to the real, specific `bpsc-tre-4` exam term instead of its generic parent.
+    quizExamKey: 'BPSC_TRE_4',
+    // विज्ञान (Science) / भूगोल (Geography) have no matching WordPress `subject` term yet — omitted on purpose.
+    quizSubjectMap: { 'हिंदी': 'Hindi', 'अंग्रेजी': 'CTET ENGLISH', 'गणित': 'Mathematics', 'इतिहास': 'History' },
   },
   'dsssb-tgt-cs': {
     label: 'DSSSB 2026 — TGT Computer Science',
@@ -80,6 +128,10 @@ export const TOPIC_BANK_SOURCES = {
     fallbackLabel: 'DSSSB TGT Computer Science',
     notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English', 'Numerical Ability': 'Maths' },
     questionPresetMap: { 'Hindi': 'hindi', 'English': 'english', 'General Awareness': 'gs', 'Numerical Ability': 'math', 'Reasoning': 'reasoning' },
+    quizExamKey: 'DSSSB_TGT',
+    // Numerical Ability/Reasoning have no matching WordPress `subject` term yet — omitted on purpose.
+    // "Computer science" (lowercase 's') is this term's actual live WordPress name.
+    quizSubjectMap: { 'Hindi': 'Hindi', 'English': 'CTET ENGLISH', 'General Awareness': 'General Awareness', 'Computer Science': 'Computer science' },
   },
   'dsssb-domestic-science': {
     label: 'DSSSB 2026 — Domestic Science Teacher',
@@ -90,6 +142,9 @@ export const TOPIC_BANK_SOURCES = {
     fallbackLabel: 'DSSSB Domestic Science',
     notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English', 'Numerical Ability': 'Maths' },
     questionPresetMap: { 'Hindi': 'hindi', 'English': 'english', 'General Awareness': 'gs', 'Numerical Ability': 'math', 'Reasoning': 'reasoning' },
+    quizExamKey: 'DSSSB_TGT',
+    // Numerical Ability/Reasoning/Domestic Science have no matching WordPress `subject` term yet — omitted on purpose.
+    quizSubjectMap: { 'Hindi': 'Hindi', 'English': 'CTET ENGLISH', 'General Awareness': 'General Awareness' },
   },
   'dsssb-tgt-special-ed': {
     label: 'DSSSB 2026 — TGT Special Education Teacher',
@@ -100,6 +155,13 @@ export const TOPIC_BANK_SOURCES = {
     fallbackLabel: 'DSSSB TGT Special Education',
     notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English', 'Numerical Ability': 'Maths' },
     questionPresetMap: { 'Hindi': 'hindi', 'English': 'english', 'General Awareness': 'gs', 'Numerical Ability': 'math', 'Reasoning': 'reasoning' },
+    // Existing legacy key (already in custom-quiz's own exam-slug exception map,
+    // resolves to the real `dsssb-tgt-special-educator` term) — reused as-is for
+    // consistency with whatever this topic's rows are already tagged with.
+    quizExamKey: 'DSSSB_SPECIAL_EDUCATOR_TGT',
+    // Numerical Ability/Reasoning have no matching WordPress `subject` term yet — omitted on purpose.
+    // "DSSSB -Special Education" (with that exact spacing) is this term's actual live WordPress name.
+    quizSubjectMap: { 'Hindi': 'Hindi', 'English': 'CTET ENGLISH', 'General Awareness': 'General Awareness', 'Special Education': 'DSSSB -Special Education' },
   },
   'dsssb-special-educator-primary': {
     label: 'DSSSB 2026 — Special Educator (Primary)',
@@ -110,5 +172,8 @@ export const TOPIC_BANK_SOURCES = {
     fallbackLabel: 'DSSSB Special Educator',
     notesSubjectMap: { 'Hindi': 'Hindi', 'English': 'English', 'Numerical Ability': 'Maths' },
     questionPresetMap: { 'Hindi': 'hindi', 'English': 'english', 'General Awareness': 'gs', 'Numerical Ability': 'math', 'Reasoning': 'reasoning' },
+    quizExamKey: 'DSSSB_PRT_SPECIAL_EDUCATOR',
+    // Numerical Ability/Reasoning have no matching WordPress `subject` term yet — omitted on purpose.
+    quizSubjectMap: { 'Hindi': 'Hindi', 'English': 'CTET ENGLISH', 'General Awareness': 'General Awareness', 'Special Education': 'DSSSB -Special Education' },
   },
 };
