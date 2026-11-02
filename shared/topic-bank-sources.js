@@ -18,7 +18,15 @@
 // gen-topic-bank-sources-browser.mjs) — never hand-edit a second copy.
 //
 // Field meanings:
-//   label          - human-readable name shown in the "Exam source" picker.
+//   label          - name shown in the "Exam" picker. Matches the live
+//                    WordPress `exam` taxonomy term's display name exactly
+//                    (2026-11-02: previously a free-form description, which
+//                    read as a mismatch once that picker became a top-level
+//                    field instead of being buried in an accordion) — with a
+//                    parenthetical subject hint appended only where more than
+//                    one source shares the same WP exam term (e.g. DSSSB TGT
+//                    Computer Science vs Domestic Science both tag `exam` as
+//                    plain "DSSSB TGT", see quizExamKey below).
 //   url            - raw.githubusercontent.com URL the browser tools fetch
 //                    the CSV from (works from any origin, incl. GitHub Pages).
 //   csvPath        - the same file, as a repo-relative path. reporting/
@@ -85,7 +93,7 @@
 //                        safe, never guesses.
 const TOPIC_BANK_SOURCES = {
   'ctet-paper-1': {
-    label: 'CTET 2026 — Paper I (Primary, Classes 1-5)',
+    label: 'CTET Paper 1',
     url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/CTET-2026-Paper-1-Topics.csv',
     csvPath: 'Automation/input sylabuss/CTET-2026-Paper-1-Topics.csv',
     examMatch: 'CTET Paper I',
@@ -97,7 +105,7 @@ const TOPIC_BANK_SOURCES = {
     quizSubjectMap: { 'Child Development & Pedagogy': 'Pedagogy', 'Mathematics': 'Mathematics', 'EVS': 'EVS', 'English': 'CTET ENGLISH', 'Hindi': 'Hindi' },
   },
   'ctet-paper-2': {
-    label: 'CTET 2026 — Paper II (Elementary, Classes 6-8)',
+    label: 'CTET Paper 2',
     url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/CTET-2026-Paper-2-Topics.csv',
     csvPath: 'Automation/input sylabuss/CTET-2026-Paper-2-Topics.csv',
     examMatch: 'CTET Paper II',
@@ -110,7 +118,7 @@ const TOPIC_BANK_SOURCES = {
     quizSubjectMap: { 'Child Development & Pedagogy': 'Pedagogy', 'English': 'CTET ENGLISH', 'Hindi': 'Hindi', 'History': 'History' },
   },
   'bpsc-tre-4': {
-    label: 'BPSC TRE 4 — Primary Teacher',
+    label: 'BPSC TRE 4',
     url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/BPSC-TRE-4-Primary-Teacher-SEO-Topics-Hindi-v2.csv',
     csvPath: 'Automation/input sylabuss/BPSC-TRE-4-Primary-Teacher-SEO-Topics-Hindi-v2.csv',
     examMatch: 'BPSC TRE',
@@ -125,7 +133,7 @@ const TOPIC_BANK_SOURCES = {
     quizSubjectMap: { 'हिंदी': 'Hindi', 'अंग्रेजी': 'CTET ENGLISH', 'गणित': 'Mathematics', 'इतिहास': 'History' },
   },
   'dsssb-tgt-cs': {
-    label: 'DSSSB 2026 — TGT Computer Science',
+    label: 'DSSSB TGT (Computer Science)',
     url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-TGT-Computer-Science-Topics.csv',
     csvPath: 'Automation/input sylabuss/DSSSB-2026-TGT-Computer-Science-Topics.csv',
     examMatch: 'DSSSB',
@@ -139,7 +147,7 @@ const TOPIC_BANK_SOURCES = {
     quizSubjectMap: { 'Hindi': 'Hindi', 'English': 'CTET ENGLISH', 'General Awareness': 'General Awareness', 'Computer Science': 'Computer science' },
   },
   'dsssb-domestic-science': {
-    label: 'DSSSB 2026 — Domestic Science Teacher',
+    label: 'DSSSB TGT (Domestic Science)',
     url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-Domestic-Science-Teacher-Topics.csv',
     csvPath: 'Automation/input sylabuss/DSSSB-2026-Domestic-Science-Teacher-Topics.csv',
     examMatch: 'DSSSB',
@@ -152,7 +160,7 @@ const TOPIC_BANK_SOURCES = {
     quizSubjectMap: { 'Hindi': 'Hindi', 'English': 'CTET ENGLISH', 'General Awareness': 'General Awareness' },
   },
   'dsssb-tgt-special-ed': {
-    label: 'DSSSB 2026 — TGT Special Education Teacher',
+    label: 'DSSSB TGT - Special Educator',
     url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-TGT-Special-Education-Teacher-Topics.csv',
     csvPath: 'Automation/input sylabuss/DSSSB-2026-TGT-Special-Education-Teacher-Topics.csv',
     examMatch: 'DSSSB',
@@ -169,7 +177,7 @@ const TOPIC_BANK_SOURCES = {
     quizSubjectMap: { 'Hindi': 'Hindi', 'English': 'CTET ENGLISH', 'General Awareness': 'General Awareness', 'Special Education': 'DSSSB -Special Education' },
   },
   'dsssb-special-educator-primary': {
-    label: 'DSSSB 2026 — Special Educator (Primary)',
+    label: 'DSSSB PRT - Special Educator',
     url: 'https://raw.githubusercontent.com/bugignore/question-factory/main/Automation/input%20sylabuss/DSSSB-2026-Special-Educator-Primary-Topics.csv',
     csvPath: 'Automation/input sylabuss/DSSSB-2026-Special-Educator-Primary-Topics.csv',
     examMatch: 'DSSSB',
