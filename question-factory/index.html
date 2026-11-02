@@ -139,50 +139,46 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 <section class="step show" id="step0">
   <h2>1 · Build &amp; copy prompt</h2>
   <p class="hint">Paste it in a new DeepSeek chat. नई DeepSeek चैट में डालें।</p>
-  <p class="hint">Choose an exam source, subject and topic from the topic bank. The website subject label is filled automatically; you do not type taxonomy or subject names.</p>
+
+  <label>Exam</label>
+  <select id="topicBankSource" aria-label="Exam" autocomplete="off" onchange="loadTopicBankForSource(this.value)"></select>
+
+  <label style="margin-top:8px">Subject</label>
+  <select id="topicBankSubject" aria-label="Subject" autocomplete="off" onchange="tryRun(onTopicBankSubjectChange)">
+    <option value="">Pick a subject…</option>
+  </select>
+
+  <input type="text" id="topicBankSearch" placeholder="Search within this subject…" oninput="renderTopicBank()" style="margin-top:8px">
+  <div id="topicBankList" style="margin-top:8px;max-height:280px;overflow-y:auto"></div>
+  <div class="msg" id="topicBankMsg"></div>
+  <input type="hidden" id="subject">
+
   <div class="row2">
-    <div><label>Website subject label (filled from Topic bank)</label><input type="text" id="subject" placeholder="Choose a topic below to fill this automatically" readonly aria-readonly="true"></div>
+    <div><label>Topic</label><input type="text" id="subtopic" placeholder="e.g. Heredity and Environment" autocomplete="off"></div>
     <div><label>Questions (5–50)</label><input type="number" id="count" value="15" min="5" max="50" inputmode="numeric"></div>
   </div>
-  <label>Sub-topic</label>
-  <input type="text" id="subtopic" placeholder="e.g. Heredity and Environment" autocomplete="off">
   <div class="row2">
     <div><label>Output language</label><select id="language"><option value="bi">Bilingual — English + Hindi</option><option value="en">English only</option><option value="hi">Hindi only</option></select></div>
     <div><label>Question style / coverage (optional)</label><input type="text" id="questionMix" placeholder="e.g. scenario-based, assertion-reason"></div>
   </div>
 
-  <details id="topicBankDetails" ontoggle="openTopicBank()" style="margin-top:8px">
-    <summary>📚 Topic bank — pick a subject to browse, click a topic to use it</summary>
+  <details style="margin-top:8px">
+    <summary>➕ Add topics to this syllabus (same CSV file notes-factory/update-factory read from)</summary>
     <div>
-      <p class="hint" style="margin-top:8px">Same research-planned SEO topics used by the notes factory, loaded on demand from the repo's own topic-research CSVs — not bundled into the page, and only the subject you pick is shown, not the whole list at once.</p>
-      <label style="margin-top:4px">Exam source</label>
-      <select id="topicBankSource" aria-label="Exam source" autocomplete="off" onchange="loadTopicBankForSource(this.value)"></select>
-      <select id="topicBankSubject" aria-label="Subject" autocomplete="off" onchange="renderTopicBank()" style="margin-top:8px">
-        <option value="">Pick a subject to browse…</option>
-      </select>
-      <input type="text" id="topicBankSearch" placeholder="Search within this subject…" oninput="renderTopicBank()" style="margin-top:8px">
-      <div id="topicBankList" style="margin-top:8px;max-height:280px;overflow-y:auto"></div>
-      <div class="msg" id="topicBankMsg"></div>
+      <p class="hint" style="margin-top:8px">Adds to whichever Exam source is picked above — saved topics appear in the list above next time this syllabus is loaded (including in notes-factory and update-factory, same shared file).</p>
+      <label style="margin-top:4px">Subject</label>
+      <input type="text" id="tbNewSubject" list="tbSubjectSuggest" placeholder="Must match an existing subject to group correctly, or type a new one">
+      <datalist id="tbSubjectSuggest"></datalist>
+      <label>New topic</label>
+      <input type="text" id="tbNewTopic" placeholder="Topic text, exactly as it should appear">
+      <button class="btn small ghost" onclick="tryRun(addSingleTopicToBank,this)">➕ Add to list below</button>
 
-      <details style="margin-top:14px">
-        <summary>➕ Add topics to this syllabus (same CSV file notes-factory/update-factory read from)</summary>
-        <div>
-          <p class="hint" style="margin-top:8px">Adds to whichever Exam source is picked above — saved topics appear in the list above next time this syllabus is loaded (including in notes-factory and update-factory, same shared file).</p>
-          <label style="margin-top:4px">Subject</label>
-          <input type="text" id="tbNewSubject" list="tbSubjectSuggest" placeholder="Must match an existing subject to group correctly, or type a new one">
-          <datalist id="tbSubjectSuggest"></datalist>
-          <label>New topic</label>
-          <input type="text" id="tbNewTopic" placeholder="Topic text, exactly as it should appear">
-          <button class="btn small ghost" onclick="tryRun(addSingleTopicToBank,this)">➕ Add to list below</button>
+      <label style="margin-top:14px">Or bulk-add from a CSV (Subject,Topic columns)</label>
+      <input type="file" id="tbCsvUpload" accept=".csv" onchange="tryRun(()=>previewTopicCsvUpload(this))">
+      <p class="hint" style="margin-top:4px">Duplicates (same Subject+Topic, already in the syllabus or already added below) are skipped automatically.</p>
 
-          <label style="margin-top:14px">Or bulk-add from a CSV (Subject,Topic columns)</label>
-          <input type="file" id="tbCsvUpload" accept=".csv" onchange="tryRun(()=>previewTopicCsvUpload(this))">
-          <p class="hint" style="margin-top:4px">Duplicates (same Subject+Topic, already in the syllabus or already added below) are skipped automatically.</p>
-
-          <div id="tbPendingWrap" style="margin-top:10px"></div>
-          <div class="msg" id="tbUploadMsg"></div>
-        </div>
-      </details>
+      <div id="tbPendingWrap" style="margin-top:10px"></div>
+      <div class="msg" id="tbUploadMsg"></div>
     </div>
   </details>
 
@@ -197,14 +193,12 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   </div></details>
   <details><summary>Website taxonomy status</summary><div>
     <p class="hint" id="examTaxonomySync" style="margin-top:4px">Loading verified WordPress exam terms…</p>
-    <p class="hint">Question Factory loads the exact exam_type_year labels from WordPress automatically. The prompt includes these labels; leave classification to the generator. No taxonomy names need to be entered.</p>
   </div></details>
 </section>
 
 <!-- STEP 2 -->
 <section class="step" id="step1">
   <h2>2 · Paste DeepSeek's CSV</h2>
-  <p class="hint">The tool fixes topic, shuffles answer positions, checks every rule. उत्तर की स्थिति अपने-आप बदली जाएगी।</p>
   <textarea id="csvIn" placeholder="Paste the whole reply — extra text around the CSV is removed automatically."></textarea>
   <label style="font-weight:500"><input type="checkbox" id="appendMode" style="width:auto;margin-right:6px">Add to questions already checked (build a bigger batch)</label>
   <button class="btn" onclick="tryRun(checkCsv,this)">✓ Check, fix &amp; shuffle</button>
@@ -231,7 +225,6 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 
   <div class="fixzone" id="fixZone">
     <h3>Fix mismatched questions</h3>
-    <p class="hint" style="margin-bottom:6px">DeepSeek re-judges only the doubtful ones (3rd pass, new chat) and returns the final answer + corrected explanation. The tool rebuilds those rows.</p>
     <button class="btn small" onclick="tryRun(copyResolver,this)">📋 Copy fix prompt</button>
     <details><summary>View fix prompt</summary><div><textarea id="resolvePrompt" readonly style="min-height:140px"></textarea></div></details>
     <label>DeepSeek's reply</label>
@@ -265,9 +258,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   </fieldset>
   <button class="btn green" onclick="tryRun(autoSaveQuestionsToGithub,this)">☁️ Auto-save to GitHub</button>
   <div class="msg" id="qfSendMsg"></div>
-  <div class="privacyNote">Pushes the CSV straight into <code>pending-questions/</code> in the repo. If the owner has set up the <code>pub-quiz.yml</code> workflow, it's imported into the website automatically within about a minute (as draft — still needs a human to publish it). If not set up yet, it just sits in <code>pending-questions/</code> until someone uploads it manually via Quiz App → Import CSV.</div>
   <details><summary>🔍 Verify answer index (recommended before first upload)</summary><div>
-    <p class="hint">This shows exactly what will be sent to the website. The "correct" column stays 1=A, 2=B, 3=C, 4=D — check a few rows against the question text to be sure.</p>
     <div id="convCheck" style="font-size:12px;max-height:220px;overflow-y:auto"></div>
   </div></details>
   <button class="btn ghost" onclick="tryRun(resetAll,this)" style="border-color:var(--bad);color:var(--bad)">Start a new batch (clear everything)</button>
@@ -387,7 +378,11 @@ async function loadTopicBank(sourceKey){
   return topicBankRows;
 }
 let topicBankLoadRequest = 0;
-function populateTopicBankSources(){
+// Runs on page load — no accordion to expand first, Exam/Subject/Topic are
+// always-visible top-level fields now. Populates the Exam select, then
+// auto-picks its first option and loads that syllabus immediately so Subject
+// and the topic list are ready without any click.
+async function populateTopicBankSources(){
   const sourceSel = document.getElementById('topicBankSource');
   const sources = window.TopicBankSources && window.TopicBankSources.TOPIC_BANK_SOURCES;
   if(!sourceSel) return false;
@@ -396,23 +391,16 @@ function populateTopicBankSources(){
     show(msg('topicBankMsg'),'bad','Topic bank registry did not load. Check shared/topic-bank-sources.js.');
     return false;
   }
-  // Populate synchronously at page startup, not only from <details> toggle events.
   if(!sourceSel.options.length){
     sourceSel.innerHTML = '<option value="">Choose an exam source…</option>' +
       Object.entries(sources).map(([key,s]) => `<option value="${key}">${s.label}</option>`).join('');
   }
-  return true;
-}
-async function openTopicBank(){
-  const details = document.getElementById('topicBankDetails');
-  if(!details || !details.open) return;
-  if(!populateTopicBankSources()) return;
-  const sourceSel = document.getElementById('topicBankSource');
   if(!sourceSel.value){
     const first = sourceSel.options.length > 1 ? sourceSel.options[1].value : '';
     if(first) sourceSel.value = first;
   }
   if(sourceSel.value && topicBankLoadedSource !== sourceSel.value) await loadTopicBankForSource(sourceSel.value);
+  return true;
 }
 document.addEventListener('DOMContentLoaded', populateTopicBankSources);
 async function loadTopicBankForSource(sourceKey){
@@ -431,11 +419,37 @@ async function loadTopicBankForSource(sourceKey){
     document.getElementById('tbSubjectSuggest').innerHTML = subjects.map(s => `<option value="${s.replace(/"/g,'&quot;')}">`).join('');
     pendingTopicAdditions = []; // a different source's topic list is a different file — don't carry staged adds across
     renderPendingTopicAdditions();
+    // Changing Exam invalidates whatever Subject/tags were resolved for the
+    // previous one — the Subject <select> above was just reset to '' but that
+    // doesn't fire its own onchange, so clear the resolved state explicitly.
+    quizTagExam = ''; quizTagSubject = '';
+    document.getElementById('subject').value = '';
+    document.getElementById('subtopic').value = '';
     renderTopicBank();
     show(msg('topicBankMsg'),'ok', rows.length+' topics available — pick a subject above.');
   }catch(e){
     show(msg('topicBankMsg'),'bad','Could not load the topic bank: '+e.message);
   }
+}
+// Resolves the custom-quiz exam/subject guardrail tags as soon as Exam +
+// Subject are both picked -- does not wait for a specific Topic row to be
+// clicked, so someone who types their own Topic text instead of using the
+// list below still gets a correctly tagged CSV row.
+function onTopicBankSubjectChange(){
+  const subjectLabel = document.getElementById('topicBankSubject').value;
+  document.getElementById('subtopic').value = '';
+  if(!subjectLabel){
+    quizTagExam = ''; quizTagSubject = '';
+    document.getElementById('subject').value = '';
+    renderTopicBank();
+    return;
+  }
+  const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
+  document.getElementById('subject').value = `${source.fallbackLabel} - ${subjectLabel}`;
+  const resolved = resolveQuizTags(source, subjectLabel);
+  quizTagExam = resolved.exam;
+  quizTagSubject = resolved.subject;
+  renderTopicBank();
 }
 function renderTopicBank(){
   const listEl = document.getElementById('topicBankList');
@@ -616,8 +630,8 @@ function useTopicBankRow(idx){
   subtopic.dispatchEvent(new Event('change', {bubbles:true}));
   document.getElementById('topicBankSubject').value = r.subjectLabel;
   document.getElementById('promptOut').value = '';
-  show(msg('topicBankMsg'),'ok', 'Selected: '+r.topic+'. Website subject label and sub-topic are now filled.');
-  subject.scrollIntoView({behavior:'smooth', block:'center'});
+  show(msg('topicBankMsg'),'ok', 'Using topic: '+r.topic);
+  subtopic.scrollIntoView({behavior:'smooth', block:'center'});
 }
 
 function langRules(m){
