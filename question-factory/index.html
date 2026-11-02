@@ -291,6 +291,12 @@ var cur = 0;
 // self-learned-topic-tag fallback leaving both blank gets.
 var quizTagExam = '';
 var quizTagSubject = '';
+// Clean subject name for the generation prompt's "Subject:" line -- never
+// the exam-prefixed string #subject holds for the download filename (e.g.
+// "CTET Paper I - Child Development & Pedagogy"), which reads as a garbled,
+// wrong subject to the model. Set alongside quizTagExam/quizTagSubject in
+// onTopicBankSubjectChange() (the single place that resolves all three).
+var quizPromptSubject = '';
 
 /* ---------- global resilience ---------- */
 function tryRun(fn, btn){
@@ -450,7 +456,7 @@ async function loadTopicBankForSource(sourceKey){
     // Changing Exam invalidates whatever Subject/tags were resolved for the
     // previous one — the Subject <select> above was just reset to '' but that
     // doesn't fire its own onchange, so clear the resolved state explicitly.
-    quizTagExam = ''; quizTagSubject = '';
+    quizTagExam = ''; quizTagSubject = ''; quizPromptSubject = '';
     document.getElementById('subject').value = '';
     document.getElementById('subtopic').value = '';
     renderTopicBank();
@@ -467,7 +473,7 @@ function onTopicBankSubjectChange(){
   const subjectLabel = document.getElementById('topicBankSubject').value;
   document.getElementById('subtopic').value = '';
   if(!subjectLabel){
-    quizTagExam = ''; quizTagSubject = '';
+    quizTagExam = ''; quizTagSubject = ''; quizPromptSubject = '';
     document.getElementById('subject').value = '';
     renderTopicBank();
     return;
@@ -482,11 +488,17 @@ function onTopicBankSubjectChange(){
     const term = (window.questionSubjectTerms || []).find(t => t.slug === slug);
     quizTagExam = source.quizExamKey || '';
     quizTagSubject = term ? quizSubjectKeyFromSlug(term.slug) : '';
+    quizPromptSubject = term ? term.name : '';
     document.getElementById('subject').value = term ? `${source.fallbackLabel} - ${term.name}` : '';
     renderTopicBank();
     return;
   }
   document.getElementById('subject').value = `${source.fallbackLabel} - ${subjectLabel}`;
+  // Same resolved WordPress name shown as the dropdown's own option text --
+  // never the exam-prefixed #subject string, which would read as a garbled
+  // subject in the prompt (e.g. "CTET Paper I - Child Development &
+  // Pedagogy" instead of just "Pedagogy").
+  quizPromptSubject = (source.quizSubjectMap && source.quizSubjectMap[subjectLabel]) || subjectLabel;
   const resolved = resolveQuizTags(source, subjectLabel);
   quizTagExam = resolved.exam;
   quizTagSubject = resolved.subject;
@@ -654,26 +666,17 @@ function resolveQuizTags(source, rawSubjectLabel){
   return {exam: source.quizExamKey || '', subject: quizSubjectKeyFromSlug(term.slug)};
 }
 
+// Exam/Subject/tags are already fully resolved by onTopicBankSubjectChange()
+// by the time any Topic row is even renderable (renderTopicBank() only shows
+// rows for the already-selected subject) -- this only ever needs to fill in
+// the specific Topic text on top of that, never re-resolve anything.
 function useTopicBankRow(idx){
   const r = topicBankRows && topicBankRows[idx];
   if(!r){ show(msg('topicBankMsg'),'bad','That topic could not be selected. Reload the topic bank and try again.'); return; }
-  const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
-  if(!source){ show(msg('topicBankMsg'),'bad','The exam source is not loaded yet. Choose the exam source again.'); return; }
-  const subject = document.getElementById('subject');
   const subtopic = document.getElementById('subtopic');
-  // Update both fields synchronously so the selection is immediately visible on mobile.
-  subject.value = `${source.fallbackLabel} - ${r.subjectLabel}`;
   subtopic.value = r.topic;
-  // Resolve the custom-quiz exam/subject guardrail tags for this exact raw
-  // subject, live against WordPress -- see resolveQuizTags() above.
-  const resolved = resolveQuizTags(source, r.subjectLabel);
-  quizTagExam = resolved.exam;
-  quizTagSubject = resolved.subject;
-  subject.dispatchEvent(new Event('input', {bubbles:true}));
-  subject.dispatchEvent(new Event('change', {bubbles:true}));
   subtopic.dispatchEvent(new Event('input', {bubbles:true}));
   subtopic.dispatchEvent(new Event('change', {bubbles:true}));
-  document.getElementById('topicBankSubject').value = r.subjectLabel;
   document.getElementById('promptOut').value = '';
   show(msg('topicBankMsg'),'ok', 'Using topic: '+r.topic);
   subtopic.scrollIntoView({behavior:'smooth', block:'center'});
@@ -699,18 +702,40 @@ PLAIN-TEXT AND SELF-CONTAINED QUESTION RULES:
 - If a reading passage is needed, repeat the short passage in every question that depends on it.
 `;
 }
+// Mirrors custom-quiz's cqp_exam_taxonomy_slug_map() (website/custom-quiz/
+// includes/csv-import-core.php) -- the only quizExamKey values that don't
+// slugify straight to their real WordPress exam term slug. Keep these two in
+// sync; a genuinely new exam's quizExamKey never needs an entry here.
+const EXAM_SLUG_EXCEPTIONS = { 'BPSC_GENERAL_AWARENESS': 'bpsc-tre', 'DSSSB_SPECIAL_EDUCATOR_TGT': 'dsssb-tgt-special-educator' };
+function cqpSlugifyKey(key){ return String(key || '').trim().toLowerCase().replace(/[_ ]/g, '-'); }
+// The full exam_type_year list is every exam on the whole site (CTET, BPSC,
+// DSSSB...) -- showing all of it regardless of which Exam was picked lets the
+// generator pick an exam_type_year from a totally unrelated exam. Scopes it
+// to the picked exam's own WordPress term plus its real children (via the
+// taxonomy's actual parent/child links, e.g. CTET -> CTET Paper 1/2 -- NOT a
+// slug-prefix guess, which wrongly pulls in unrelated siblings like DSSSB TGT
+// vs DSSSB TGT - Special Educator, confirmed via a live parent-id check).
+function scopedExamTypeYearTerms(source){
+  const terms = Array.isArray(window.questionExamTerms) ? window.questionExamTerms : [];
+  const examSlug = source && source.quizExamKey ? (EXAM_SLUG_EXCEPTIONS[source.quizExamKey] || cqpSlugifyKey(source.quizExamKey)) : '';
+  const matched = examSlug ? terms.find(t => t.slug === examSlug) : null;
+  if(!matched) return window.questionExamTermNames.slice(); // no exam picked yet, or no match -- full list, same as before
+  return terms.filter(t => t.id === matched.id || t.parent === matched.id).map(t => t.name);
+}
 function buildPrompt(){
   if (!window.questionExamTaxonomyReady) {
     throw new Error('Verified WordPress exam terms are not available yet. Try again when the site or a verified snapshot is available.');
   }
   const subj = document.getElementById('subject').value.trim();
   if (!subj) throw new Error('Open Topic bank, choose a subject, then tap Use on a topic. The website subject label will fill automatically.');
+  const promptSubject = quizPromptSubject || subj;
   const language = document.getElementById('language').value;
   const questionMix = document.getElementById('questionMix').value.trim() || 'a balanced mix of conceptual, application-based, scenario-based and exam-appropriate questions';
-  const sub  = document.getElementById('subtopic').value.trim() || subj;
+  const sub  = document.getElementById('subtopic').value.trim() || promptSubject;
   const n    = Math.min(50, Math.max(5, parseInt(document.getElementById('count').value)||15));
   document.getElementById('count').value = n;
-  const taxonomyTerms = window.questionExamTermNames.slice();
+  const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
+  const taxonomyTerms = scopedExamTypeYearTerms(source);
   if (!taxonomyTerms.length) throw new Error('Verified WordPress exam terms are unavailable. Try again when WordPress or the verified snapshot is reachable.');
   const taxonomyRules = taxonomyTerms.map(term => '- "' + term + '"').join(String.fromCharCode(10));
   return `You are an expert paper setter for Indian Teacher Recruitment Exams.
@@ -721,7 +746,7 @@ ${taxonomyRules}
 
 
 Generate EXACTLY ${n} original, high-quality MCQs.
-Subject: ${subj}
+Subject: ${promptSubject}
 Sub-topic: ${sub}
 
 METHOD (strict, for EVERY question):
@@ -741,7 +766,7 @@ CSV RULES:
 - Output ONLY one markdown code block containing valid UTF-8 CSV. No text before or after it.
 - First line exactly:
 topic,question_en,question_hi,option1_en,option1_hi,option2_en,option2_hi,option3_en,option3_hi,option4_en,option4_hi,correct,explanation_en,explanation_hi,exam_type_year,cognitive_level
-- topic column is ALWAYS exactly: ${sub}  (the sub-topic — never "${subj}", never a subject/exam label)
+- topic column is ALWAYS exactly: ${sub}  (the sub-topic — never "${promptSubject}", never a subject/exam label)
 - EVERY field wrapped in straight double quotes ("), inner quotes doubled. Use only straight quotes, never curly quotes.
 - No commas problems: since every field is quoted, commas inside text are fine.
 - correct = 1, 2, 3 or 4 only. No blank fields.
@@ -920,7 +945,7 @@ function checkCsv(){
 
   const lang = document.getElementById('language').value;
   const subj = document.getElementById('subject').value.trim();
-  const sub  = document.getElementById('subtopic').value.trim() || subj;
+  const sub  = document.getElementById('subtopic').value.trim() || quizPromptSubject || subj;
   if(!subj){ show(m,'bad','Open Topic bank, choose a subject, then tap Use on a topic, before pasting a CSV.'); return; }
   if(!document.getElementById('appendMode').checked) rows = [];
 
@@ -1240,7 +1265,7 @@ async function autoSaveQuestionsToGithub(btn){
 }
 function resetAll(){
   if(!confirm('Clear all questions and start fresh?')) return;
-  rows=[]; cur=0; quizTagExam=''; quizTagSubject='';
+  rows=[]; cur=0; quizTagExam=''; quizTagSubject=''; quizPromptSubject='';
   ['csvIn','oldCsv','verifyIn','verifyPrompt','resolveIn','resolvePrompt','finalOut','promptOut'].forEach(id=>document.getElementById(id).value='');
   document.querySelectorAll('.msg').forEach(e=>e.className='msg');
   document.querySelectorAll('.stats').forEach(e=>e.innerHTML='');
@@ -1280,6 +1305,7 @@ render();
 (function(){
   window.questionExamTaxonomyReady = false;
   window.questionExamTermNames = [];
+  window.questionExamTerms = [];
   async function syncQuestionExamTaxonomy(){
     const status = document.getElementById('examTaxonomySync');
     if(!status) return;
@@ -1287,6 +1313,7 @@ render();
     try {
       const terms = await window.WordPressTaxonomy.fetchTerms('exam');
       window.questionExamTermNames = terms.map(t => t.name);
+      window.questionExamTerms = terms; // full {id,name,slug,parent} objects -- buildPrompt() uses these to scope the list to the picked Exam
       const sync = window.WordPressTaxonomy.getStatus();
       window.questionExamTaxonomyReady = terms.length > 0;
       status.textContent = terms.length
@@ -1298,6 +1325,7 @@ render();
     } catch(error) {
       window.questionExamTaxonomyReady = false;
       window.questionExamTermNames = [];
+      window.questionExamTerms = [];
       status.textContent = 'Exam taxonomy is temporarily unavailable. No verified snapshot exists yet; prompt generation is paused.';
       status.style.color = '#b32d2e';
     }
