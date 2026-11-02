@@ -277,7 +277,18 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
 <script src="/question-factory/shared/topic-bank-sources.js?v=20261102a"></script>
 <script>
 "use strict";
-const HEADER =["topic","question_en","question_hi","option1_en","option1_hi","option2_en","option2_hi","option3_en","option3_hi","option4_en","option4_hi","correct","explanation_en","explanation_hi","exam_type_year","cognitive_level","exam","subject"];
+// Internal field order -- every row's r.fields array is always in THIS order,
+// never changes. checkCsv/shuffleRow/buildChecker/compareAnswers/applyResolve
+// and the verify-answer-index preview all index into r.fields by fixed
+// position against this order, independent of whatever column order the
+// exported CSV uses (see HEADER + HEADER_REMAP below).
+const INTERNAL_FIELD_ORDER = ["topic","question_en","question_hi","option1_en","option1_hi","option2_en","option2_hi","option3_en","option3_hi","option4_en","option4_hi","correct","explanation_en","explanation_hi","exam_type_year","cognitive_level","exam","subject"];
+// Exported CSV's literal column order -- subject/exam first so they're
+// immediately visible instead of scrolled past at the end (2026-11-03).
+// Remapped from INTERNAL_FIELD_ORDER only at serialization time (toCSV) --
+// nothing else needs to know about this order.
+const HEADER = ["subject","exam","topic","question_en","question_hi","option1_en","option1_hi","option2_en","option2_hi","option3_en","option3_hi","option4_en","option4_hi","correct","explanation_en","explanation_hi","exam_type_year","cognitive_level"];
+const HEADER_REMAP = HEADER.map(name => INTERNAL_FIELD_ORDER.indexOf(name));
 var rows = [];
 var cur = 0;
 // Deterministic custom-quiz guardrail tags for the CURRENT batch, resolved once
@@ -874,7 +885,7 @@ function parseCSV(text){
   return out.filter(r=>r.length>1 || (r.length===1&&r[0].trim()!==''));
 }
 function csvField(v){ v=String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
-function toCSV(rws){ return HEADER.join(',')+'\n'+rws.map(r=>r.fields.map(csvField).join(',')).join('\n'); }
+function toCSV(rws){ return HEADER.join(',')+'\n'+rws.map(r=>HEADER_REMAP.map(i=>csvField(r.fields[i])).join(',')).join('\n'); }
 /* The website's CSV importer (custom-quiz/admin/csv-import.php and the REST
    import route) expects correct to be 1-indexed (1=option1/A ... 4=option4/D)
    in the uploaded CSV — it does its own -1 conversion internally when saving
@@ -979,10 +990,10 @@ function checkCsv(){
     // validations
     if(!/^[1-4]$/.test(f[11])) issues.push('correct = "'+f[11]+'"');
     if(!/^[1-3]$/.test(f[15])) issues.push('cognitive_level = "'+f[15]+'" (must be 1, 2 or 3)');
-    f.forEach((v,i)=>{ if(v==='' && i!==14 && i!==15) issues.push(HEADER[i]+' blank'); }); // exam_type_year (14) is allowed to be blank on purpose; cognitive_level (15) has its own message above
+    f.forEach((v,i)=>{ if(v==='' && i!==14 && i!==15) issues.push(INTERNAL_FIELD_ORDER[i]+' blank'); }); // exam_type_year (14) is allowed to be blank on purpose; cognitive_level (15) has its own message above
     if(f[1].length<10) issues.push('question too short');
     if(f[1].length>1200 || f[2].length>1200) issues.push('question too long for website DB');
-    for(let i=3;i<=10;i++){ if(f[i].length>280){ issues.push(HEADER[i]+' too long ('+f[i].length+' chars) — website DB limit'); break; } }
+    for(let i=3;i<=10;i++){ if(f[i].length>280){ issues.push(INTERNAL_FIELD_ORDER[i]+' too long ('+f[i].length+' chars) — website DB limit'); break; } }
     if(f[12].length>900 || f[13].length>900) issues.push('explanation too long for website DB');
     if(lang!=='en' && !DEV.test(f[2])) issues.push('question_hi has no Hindi');
     const on=[f[3],f[5],f[7],f[9]].map(norm);
