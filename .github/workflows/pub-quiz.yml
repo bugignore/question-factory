@@ -113,6 +113,15 @@ jobs:
                 continue
               fi
 
+              # A 100%-skipped batch (0 imported, some skipped) is almost always
+              # a stale/unresolvable exam+subject guardrail tag, not a one-off
+              # bad row -- fail the Action so it's noticed here instead of only
+              # in this result.json, which nothing else alerts on.
+              if [ "$imported" = "0" ] && [ "$skipped" != "0" ]; then
+                echo "::error::$slug — every row was skipped (0 imported, $skipped skipped). See errors above — likely a stale exam/subject tag that no longer resolves to a real WordPress term."
+                failed=1
+              fi
+
               errors_json="$(jq -c '.errors // []' /tmp/wp-response.json)"
               jq -n --argjson imported "$imported" --argjson skipped "$skipped" \
                     --argjson errors "$errors_json" \

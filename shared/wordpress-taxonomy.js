@@ -10,7 +10,12 @@
   const API_ROOT = DEFAULT_SITE_URL.replace(/\/$/, '') + '/wp-json/wp/v2';
   const SCRIPT_URL = document.currentScript && document.currentScript.src
     ? document.currentScript.src : new URL('shared/wordpress-taxonomy.js', location.href).href;
-  const SNAPSHOT_URL = new URL('./data/exam-taxonomy.json', SCRIPT_URL).toString();
+  // One snapshot file per taxonomy (shared/data/{taxonomy}-taxonomy.json),
+  // kept in sync by .github/workflows/sync-taxonomy-snapshots.yml -- used
+  // only as the offline/network-failure fallback for fetchTerms() below.
+  function snapshotUrlFor(taxonomy) {
+    return new URL('./data/' + taxonomy + '-taxonomy.json', SCRIPT_URL).toString();
+  }
   let lastStatus = { source: 'unavailable', syncedAt: null, message: 'Taxonomy has not loaded.' };
 
   function normalizeTerms(raw) {
@@ -25,7 +30,7 @@
   }
 
   async function loadSnapshot(taxonomy) {
-    const response = await fetch(SNAPSHOT_URL, { method: 'GET', credentials: 'omit', cache: 'no-store' });
+    const response = await fetch(snapshotUrlFor(taxonomy), { method: 'GET', credentials: 'omit', cache: 'no-store' });
     if (!response.ok) throw new Error('Taxonomy snapshot unavailable.');
     const data = await response.json();
     if (!data || data.schemaVersion !== 1 || data.siteUrl !== DEFAULT_SITE_URL ||
@@ -109,7 +114,7 @@
   global.WordPressTaxonomy = Object.freeze({
     siteUrl: DEFAULT_SITE_URL,
     apiRoot: API_ROOT,
-    snapshotUrl: SNAPSHOT_URL,
+    snapshotUrlFor: snapshotUrlFor,
     fetchTerms: fetchTerms,
     exactTerm: exactTerm,
     escapeHtml: escapeHtml,
