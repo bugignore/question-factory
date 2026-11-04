@@ -750,7 +750,8 @@ function buildPrompt(){
   const promptSubject = quizPromptSubject || subj;
   const language = document.getElementById('language').value;
   const questionMix = document.getElementById('questionMix').value.trim() || 'a balanced mix of conceptual, application-based, scenario-based and exam-appropriate questions';
-  const sub  = document.getElementById('subtopic').value.trim() || promptSubject;
+  const sub  = document.getElementById('subtopic').value.trim();
+  if (!sub) throw new Error('Topic is empty. Open Topic bank and tap Use on a topic, or type a Topic manually — it must not be left blank.');
   const n    = Math.min(50, Math.max(5, parseInt(document.getElementById('count').value)||15));
   document.getElementById('count').value = n;
   const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
@@ -964,8 +965,9 @@ function checkCsv(){
 
   const lang = document.getElementById('language').value;
   const subj = document.getElementById('subject').value.trim();
-  const sub  = document.getElementById('subtopic').value.trim() || quizPromptSubject || subj;
+  const sub  = document.getElementById('subtopic').value.trim();
   if(!subj){ show(m,'bad','Open Topic bank, choose a subject, then tap Use on a topic, before pasting a CSV.'); return; }
+  if(!sub){ show(m,'bad','Topic is empty. Open Topic bank and tap Use on a topic, or type a Topic manually, before pasting a CSV.'); return; }
   if(!document.getElementById('appendMode').checked) rows = [];
 
   // NOTE: DeepSeek output is always treated as 1-indexed (1-4), per the generation prompt.
