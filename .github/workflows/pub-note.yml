@@ -56,34 +56,23 @@ jobs:
           # Educator, DSSSB TGT and BPSC TRE 4 — notes kept landing on the
           # wrong, too-generic term or with no exam term at all.)
 
-          # Subject stays a small curated map on purpose: notes-factory's
-          # Subject <select> is deliberately scoped to the ~9 CTET/general
-          # families this tool targets, not the full ~190-term `subject`
-          # taxonomy (that's the separate B.Ed/D.Ed content-writer-mcp
-          # pipeline's job — see course-structure notes). These values were
-          # found wrong on 2026-10-21: CDP/Maths/English pointed at term
-          # names that don't exist on the live site (the real terms are
-          # prefixed, e.g. "CTET-Mathematics" not "Maths"), so resolve_term_id
-          # was silently auto-creating stray duplicate terms instead of
-          # reusing the real ones, and "Employability Skills" (a real,
-          # already-used term + a real option in the <select>) had no entry
-          # at all, so it was always left unassigned. Fixed to the exact
-          # current live term names below — if this list and the live
-          # `subject` taxonomy drift again, that's the bug to fix, not a
-          # reason to delete the map.
-          declare -A SUBJECT_TERM_MAP=(
-            ["CDP"]="CTET-Child Development & Pedagogy"
-            ["Geography"]="Geography"
-            ["History"]="History"
-            ["Science"]="Science"
-            ["Maths"]="CTET-Mathematics"
-            ["Hindi"]="Hindi"
-            ["English"]="CTET ENGLISH"
-            ["EVS"]="EVS"
-            ["Employability Skills"]="Employability Skills"
-          )
-          # "Auto-detect" is intentionally unmapped — the app never resolves what
-          # subject it auto-detected to, so there's nothing reliable to assign.
+          # No static SUBJECT_TERM_MAP any more (removed 2026-11-11). It drifted
+          # stale TWICE — fixed once on 2026-10-21, then WordPress's subject terms
+          # were renamed/reorganized again (e.g. "CTET-Mathematics" -> plain
+          # "Mathematics") and the map silently kept pointing at the old names,
+          # hard-failing every CDP/Geography/Science/Maths note at publish. The
+          # fix now lives upstream, not here: notes-factory/update-factory resolve
+          # each Subject <select> label against the LIVE 'subject' taxonomy
+          # (window.WordPressTaxonomy.fetchTerms('subject'), same verified-
+          # snapshot-fallback helper the exam checkboxes already use) before a
+          # save/queue ever happens, via resolveSubjectWpTermName() + the
+          # SUBJECT_LABEL_WP_ALIASES map in each tool's index.html, and BLOCK the
+          # save if nothing resolves. So by the time a pending-notes/*.json file
+          # reaches this workflow, its .subject field (when non-blank) is already
+          # a verified, currently-real WordPress term name — this step can just
+          # look it up directly, exactly like `exam` above always has, with no
+          # remap table to go stale. "Auto-detect" stays intentionally unmapped —
+          # nothing reliable to assign, same as before.
 
           # Exact-match lookup only. WordPress owns the taxonomy; a miss must
           # never create a near-duplicate term. A missing term is reported and
@@ -230,14 +219,12 @@ jobs:
             subject_ids_json="[]"
             raw_subject="$(jq -r '.subject // empty' "$f")"
             if [ -n "$raw_subject" ] && [ "$raw_subject" != "Auto-detect" ]; then
-              mapped="${SUBJECT_TERM_MAP[$raw_subject]:-}"
-              if [ -n "$mapped" ]; then
-                tid="$(resolve_term_id subject "$mapped")" || return 1
-                [ -n "$tid" ] && subject_ids_json="[$tid]"
-              else
-                echo "::error::$slug — no subject-taxonomy mapping for \"$raw_subject\". Refusing to publish without a verified taxonomy assignment." >&2
-                return 1
-              fi
+              # No remap table — notes-factory/update-factory already verified
+              # raw_subject against the live taxonomy before this file was ever
+              # saved (see the big comment above), so it's an exact, currently-
+              # real WordPress term name here. Same direct lookup `exam` uses.
+              tid="$(resolve_term_id subject "$raw_subject")" || return 1
+              [ -n "$tid" ] && subject_ids_json="[$tid]"
             fi
 
             # Featured image: an optional companion file the browser tool commits

@@ -603,6 +603,52 @@ async function loadLiveExamTypes(){
   examTaxonomyError = EXAM_TYPES.length ? '' : 'No verified taxonomy snapshot exists yet.';
 }
 
+/* ---- Subject taxonomy: verify-before-send, not a static remap table ----
+   The Subject <select> below keeps its own curated labels (CDP, Geography,
+   Science, ...) because renderRefUrlList()/REFERENCE_SOURCES_BY_SUBJECT and
+   the Wikipedia-category hints further down key off these exact labels —
+   replacing them with raw WordPress term names would break that. What
+   WOULD break (and did: pub-note.yml's old static SUBJECT_TERM_MAP pointed
+   4 of these 9 labels at WordPress term names that no longer exist, e.g.
+   "CTET-Mathematics" after WordPress was renamed to plain "Mathematics" —
+   every CDP/Geography/Science/Maths note hard-failed at publish) is
+   SENDING one of these labels straight through on faith. Each label is
+   instead resolved HERE, live, against window.WordPressTaxonomy's
+   'subject' terms (same fetch-with-verified-snapshot-fallback helper
+   loadLiveExamTypes() above already uses) right before a save/queue, and
+   the REAL, currently-live WordPress term name is what actually gets sent
+   — pub-note.yml no longer needs its own copy of this mapping at all (see
+   that workflow's resolve_term_id call, now a direct exact-name lookup
+   same as 'exam' already was). If none of a label's candidate names
+   resolve, the save is blocked with the exact reason instead of silently
+   shipping a stale name for WordPress to reject later. */
+const SUBJECT_LABEL_WP_ALIASES = {
+  'CDP': ['Pedagogy', 'CTET-Child Development & Pedagogy', 'CDP'],
+  'Geography': ['Geography'],
+  'History': ['History'],
+  'Science': ['Science'],
+  'Maths': ['Mathematics', 'CTET-Mathematics', 'Maths'],
+  'Hindi': ['Hindi'],
+  'English': ['CTET ENGLISH', 'English'],
+  'EVS': ['EVS'],
+  'Employability Skills': ['Employability Skills']
+};
+let SUBJECT_TERMS_CACHE = null;
+async function resolveSubjectWpTermName(label){
+  if(!label || label === 'Auto-detect') return { status:'n/a', name:null, reason:'' };
+  const candidates = SUBJECT_LABEL_WP_ALIASES[label] || [label];
+  let terms;
+  try{ terms = SUBJECT_TERMS_CACHE || (SUBJECT_TERMS_CACHE = await window.WordPressTaxonomy.fetchTerms('subject')); }
+  catch(e){ return { status:'error', name:null, reason:'Could not reach WordPress to verify the "'+label+'" subject: '+e.message }; }
+  if(!terms.length) return { status:'error', name:null, reason:'No verified WordPress subject taxonomy available right now (WordPress unreachable and no synced snapshot) — cannot verify "'+label+'".' };
+  for(const candidate of candidates){
+    const t = window.WordPressTaxonomy.exactTerm(terms, candidate);
+    if(t) return { status:'resolved', name:t.name, reason:'' };
+  }
+  return { status:'unresolved', name:null,
+    reason:`Subject "${label}" has no matching WordPress subject term right now (tried: ${candidates.join(', ')}). Publishing would be rejected server-side — pick a different Subject, or get the WordPress term created/renamed to match, then update SUBJECT_LABEL_WP_ALIASES above.` };
+}
+
 /* ---------- Topic bank (research CSVs, multiple exam sources) ----------
    Deliberately NOT baked into the page like CDP_TOPICS above: each source
    is fetched on demand (only once the <details> below is actually opened,
@@ -2343,16 +2389,121 @@ function expandLongPostBlocks(raw){
   return { html: out, blockCount, unclosedCount };
 }
 
+/* ================= MECHANICAL AI-TELL CLEAN (no LLM, deterministic) =================
+   Ported from website/tools/humanizer-toolkit/{mechanical_clean.py,scan.py,
+   banned_phrases.json} — the same scripts used for the 2026-11-09 85-post audit.
+   Runs automatically on every AI reply this tool parses, same place stripHtmlComments()
+   already runs unconditionally above, BEFORE the human ever sees a preview. This is the
+   actual guardrail: it doesn't matter whether the model's reply CLAIMS it removed
+   emoji/dashes/sales phrasing — this re-reads the real output text and fixes/blocks on
+   what's actually there. vCheckEmDash/vCheckBoldDensity/vCheckEmojiRemaining/
+   vCheckBannedPhrasesRemaining/vCheckDuplicateHeadingText below are the hard-fail net
+   for anything this pass couldn't fix on its own (see each function's cap/notes). */
+const AI_TELL_EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F100}-\u{1F1FF}\u{2190}-\u{21FF}\u{FE0F}\u{200D}\u{2B00}-\u{2BFF}\u{1F000}-\u{1F0FF}]/gu;
+const AI_TELL_SAFE_GLYPHS = new Set(['→','↑','↓','←','✓','✔','✗','✘']); // load-bearing MCQ marks / process arrows, never strip
+const AI_TELL_BANNED_PHRASES = [
+  'कोई हिस्सा gated नहीं','कोई पे-वॉल नहीं','कोई ब्लर नहीं','कुछ बी लॉक नहीं','कोई lock नहीं',
+  'कोई paywall नहीं','premium guide','premium notes','premium-quality','complete free notes',
+  'पूरी तरह से मुफ्त','पूरी तरह free','pe-wall','पे-वॉल के पीछे','कुछ बी locked','blurred answer',
+  'hidden trick नहीं','हर mnemonic, हर pyq analysis और हर trick',
+  'सीधे हाथ से निकल जाते हैं','skip करते हैं तो',"what others don't tell you"
+];
+const AI_TELL_STAGED_OPENER_HINTS = [ // report-only, never auto-deleted — needs a rewrite, not a cut
+  'क्या आप जानते हैं','did you know','साधारण गलत धारणा','common misconception',
+  'असली सवाल यह नहीं','पहला सवाल यह नहीं होना चाहिए'
+];
+
+function aiTellStripEmoji(text){
+  let removed = 0;
+  let out = text.replace(AI_TELL_EMOJI_RE, ch => { if(AI_TELL_SAFE_GLYPHS.has(ch)) return ch; removed++; return ''; });
+  out = out.replace(/[ \t]{2,}/g,' ').replace(/>\s+</g,'><').replace(/[ \t]+([।.,])/g,'$1');
+  return { text: out, removed };
+}
+function aiTellRemoveBannedPhrases(text){
+  const removedSpans = [];
+  let t = text;
+  for(const phrase of AI_TELL_BANNED_PHRASES){
+    const pl = phrase.toLowerCase();
+    while(true){
+      const idx = t.toLowerCase().indexOf(pl);
+      if(idx === -1) break;
+      let left = idx;
+      while(left > 0 && '।.!?>'.indexOf(t[left-1]) === -1) left--;
+      let right = idx + phrase.length;
+      while(right < t.length && '।.!?<'.indexOf(t[right]) === -1) right++;
+      if(right < t.length && '।.!?'.indexOf(t[right]) !== -1) right++;
+      const span = t.slice(left, right);
+      if(span.length > 400) break; // too big a span to be confident — leave for the hard-check net + human
+      removedSpans.push(span.trim());
+      t = t.slice(0, left) + t.slice(right);
+    }
+  }
+  t = t.replace(/[ \t]{2,}/g,' ').replace(/\n{3,}/g,'\n\n');
+  return { text: t, removedSpans };
+}
+function aiTellRemoveStrayTokens(text){
+  const removed = [];
+  let t = text.replace(/^\s*html\s*\n/i, '\n');
+  if(t !== text) removed.push('bare "html" token');
+  const t2 = t.replace(/\*\*H1\*\*/g, '');
+  if(t2 !== t) removed.push('literal "**H1**" token');
+  return { text: t2, removed };
+}
+function aiTellFixDuplicateH1(text, title){
+  if(!title || !title.trim()) return { text, attempted:false, reason:'no title given' };
+  const esc = title.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`((?:<[^>]+>|\\s)*)${esc}(?:<\\/[a-zA-Z0-9]+>\\s*)*\\s*(?=<h[1-4][^>]*>\\s*${esc}\\s*</h[1-4]>)`, 'i');
+  const m = re.exec(text);
+  if(!m) return { text, attempted:true, fixed:false, reason:'exact adjacent-duplicate pattern not found' };
+  const newText = text.slice(0, m.index) + m[1] + text.slice(m.index + m[0].length);
+  return { text:newText, attempted:true, fixed:true };
+}
+function aiTellNormalizeDashes(text){
+  // clause-local rule, not sentence-reading: 1 em-dash in a clause -> colon, 2+ -> commas.
+  const parts = text.split(/(<[^>]+>)/);
+  let toColon = 0, toComma = 0;
+  for(let i=0;i<parts.length;i++){
+    if(parts[i].startsWith('<')) continue;
+    const clauses = parts[i].split(/([।.!?]+)/);
+    for(let j=0;j<clauses.length;j++){
+      const clause = clauses[j];
+      if(!clause || /^[।.!?]+$/.test(clause)) continue;
+      const n = (clause.match(/—/g)||[]).length;
+      if(n === 1){ clauses[j] = clause.replace(/\s*—\s*/, ': '); toColon++; }
+      else if(n > 1){ clauses[j] = clause.replace(/\s*—\s*/g, ', '); toComma += n; }
+    }
+    parts[i] = clauses.join('');
+  }
+  return { text: parts.join(''), toColon, toComma };
+}
+function aiTellMechanicalClean(html, title){
+  let text = String(html||'');
+  const report = {};
+  let r;
+  r = aiTellStripEmoji(text); text = r.text; report.emojiRemoved = r.removed;
+  r = aiTellRemoveBannedPhrases(text); text = r.text; report.bannedPhrasesRemoved = r.removedSpans;
+  r = aiTellRemoveStrayTokens(text); text = r.text; report.strayTokensRemoved = r.removed;
+  r = aiTellFixDuplicateH1(text, title); text = r.text; report.duplicateH1 = r;
+  r = aiTellNormalizeDashes(text); text = r.text; report.dashNormalize = { toColon:r.toColon, toComma:r.toComma };
+  text = text.replace(/<(p|li|span|div|strong|b|em|i)(\s[^>]*)?>\s*<\/\1>/gi, ''); // tags left empty by the removals above
+  const lowered = text.toLowerCase();
+  report.stagedOpenerHints = AI_TELL_STAGED_OPENER_HINTS.filter(p => lowered.includes(p.toLowerCase()));
+  report.text = text;
+  return report;
+}
+
 function parseResponse(raw){
   const seoResult = extractSEO(raw);
   const bodyResult = extractBody(raw);
   const pubResult = extractPublisherNotes(raw, bodyResult.endIdx);
   const cleanedBody = stripHtmlComments(bodyResult.bodyHtml);
   const blockResult = expandLongPostBlocks(cleanedBody);
+  const mechClean = aiTellMechanicalClean(blockResult.html, seoResult.seo.h1);
   const contentMemory = extractContentMemory(raw);
   const result = {
     seo: seoResult.seo,
-    bodyHtml: blockResult.html,
+    bodyHtml: mechClean.text,
+    mechanicalClean: mechClean,
     publisherNotes: pubResult.publisherNotes,
     contentMemory,
     method: seoResult.method + ' + ' + bodyResult.method + (blockResult.blockCount ? ' + blocks:'+blockResult.blockCount : ''),
@@ -2371,6 +2522,16 @@ function parseResponse(raw){
   if(seoResult.method==='label-text') warnings.push('SEO fields: no JSON block found — read from the plain labeled panel instead. Double-check every field.');
   if(bodyResult.method==='h2-scan') warnings.push('Notes body: no marker comments found — guessed the body by scanning from the first <h2> to the next recognizable end-of-notes marker. Double-check the body did not get cut short or include trailing text.');
   if(!result.contentMemory) warnings.push('Content Memory block missing or unparseable — this note won\'t be recorded in Automation/content-memory/. Not fatal, but future runs lose this article\'s anti-repetition signal.');
+  {
+    const mc = mechClean, mcNotes = [];
+    if(mc.emojiRemoved) mcNotes.push(`${mc.emojiRemoved} emoji stripped`);
+    if(mc.bannedPhrasesRemoved.length) mcNotes.push(`${mc.bannedPhrasesRemoved.length} sales/paywall-boilerplate sentence(s) removed`);
+    if(mc.strayTokensRemoved.length) mcNotes.push(mc.strayTokensRemoved.join(', ') + ' removed');
+    if(mc.duplicateH1.fixed) mcNotes.push('duplicate H1 fixed');
+    if(mc.dashNormalize.toColon || mc.dashNormalize.toComma) mcNotes.push(`${mc.dashNormalize.toColon} em-dash→colon, ${mc.dashNormalize.toComma} em-dash→comma`);
+    if(mcNotes.length) warnings.push('Mechanical AI-tell clean auto-fixed this reply before you saw it: ' + mcNotes.join('; ') + '.');
+    if(mc.stagedOpenerHints.length) warnings.push('Staged rhetorical opener detected ("' + mc.stagedOpenerHints.join('", "') + '") — this needs a rewrite, not auto-deletion; re-read the opening lines.');
+  }
   // blockResult.blockCount is expected to be 0 for every current-prompt reply —
   // the merged v13 prompt is back to hand-written HTML (see BLOCK-TAG EXPANSION
   // comment above), so a 0 count here is the normal case, not worth a warning.
@@ -2830,9 +2991,18 @@ async function unlockGithub(btn){
   }
 }
 
-function buildBundle(){
+async function buildBundle(){
+  const subjectResolution = await resolveSubjectWpTermName(state.subject);
   const bundle = {
-    topic: state.topic, examType: state.examType, subject: state.subject, targetYear: 2026,
+    topic: state.topic, examType: state.examType,
+    // Send the VERIFIED live WordPress term name once resolved, never the
+    // raw UI label on faith — see resolveSubjectWpTermName() above. Falls
+    // back to the raw label only for 'Auto-detect' (n/a, unchanged
+    // behaviour) or if resolution itself failed (caller gates on
+    // subjectResolution.status before ever reaching GitHub — see
+    // autoSaveToGithub()/addToQueue()).
+    subject: subjectResolution.status === 'resolved' ? subjectResolution.name : state.subject,
+    subjectResolution, targetYear: 2026,
     hindiPercent: state.hindiPercent,
     seo: state.seo, bodyHtml: state.bodyHtml, publisherNotes: state.publisherNotes,
     createdAt: new Date().toISOString()
@@ -2930,10 +3100,15 @@ async function autoSaveToGithub(btn){
   }
   const token = sessionStorage.getItem('ghUnlockedToken');
   if(!token){ show(m,'bad','Unlock saving above first (enter the app password), then try again.'); return; }
+  show(m,'warn','Verifying Subject against live WordPress taxonomy…');
+  const bundle = await buildBundle();
+  if(bundle.subjectResolution.status === 'unresolved' || bundle.subjectResolution.status === 'error'){
+    show(m,'bad','Auto-save blocked — '+bundle.subjectResolution.reason);
+    return;
+  }
   const saveBtn = document.getElementById('autoSaveBtn');
   saveBtn.disabled = true;
   show(m,'warn','Saving to GitHub…');
-  const bundle = buildBundle();
   const path = `pending-notes/${state.seo.slug}.json`;
   try{
     const res = await githubPutFile(GH_OWNER, GH_REPO, token, path, JSON.stringify(bundle, null, 2), `Add note: ${state.seo.slug}`);
@@ -3018,7 +3193,12 @@ async function addToQueue(btn){
   }
   const q = loadQueue();
   if(q.some(item=>item.slug===state.seo.slug)){ show(m,'bad',`"${state.seo.slug}" is already in the queue.`); return; }
-  q.push({ slug: state.seo.slug, bundle: buildBundle() });
+  const bundle = await buildBundle();
+  if(bundle.subjectResolution.status === 'unresolved' || bundle.subjectResolution.status === 'error'){
+    show(m,'bad','Not queued — '+bundle.subjectResolution.reason);
+    return;
+  }
+  q.push({ slug: state.seo.slug, bundle });
   saveQueueList(q);
   show(m,'ok',`Added "${state.seo.slug}" to the batch queue (${q.length} queued). Start the next note at Step 1, or post the queue when everyone's done.`);
   clearDraft();
@@ -3232,10 +3412,10 @@ async function trackPipeline(token, sha){
   applyResolvedStatus(status);
 }
 
-function downloadBundle(btn){
+async function downloadBundle(btn){
   syncFormToState();
   if(!state.seo.slug){ show(msg('sendMsg'),'bad','Set a URL Slug in Step 3 first — it is used as the filename.'); return; }
-  const bundle = buildBundle();
+  const bundle = await buildBundle();
   const blob = new Blob([JSON.stringify(bundle, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -3650,6 +3830,46 @@ function vCheckPipelineArtifacts(bodyHtml, seo){
     pass: offenders.length===0, detail: offenders.length ? offenders.join('; ') : 'clean' };
 }
 
+/* ---- AI-tell hard-fail net: catches whatever aiTellMechanicalClean() (parseResponse,
+   above) couldn't safely auto-fix on its own — a banned-phrase span too big to delete
+   confidently, a duplicate-H1 shape the narrow regex didn't match, dash/bold counts the
+   clause-local dash rule legitimately can't reduce further. These block Auto-save the
+   same way vCheckDuplicateIds etc. already do; see 2026-11-09 writing-tells audit. ---- */
+function vCheckEmDashRemaining(bodyHtml){
+  const n = (String(bodyHtml||'').match(/—/g)||[]).length;
+  const cap = 20;
+  return { id:'em-dash', label:`Em-dash count stays low after auto-clean (cap ${cap})`, tier:'hard',
+    pass: n<=cap, detail: `${n} remain (max ${cap}) — if high, the dash-normalize pass hit mostly multi-dash clauses; re-read and restructure those sentences` };
+}
+function vCheckBoldDensity(bodyHtml){
+  const n = (String(bodyHtml||'').match(/<(strong|b)\b/gi)||[]).length;
+  const cap = 15;
+  return { id:'bold-density', label:`Bold spans stay low — not a label-prefix habit (cap ${cap})`, tier:'hard',
+    pass: n<=cap, detail: `${n} <strong>/<b> span(s) found (max ${cap})` };
+}
+function vCheckEmojiRemaining(bodyHtml){
+  const html = String(bodyHtml||'');
+  const hits = (html.match(AI_TELL_EMOJI_RE)||[]).filter(ch=>!AI_TELL_SAFE_GLYPHS.has(ch));
+  return { id:'emoji-remaining', label:'Zero emoji remain after auto-strip', tier:'hard',
+    pass: hits.length===0, detail: hits.length ? `${hits.length} remain: ${hits.slice(0,10).join(' ')}` : 'clean' };
+}
+function vCheckBannedPhrasesRemaining(bodyHtml){
+  const html = String(bodyHtml||'').toLowerCase();
+  const hits = AI_TELL_BANNED_PHRASES.filter(p=>html.includes(p.toLowerCase()));
+  return { id:'banned-phrases-remaining', label:'Zero sales/paywall-boilerplate phrases remain', tier:'hard',
+    pass: hits.length===0, detail: hits.length ? `still present: "${hits.join('", "')}"` : 'clean' };
+}
+function vCheckDuplicateHeadingText(bodyHtml){
+  const html = String(bodyHtml||'');
+  const m = /<h[12][^>]*>\s*([^<]{3,200}?)\s*<\/h[12]>/i.exec(html);
+  if(!m) return { id:'dup-heading-text', label:'Title text does not repeat as plain text right before the H1/H2', tier:'hard', pass:true, detail:'no h1/h2 found to check' };
+  const heading = m[1].trim();
+  const before = html.slice(Math.max(0, m.index-300), m.index).replace(/<[^>]+>/g,' ');
+  const dup = heading.length>=3 && before.toLowerCase().includes(heading.toLowerCase());
+  return { id:'dup-heading-text', label:'Title text does not repeat as plain text right before the H1/H2', tier:'hard',
+    pass: !dup, detail: dup ? `"${heading}" appears again immediately before its own heading` : 'clean' };
+}
+
 function vRunChecks(seo, bodyHtml){
   seo = seo || {};
   const doc = vParseBody(bodyHtml);
@@ -3660,7 +3880,9 @@ function vRunChecks(seo, bodyHtml){
     vCheckParagraphs(doc), vCheckLinks(doc), vCheckDuplicateIds(doc), vCheckBareH3(doc),
     vCheckScriptTags(doc), vCheckCitations(doc), vCheckToc(doc), vCheckAdSlots(doc),
     vCheckTitle(seo), vCheckMeta(seo), vCheckSlug(seo), vCheckH1(seo),
-    vCheckFirst100Words(doc, seo)
+    vCheckFirst100Words(doc, seo),
+    vCheckEmDashRemaining(bodyHtml), vCheckBoldDensity(bodyHtml), vCheckEmojiRemaining(bodyHtml),
+    vCheckBannedPhrasesRemaining(bodyHtml), vCheckDuplicateHeadingText(bodyHtml)
   ];
   const hardChecks = checks.filter(c=>c.tier==='hard');
   return { checks, hardFails: hardChecks.filter(c=>!c.pass), hardPass: hardChecks.every(c=>c.pass),

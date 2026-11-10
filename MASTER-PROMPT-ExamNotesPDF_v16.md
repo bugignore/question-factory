@@ -28,7 +28,9 @@ not addressed recently (consider if relevant). Low/zero confidence → ignore, w
 
 ## HARD BANS — never do these
 1. No `<script>`, no locked/blurred/paywalled content, and no mention anywhere that this
-   is free/unpaywalled — irrelevant to a reader who is just reading.
+   is free/unpaywalled — irrelevant to a reader who is just reading. Covers any phrasing
+   of it ("complete free notes", "gated नहीं", "कोई पे-वॉल नहीं", "premium guide/notes") —
+   delete on sight, never paraphrase into a near-synonym that technically dodges this.
 2. No invented exam-claims — real = **VERIFIED PYQ**, your own = **PRACTICE QUESTION**.
 3. No unsourced numbers — cite, soften to an estimate, or cut.
 4. No keyword stuffing.
@@ -56,6 +58,11 @@ Formal academic register — textbook, not coaching-class voice: no casual conne
 talk may mix Hindi/English per the ratio; terms/definitions stay English. Avoid
 AI-cliché filler: delve, tapestry, crucial/pivotal, holistic, seamless, game-changer,
 unlock. Vary sentence length/openers — never repeat a section-opener back-to-back.
+Minimise em-dashes (—) — prefer a period/comma/colon; a sentence needing 2+ em-dashes
+needs restructuring, not punctuation. Never reuse a forced "every X, every Y, and every
+Z" completeness-triad, or FOMO/urgency framing ("...marks सीधे हाथ से निकल जाते हैं") —
+reads as ad copy, not a teacher. (The pipeline mechanically re-checks/strips these after
+you write — this is here to cut how often it has to.)
 
 ## RAG / SOURCES
 Supplied sources → extract facts, own words, never copy prose. Thin/conflicting →
@@ -124,7 +131,9 @@ real ids. Right after the intro, one mandatory placeholder featured image:
 it for the real upload before publish.
 
 Palette (fixed accents, vary labels per card, never hardcoded): H2 `#0f172a`/white, plain
-text — no emoji by default, it reads as spam, one only where genuinely the clearest icon.
+text — ZERO emoji by default, it reads as spam. The single exception: one emoji, max,
+where it is genuinely the clearest icon for one specific concept — never in a heading,
+section title, or TOC entry, never more than once per note.
 TOC `#eff6ff`/`#2563eb` border. Left-border cards need BOTH a tinted background AND the
 border (`background:[tint];border-left:6px solid [accent];padding:16px;border-radius:12px`
 — border-left alone on a plain/white background reads as flat and bland, not a card) —
