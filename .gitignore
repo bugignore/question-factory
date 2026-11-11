@@ -8,3 +8,8 @@ Automation/knowledge-base/
 # text backup) — never commit. The active book-input folder is
 # Automation/core/input/book-library/ (see Automation/core/.gitignore), not this one.
 _archive/
+
+# Trend-analysis source files must never be committed in plaintext — only
+# the AES-GCM-encrypted .md.enc blobs belong in Automation/trend-analysis/.
+Automation/trend-analysis/*.md
+!Automation/trend-analysis/README.md

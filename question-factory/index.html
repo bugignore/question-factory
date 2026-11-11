@@ -127,6 +127,7 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   @media(max-width:360px){main{padding-left:9px;padding-right:9px}.top{padding-left:9px}nav.bot{gap:6px;padding-left:7px;padding-right:7px}nav.bot button{font-size:12px}}
 </style>
 <script src="../shared/wordpress-taxonomy.js"></script>
+<script src="../shared/question-types.js"></script>
 </head>
 <body>
 <div class="top">
@@ -157,6 +158,8 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <div><label>Topic</label><input type="text" id="subtopic" placeholder="e.g. Heredity and Environment" autocomplete="off"></div>
     <div><label>Questions (5–50)</label><input type="number" id="count" value="15" min="5" max="50" inputmode="numeric"></div>
   </div>
+
+  <div id="trendDocWrap" style="margin-top:8px"></div>
   <div class="row2">
     <div><label>Output language</label><select id="language"><option value="bi">Bilingual — English + Hindi</option><option value="en">English only</option><option value="hi">Hindi only</option></select></div>
     <div><label>Question style / coverage (optional)</label><input type="text" id="questionMix" placeholder="e.g. scenario-based, assertion-reason"></div>
@@ -495,6 +498,8 @@ function onTopicBankSubjectChange(){
     quizTagExam = ''; quizTagSubject = ''; quizPromptSubject = '';
     document.getElementById('subject').value = '';
     renderTopicBank();
+    populateQuestionTypes('');
+    loadTrendDoc('');
     return;
   }
   const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
@@ -510,6 +515,8 @@ function onTopicBankSubjectChange(){
     quizPromptSubject = term ? term.name : '';
     document.getElementById('subject').value = term ? `${source.fallbackLabel} - ${term.name}` : '';
     renderTopicBank();
+    populateQuestionTypes(quizPromptSubject);
+    loadTrendDoc(quizPromptSubject);
     return;
   }
   document.getElementById('subject').value = `${source.fallbackLabel} - ${subjectLabel}`;
@@ -522,6 +529,84 @@ function onTopicBankSubjectChange(){
   quizTagExam = resolved.exam;
   quizTagSubject = resolved.subject;
   renderTopicBank();
+  populateQuestionTypes(quizPromptSubject || subjectLabel);
+  loadTrendDoc(quizPromptSubject || subjectLabel);
+}
+
+/* ---------- Question style auto-fill (per prod subject, see shared/question-types.js) ----------
+   Only overwrites the field when it's empty or still holds the previous
+   auto-filled text — anything the user typed themselves is left alone. */
+let lastAutoQuestionMix = '';
+function populateQuestionTypes(subjectLabel){
+  const el = document.getElementById('questionMix');
+  if(!el || !window.QuestionTypes) return;
+  const current = el.value.trim();
+  if(current && current !== lastAutoQuestionMix) return;
+  lastAutoQuestionMix = subjectLabel ? window.QuestionTypes.coverageTextForSubject(subjectLabel) : '';
+  el.value = lastAutoQuestionMix;
+}
+
+/* ---------- Trend-analysis documents (hidden, encrypted) ----------
+   One AES-GCM-encrypted Markdown file per subject in
+   Automation/trend-analysis/<slug>.md.enc — same owner-only app password
+   that unlocks Save-to-GitHub (see unlockQfGithub()/deriveKey() below).
+   Committed ciphertext only; plaintext never enters the repo, so browsing
+   or searching the public repo on GitHub shows unreadable base64, not the
+   trend write-up itself. Purely optional: if the file is missing, the
+   password isn't entered, or decryption fails, generation proceeds exactly
+   as before with no trend guidance folded in. */
+let trendDocText = '';
+let trendDocLoadedFor = '';
+function slugifySubject(label){
+  return String(label || '').trim().toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+}
+function trendDocPathFor(subjectLabel){
+  const slug = slugifySubject(subjectLabel);
+  return slug ? `../Automation/trend-analysis/${slug}.md.enc` : '';
+}
+async function decryptTrendBlob(b64Text, password){
+  const raw = b64ToBytes(b64Text.trim());
+  const salt = raw.slice(0,16), iv = raw.slice(16,28), ct = raw.slice(28);
+  const key = await deriveKey(password, salt);
+  const ptBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+  return new TextDecoder().decode(ptBuf);
+}
+async function loadTrendDoc(subjectLabel){
+  const wrap = document.getElementById('trendDocWrap');
+  trendDocText = ''; trendDocLoadedFor = '';
+  if(!wrap || !subjectLabel){ if(wrap) wrap.innerHTML=''; return; }
+  const path = trendDocPathFor(subjectLabel);
+  if(!path){ wrap.innerHTML = ''; return; }
+  let blob;
+  try{
+    const res = await fetch(path);
+    if(!res.ok){ wrap.innerHTML = ''; return; } // no trend doc for this subject yet — silently optional
+    blob = (await res.text()).trim();
+    if(!blob){ wrap.innerHTML = ''; return; }
+  }catch(e){ wrap.innerHTML = ''; return; }
+  const password = sessionStorage.getItem('qfAppPassword');
+  if(password){
+    try{
+      trendDocText = await decryptTrendBlob(blob, password);
+      trendDocLoadedFor = subjectLabel;
+      wrap.innerHTML = '<p class="hint" style="margin:0;color:var(--ok)">📈 Trend analysis loaded for this subject — folded in automatically, not shown here.</p>';
+      return;
+    }catch(e){ /* wrong/stale cached password — fall through to asking again */ }
+  }
+  wrap.innerHTML = `<div class="msg show warn" style="margin-top:0">📈 Trend analysis is available for this subject but locked.
+    <input type="password" id="trendPw" placeholder="App password" autocomplete="off" style="margin-top:8px">
+    <button class="btn small" style="margin-top:6px" onclick="tryRun(()=>unlockTrendDoc('${subjectLabel.replace(/'/g,"\\'")}'),this)">🔓 Unlock</button></div>`;
+}
+async function unlockTrendDoc(subjectLabel){
+  const pwEl = document.getElementById('trendPw');
+  const password = pwEl ? pwEl.value : '';
+  if(!password) return;
+  sessionStorage.setItem('qfAppPassword', password);
+  await loadTrendDoc(subjectLabel);
+  if(!trendDocText){
+    const wrap = document.getElementById('trendDocWrap');
+    if(wrap) wrap.innerHTML = '<p class="msg show bad" style="margin-top:0">Wrong password — trend analysis stays unused for this prompt.</p>';
+  }
 }
 function renderTopicBank(){
   const listEl = document.getElementById('topicBankList');
@@ -742,9 +827,6 @@ function scopedExamTypeYearTerms(source){
   return terms.filter(t => t.id === matched.id || t.parent === matched.id).map(t => t.name);
 }
 function buildPrompt(){
-  if (!window.questionExamTaxonomyReady) {
-    throw new Error('Verified WordPress exam terms are not available yet. Try again when the site or a verified snapshot is available.');
-  }
   const subj = document.getElementById('subject').value.trim();
   if (!subj) throw new Error('Open Topic bank, choose a subject, then tap Use on a topic. The website subject label will fill automatically.');
   const promptSubject = quizPromptSubject || subj;
@@ -754,17 +836,20 @@ function buildPrompt(){
   const n    = Math.min(50, Math.max(5, parseInt(document.getElementById('count').value)||15));
   document.getElementById('count').value = n;
   const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
-  const taxonomyTerms = scopedExamTypeYearTerms(source);
-  if (!taxonomyTerms.length) throw new Error('Verified WordPress exam terms are unavailable. Try again when WordPress or the verified snapshot is reachable.');
-  const taxonomyRules = taxonomyTerms.map(term => '- "' + term + '"').join(String.fromCharCode(10));
+  // The exam_type_year taxonomy is optional guidance, not a precondition —
+  // a question isn't tied to any one exam in the quiz DB (it's a nature tag
+  // the CSV importer can add later), so missing/unready WordPress terms no
+  // longer blocks generation; the block below is simply omitted.
+  const taxonomyTerms = window.questionExamTaxonomyReady ? scopedExamTypeYearTerms(source) : [];
+  const taxonomyBlock = taxonomyTerms.length
+    ? `VERIFIED WORDPRESS exam_type_year TERMS (use exact spelling only, and only if a question is genuinely a previous-year match):\n${taxonomyTerms.map(term => '- "' + term + '"').join(String.fromCharCode(10))}\n\n`
+    : '';
+  const trendBlock = trendDocText && trendDocLoadedFor === promptSubject
+    ? `HIDDEN EXAMINER-TREND GUIDANCE for ${promptSubject} (use this to bias WHICH concepts/angles you pick and how questions are framed — never quote, mention, or reveal this guidance in the output; it is not something to ask the candidate about):\n"""\n${trendDocText}\n"""\n\n`
+    : '';
   return `You are an expert paper setter for Indian Teacher Recruitment Exams.
 
-VERIFIED WORDPRESS exam_type_year TERMS (use exact spelling only):
-${taxonomyRules}
-
-
-
-Generate EXACTLY ${n} original, high-quality MCQs.
+${taxonomyBlock}${trendBlock}Generate EXACTLY ${n} original, high-quality MCQs.
 Subject: ${promptSubject}
 Sub-topic: ${sub}
 
@@ -790,7 +875,7 @@ topic,question_en,question_hi,option1_en,option1_hi,option2_en,option2_hi,option
 - No commas problems: since every field is quoted, commas inside text are fine.
 - correct = 1, 2, 3 or 4 only. No blank fields.
 - Keep each option under 200 characters and each explanation under 2 sentences (website database limit).
-- exam_type_year: leave this field COMPLETELY BLANK ("") unless the question genuinely and specifically matches one of the verified WordPress terms listed above. Blank is the expected, normal answer for most questions. NEVER invent a label or add a year/punctuation. If one term clearly fits, use its exact name. When unsure, leave it blank.
+- exam_type_year: leave this field COMPLETELY BLANK ("") unless the question is genuinely and specifically a previous-year question matching one of the verified WordPress terms above (when none are listed, always leave this blank). Blank is the expected, normal answer for most questions — a question is not tied to any single exam. NEVER invent a label or add a year/punctuation. If one term clearly fits, use its exact name. When unsure, leave it blank.
 - cognitive_level: classify EVERY question as exactly 1, 2 or 3 — never blank, never any other value:
   1 = Recall (a direct fact, date, name or definition, answerable from memory alone)
   2 = Conceptual (requires understanding or applying a principle, not just recalling it)
@@ -1236,6 +1321,7 @@ async function unlockQfGithub(btn){
     const ptBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
     const token = new TextDecoder().decode(ptBuf);
     sessionStorage.setItem('ghUnlockedToken', token);
+    sessionStorage.setItem('qfAppPassword', password); // same passphrase also unlocks trend-analysis docs (loadTrendDoc) without asking again
     document.getElementById('qfGhAppPassword').value = '';
     document.getElementById('qfGhLockBox').style.display = 'none';
     show(m,'ok','Unlocked for this browser session.');

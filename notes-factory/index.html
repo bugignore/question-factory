@@ -222,13 +222,6 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
   <h2>✍️ 1 · Build &amp; copy the prompt</h2>
   <p class="hint">Fills your exact TOPIC / EXAM TYPE / SUBJECT into the master prompt (the file itself is never edited) and copies the whole thing — paste it into a new DeepSeek / ChatGPT / Claude chat.</p>
 
-  <fieldset>
-    <legend>🔄 Updating an existing note instead?</legend>
-    <p class="hint" style="margin-top:0">Pick a file from <code>published-notes/</code> — its topic/exam/subject prefill below, and "Build prompt" switches to a revision prompt: the AI gets the old SEO + body as context and is told to fix thin depth, fabricated stats, and generic SEO, keeping the same slug so this republishes over the same WordPress post instead of creating a new one.</p>
-    <input type="file" id="oldNoteFile" accept=".json">
-    <div class="msg" id="oldNoteMsg"></div>
-  </fieldset>
-
   <label>Topic (type any topic — suggestions shown from the CDP list, but any subject's topic is fine)</label>
   <input type="text" id="topic" list="topicSuggestions" placeholder="e.g. Photosynthesis, Mughal Empire, Growth & Development..." oninput="this.classList.remove('fieldErr'); checkTopicAgainstPublished()">
   <p class="hint" id="topicLiveWarn" style="display:none;margin:4px 0 0"></p>
@@ -250,17 +243,12 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
       <details style="margin-top:14px">
         <summary>➕ Add topics to this syllabus (same CSV file question-factory/update-factory read from)</summary>
         <div>
-          <p class="hint" style="margin-top:8px">Adds to whichever Exam source is picked above — saved topics appear in the list above next time this syllabus is loaded (including in question-factory and update-factory, same shared file).</p>
-          <label style="margin-top:4px">Subject</label>
-          <input type="text" id="tbNewSubject" list="tbSubjectSuggest" placeholder="Must match an existing subject to group correctly, or type a new one">
-          <datalist id="tbSubjectSuggest"></datalist>
-          <label>New topic</label>
-          <input type="text" id="tbNewTopic" placeholder="Topic text, exactly as it should appear">
-          <button class="btn small ghost" onclick="tryRun(addSingleTopicToBank,this)">➕ Add to list below</button>
-
-          <label style="margin-top:14px">Or bulk-add from a CSV (Subject,Topic columns)</label>
+          <p class="hint" style="margin-top:8px">Upload a <code>.csv</code> with a header row containing <b>Subject</b> and <b>Topic</b> columns (case-insensitive, any order; extra columns like S.No. are ignored). Adds to the Exam source picked above; duplicates are skipped. Example:</p>
+          <pre style="margin:0 0 8px;padding:8px 10px;border:1.5px solid var(--line);border-radius:9px;background:var(--card);font-size:12px;overflow-x:auto">Subject,Topic
+Mathematics,Mensuration
+EVS,"Water, Air &amp; Pollution"</pre>
+          <p class="hint" style="margin:0 0 8px">ChatGPT prompt: <i>"Give me a CSV with columns Subject,Topic listing 20 CTET Paper 1 Mathematics topics not already in this list: [paste current topics]. Output only the CSV."</i></p>
           <input type="file" id="tbCsvUpload" accept=".csv" onchange="tryRun(()=>previewTopicCsvUpload(this))">
-          <p class="hint" style="margin-top:4px">Duplicates (same Subject+Topic, already in the syllabus or already added below) are skipped automatically.</p>
 
           <div id="tbPendingWrap" style="margin-top:10px"></div>
           <div class="msg" id="tbUploadMsg"></div>
@@ -729,7 +717,8 @@ async function loadTopicBankForSource(sourceKey){
       + subjects.map(s => `<option value="${s}">${s} (${rows.filter(r=>r.subjectLabel===s).length})</option>`).join('');
     document.getElementById('topicBankSubject').value = '';
     document.getElementById('topicBankSearch').value = '';
-    document.getElementById('tbSubjectSuggest').innerHTML = subjects.map(s => `<option value="${s.replace(/"/g,'&quot;')}">`).join('');
+    const suggest = document.getElementById('tbSubjectSuggest');
+    if(suggest) suggest.innerHTML = subjects.map(s => `<option value="${s.replace(/"/g,'&quot;')}">`).join('');
     pendingTopicAdditions = []; // a different source's topic list is a different file — don't carry staged adds across
     renderPendingTopicAdditions();
     renderTopicBank();
@@ -783,15 +772,6 @@ function stageTopicAddition(subjectLabel, topic){
   pendingTopicAdditions.push({ subjectLabel, topic });
   renderPendingTopicAdditions();
   return { ok:true };
-}
-function addSingleTopicToBank(){
-  if(!topicBankLoadedSource){ show(msg('tbUploadMsg'),'bad','Pick an Exam source above first.'); return; }
-  const subjectEl = document.getElementById('tbNewSubject');
-  const topicEl = document.getElementById('tbNewTopic');
-  const r = stageTopicAddition(subjectEl.value, topicEl.value);
-  if(!r.ok){ show(msg('tbUploadMsg'),'bad',r.reason); return; }
-  topicEl.value = '';
-  show(msg('tbUploadMsg'),'ok','Added to the list below — review it, then push when ready.');
 }
 function previewTopicCsvUpload(input){
   const file = input.files && input.files[0];
@@ -1454,7 +1434,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
     reader.readAsText(f);
   });
 
-  document.getElementById('oldNoteFile').addEventListener('change', function(){
+  const oldNoteInput = document.getElementById('oldNoteFile');
+  if(oldNoteInput) oldNoteInput.addEventListener('change', function(){
     const f = this.files && this.files[0];
     if(!f) return;
     const reader = new FileReader();
