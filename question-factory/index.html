@@ -863,7 +863,14 @@ function buildPrompt(){
   const promptSubject = quizPromptSubject || subj;
   const language = document.getElementById('language').value;
   const questionMix = document.getElementById('questionMix').value.trim() || 'a balanced mix of conceptual, application-based, scenario-based and exam-appropriate questions';
-  const sub  = document.getElementById('subtopic').value.trim() || promptSubject;
+  const typedTopic = document.getElementById('subtopic').value.trim();
+  const sub  = typedTopic || promptSubject;
+  // No Topic chosen: hand the model this subject's real syllabus topics to pick from per question,
+  // instead of letting every row's topic column collapse to the subject name.
+  const pickedBankSubject = document.getElementById('topicBankSubject').value;
+  const syllabusTopics = (!typedTopic && topicBankRows && pickedBankSubject && !pickedBankSubject.startsWith('__unscoped__:'))
+    ? topicBankRows.filter(r => r.subjectLabel === pickedBankSubject).map(r => r.topic)
+    : [];
   const n    = Math.min(50, Math.max(5, parseInt(document.getElementById('count').value)||15));
   document.getElementById('count').value = n;
   const source = TOPIC_BANK_SOURCES[topicBankLoadedSource];
@@ -882,7 +889,7 @@ function buildPrompt(){
 
 ${taxonomyBlock}${trendBlock}Generate EXACTLY ${n} original, high-quality MCQs.
 Subject: ${promptSubject}
-Sub-topic: ${sub}
+Sub-topic: ${syllabusTopics.length ? 'spread across the syllabus topics listed in the CSV RULES below' : sub}
 
 METHOD (strict, for EVERY question):
 1. Decide the factually correct answer FIRST. For maths/reasoning, calculate it step by step internally.
@@ -892,7 +899,14 @@ METHOD (strict, for EVERY question):
 5. If you cannot fit all ${n} rows, output fewer COMPLETE rows — never a half row.
 
 QUESTION MIX: ${questionMix}
-No previous-year copies. No duplicate concepts. Match the stated subject and exam context; avoid unsupported claims about current exam patterns.
+No previous-year copies. Match the stated subject and exam context; avoid unsupported claims about current exam patterns.
+
+QUALITY RULES (apply to the whole batch, check before output):
+- No repeated concepts: every question tests a different concept. Never two questions on the same idea, theorist-concept pair, disability or assessment type, even if worded differently.
+- Answer key balance: spread the correct option across 1, 2, 3 and 4 as evenly as possible. For ${n} questions no option may be correct more than ${Math.ceil(n/4)+1} times, and with 8 or more questions every option must be correct at least once. Do not put correct answers in any repeating pattern.
+- Distractors must be plausible. A wrong option may never be absurd, obviously unprofessional or a straw man. It should be what a half-prepared candidate would genuinely pick.
+- Assertion-Reason questions: BOTH statements must sound reasonable at first reading, so the candidate has to reason, not just spot a silly line. Across the batch, use all four outcomes (both true and R explains A; both true but R does not explain A; A true and R false; A false and R true), not only the easy ones. Never make R a statement that is plainly wrong.
+- Scenario questions (a teacher, learner or classroom situation described in the question) always carry cognitive_level 3, even when the answer is a single concept.
 
 ${langRules(language)}
 ${formatRules()}
@@ -901,17 +915,20 @@ CSV RULES:
 - Output ONLY one markdown code block containing valid UTF-8 CSV. No text before or after it.
 - First line exactly:
 topic,question_en,question_hi,option1_en,option1_hi,option2_en,option2_hi,option3_en,option3_hi,option4_en,option4_hi,correct,explanation_en,explanation_hi,exam_type_year,cognitive_level
-- topic column is ALWAYS exactly: ${sub}  (the sub-topic — never "${promptSubject}", never a subject/exam label)
+${syllabusTopics.length
+  ? `- topic column: for EACH question put the one best-fitting topic from this syllabus list, copied EXACTLY as written (same spelling, symbols and capitalisation). Spread the questions across different topics, favour the most examined ones, and never write "${promptSubject}" or any subject/exam name:
+${syllabusTopics.map(t => '  * ' + t).join('\n')}`
+  : `- topic column is ALWAYS exactly: ${sub}  (the sub-topic — never "${promptSubject}", never a subject/exam label)`}
 - EVERY field wrapped in straight double quotes ("), inner quotes doubled. Use only straight quotes, never curly quotes.
 - No commas problems: since every field is quoted, commas inside text are fine.
 - correct = 1, 2, 3 or 4 only. No blank fields.
-- Keep each option under 200 characters and each explanation under 2 sentences (website database limit).
+- Keep each option under 200 characters. Explanations have no length limit.
 - exam_type_year: leave this field COMPLETELY BLANK ("") unless the question is genuinely and specifically a previous-year question matching one of the verified WordPress terms above (when none are listed, always leave this blank). Blank is the expected, normal answer for most questions — a question is not tied to any single exam. NEVER invent a label or add a year/punctuation. If one term clearly fits, use its exact name. When unsure, leave it blank.
 - cognitive_level: classify EVERY question as exactly 1, 2 or 3 — never blank, never any other value:
   1 = Recall (a direct fact, date, name or definition, answerable from memory alone)
   2 = Conceptual (requires understanding or applying a principle, not just recalling it)
   3 = Case-study (a scenario/classroom situation the candidate must reason through)
-- Explanation: 1-2 sentences on why the correct option is right (maths: show the quick calculation).`;
+- Explanation (explanation_en and explanation_hi): write in the simplest possible words, as if explaining to a Class 8 student who is hearing the idea for the first time. Say clearly why the correct option is right and, where it helps, why the tempting wrong option is wrong. Use short sentences and everyday examples. No jargon without a plain-word meaning. Do not shorten it to save space (maths: show the calculation step by step).`;
 }
 function copyPrompt(btn){
   const t = document.getElementById('promptOut');
@@ -1205,7 +1222,7 @@ function buildResolver(){
   let p = `You are a senior question-paper reviewer for Indian teacher exams. For each MCQ below, two different reviews disagreed about the answer. Decide the FINAL correct option with full care — solve/verify from first principles.
 
 Reply with ONE line per question in EXACTLY this format (pipe-separated):
-QUESTIONNUMBER=FINALOPTION | corrected English explanation (1-2 sentences) | ${lang==='en'?'same English explanation again':'उसी की हिंदी व्याख्या'}
+QUESTIONNUMBER=FINALOPTION | corrected English explanation (simple words, no length limit) | ${lang==='en'?'same English explanation again':'उसी की हिंदी व्याख्या'}
 If the question itself is flawed (no single correct option), reply: QUESTIONNUMBER=0 | flawed | flawed
 No other text.
 
