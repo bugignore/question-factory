@@ -149,20 +149,20 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
     <option value="">Pick a subject…</option>
   </select>
 
-  <input type="text" id="topicBankSearch" placeholder="Search within this subject…" oninput="renderTopicBank()" style="margin-top:8px">
+  <label style="margin-top:8px">Topic <span class="hint" style="margin:0;display:inline">(type to filter the syllabus list, tap a row to select, or keep your own text)</span></label><input type="text" id="subtopic" placeholder="Pick a subject first" autocomplete="off" oninput="renderTopicBank()">
+  <input type="hidden" id="topicBankSearch">
   <div id="topicBankList" style="margin-top:8px;max-height:280px;overflow-y:auto"></div>
   <div class="msg" id="topicBankMsg"></div>
   <input type="hidden" id="subject">
 
   <div class="row2">
-    <div><label>Selected topic <span class="hint" style="margin:0;display:inline">(from the list above, or type your own)</span></label><input type="text" id="subtopic" placeholder="Pick a subject first" autocomplete="off" oninput="renderTopicBank()"></div>
     <div><label>Questions (5–50)</label><input type="number" id="count" value="15" min="5" max="50" inputmode="numeric"></div>
   </div>
 
   <div id="trendDocWrap" style="margin-top:8px"></div>
   <div class="row2">
     <div><label>Output language</label><select id="language"><option value="bi">Bilingual — English + Hindi</option><option value="en">English only</option><option value="hi">Hindi only</option></select></div>
-    <div><label>Question style / coverage (optional)</label><input type="text" id="questionMix" placeholder="e.g. scenario-based, assertion-reason"></div>
+    <div><label>Question styles <span class="hint" style="margin:0;display:inline">(tap to include / exclude)</span></label><input type="hidden" id="questionMix"><div id="questionStyleChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:2px"><span class="hint" style="margin:0">Pick a subject to see its question styles.</span></div></div>
   </div>
 
   <details style="margin-top:8px">
@@ -537,13 +537,38 @@ function onTopicBankSubjectChange(){
    Only overwrites the field when it's empty or still holds the previous
    auto-filled text — anything the user typed themselves is left alone. */
 let lastAutoQuestionMix = '';
+let questionStyleOff = new Set();
+function questionStylesFor(){ return window.QuestionTypes ? window.QuestionTypes.typesForSubject(currentQuestionSubject) : []; }
+let currentQuestionSubject = '';
+function syncQuestionMixFromChips(){
+  const el = document.getElementById('questionMix');
+  lastAutoQuestionMix = questionStylesFor().filter(t => !questionStyleOff.has(t)).join(', ');
+  el.value = lastAutoQuestionMix;
+}
+function renderQuestionStyleChips(){
+  const wrap = document.getElementById('questionStyleChips');
+  if(!wrap) return;
+  const types = currentQuestionSubject ? questionStylesFor() : [];
+  wrap.innerHTML = types.length ? '' : '<span class="hint" style="margin:0">Pick a subject to see its question styles.</span>';
+  types.forEach(t => {
+    const on = !questionStyleOff.has(t);
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('aria-pressed', on); b.textContent = (on ? '✓ ' : '') + t;
+    b.style.cssText = `padding:6px 11px;border-radius:99px;font:inherit;font-size:13px;cursor:pointer;border:1.5px solid ${on?'var(--accent)':'var(--line)'};background:${on?'var(--accent-bg)':'var(--card)'};color:${on?'var(--accent)':'var(--ink-soft)'}`;
+    b.onclick = () => { on ? questionStyleOff.add(t) : questionStyleOff.delete(t); syncQuestionMixFromChips(); renderQuestionStyleChips(); document.getElementById('promptOut').value = ''; };
+    wrap.appendChild(b);
+  });
+}
 function populateQuestionTypes(subjectLabel){
   const el = document.getElementById('questionMix');
   if(!el || !window.QuestionTypes) return;
   const current = el.value.trim();
-  if(current && current !== lastAutoQuestionMix) return;
-  lastAutoQuestionMix = subjectLabel ? window.QuestionTypes.coverageTextForSubject(subjectLabel) : '';
-  el.value = lastAutoQuestionMix;
+  const userTyped = current && current !== lastAutoQuestionMix;
+  currentQuestionSubject = subjectLabel || '';
+  questionStyleOff = new Set();
+  renderQuestionStyleChips();
+  if(userTyped) return;
+  if(currentQuestionSubject) syncQuestionMixFromChips(); else { lastAutoQuestionMix = ''; el.value = ''; }
 }
 
 /* ---------- Trend-analysis documents (hidden, encrypted) ----------
@@ -614,17 +639,18 @@ function renderTopicBank(){
   const subj = document.getElementById('topicBankSubject').value;
   if(!subj){ listEl.innerHTML = '<p class="hint">Pick a subject above to see its topics.</p>'; return; }
   if(subj.startsWith('__unscoped__:')){
-    listEl.innerHTML = '<p class="hint">No pre-written topics for this subject yet — type your own Topic below.</p>';
+    listEl.innerHTML = '<p class="hint">No pre-written topics for this subject yet — type your own Topic above.</p>';
     return;
   }
-  const q = document.getElementById('topicBankSearch').value.trim().toLowerCase();
   const esc = t => String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
   const chosen = document.getElementById('subtopic').value.trim();
   const all = topicBankRows.map((r,i) => ({...r, idx:i})).filter(r => r.subjectLabel === subj);
+  const exact = all.some(r => r.topic === chosen);
+  const q = exact ? '' : chosen.toLowerCase();
   const rows = all.filter(r => !q || r.topic.toLowerCase().includes(q));
   const subtopicEl = document.getElementById('subtopic');
   if(all.length) subtopicEl.placeholder = 'e.g. ' + all[0].topic;
-  const head = `<p class="hint" style="margin:0 0 6px">${q ? rows.length+' of '+all.length : all.length} syllabus topics — tap one to select it${chosen ? '' : ', or type your own below'}.</p>`;
+  const head = `<p class="hint" style="margin:0 0 6px">${q ? rows.length+' of '+all.length : all.length} syllabus topics — tap one to select it${q && !rows.length ? '' : ''}${q ? '; your own text is used as-is if none fit' : ''}.</p>`;
   listEl.innerHTML = head + (rows.length
     ? rows.map(r => {
         const on = r.topic === chosen;
@@ -632,7 +658,7 @@ function renderTopicBank(){
           <span aria-hidden="true" style="flex:none;width:18px;height:18px;border-radius:50%;border:2px solid ${on?'var(--accent)':'var(--line)'};background:${on?'var(--accent)':'transparent'};color:var(--on-accent);font-size:12px;line-height:14px;text-align:center">${on?'✓':''}</span>
           <span style="flex:1">${esc(r.topic)}</span></button>`;
       }).join('')
-    : '<p class="hint">No topics match — clear the search, or type your own topic below.</p>');
+    : '<p class="hint">No syllabus topic matches — your text will be used as the topic.</p>');
 }
 
 /* ---------- Topic bank: add new topics (writes back to the real CSV in the repo) ----------
