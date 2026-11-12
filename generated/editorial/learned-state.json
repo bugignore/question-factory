@@ -478,6 +478,28 @@
       "coverage": null,
       "sampleSize": 5
     },
+    "DSSSB PRT - Special Educator::CTET ENGLISH": {
+      "recentStructures": {
+        "recentShapeDistribution": {
+          "definitions and scope": 1,
+          "sentence structure and parts of speech": 1,
+          "tense and agreement": 1,
+          "vocabulary relationships": 1,
+          "error detection method": 1,
+          "reading comprehension and passage": 1,
+          "inclusive teaching application": 1,
+          "mixed practice and answer key": 1,
+          "rapid revision": 1,
+          "faq and references": 1
+        },
+        "structuralDivergenceFromHistory": 1,
+        "structuralRepetitiveness": 0,
+        "sectionCountEwma": 10,
+        "sampleSize": 1
+      },
+      "coverage": null,
+      "sampleSize": 1
+    },
     "CTET Paper I / CTET Paper II::CDP": {
       "recentStructures": {
         "recentShapeDistribution": {
@@ -577,5 +599,5 @@
       "sampleSize": 1
     }
   },
-  "generatedAt": "2026-10-26T19:26:38.171Z"
+  "generatedAt": "2026-11-12T12:14:44.824Z"
 }

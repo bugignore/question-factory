@@ -17,160 +17,237 @@
         "id": "BPSC TRE::English",
         "exploitScore": 0.5,
         "timesUsed": 0,
-        "explorationBonus": 2.067062091905214,
-        "totalScore": 2.567062091905214
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
       },
       {
         "id": "BPSC TRE::Geography",
         "exploitScore": 0.5,
         "timesUsed": 0,
-        "explorationBonus": 2.067062091905214,
-        "totalScore": 2.567062091905214
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
       },
       {
         "id": "BPSC TRE::History",
         "exploitScore": 0.5,
         "timesUsed": 0,
-        "explorationBonus": 2.067062091905214,
-        "totalScore": 2.567062091905214
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
       },
       {
         "id": "BPSC TRE::Maths",
         "exploitScore": 0.5,
         "timesUsed": 0,
-        "explorationBonus": 2.067062091905214,
-        "totalScore": 2.567062091905214
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
       },
       {
         "id": "BPSC TRE::Science",
         "exploitScore": 0.5,
         "timesUsed": 0,
-        "explorationBonus": 2.067062091905214,
-        "totalScore": 2.567062091905214
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "CTET Paper I::EVS",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "CTET Paper I::Hindi",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "CTET Paper I::Maths",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "CTET Paper II::CDP",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "CTET Paper II::English",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "CTET Paper II::Geography",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "CTET Paper II::Hindi",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "CTET Paper II::History",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "CTET Paper II::Science",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
       },
       {
         "id": "DSSSB::English",
         "exploitScore": 0.5,
         "timesUsed": 0,
-        "explorationBonus": 2.067062091905214,
-        "totalScore": 2.567062091905214
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
       },
       {
         "id": "DSSSB::Hindi",
         "exploitScore": 0.5,
         "timesUsed": 0,
-        "explorationBonus": 2.067062091905214,
-        "totalScore": 2.567062091905214
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
+      },
+      {
+        "id": "DSSSB::Maths",
+        "exploitScore": 0.5,
+        "timesUsed": 0,
+        "explorationBonus": 2.0704088539147736,
+        "totalScore": 2.5704088539147736
       },
       {
         "id": "BPSC TRE::EVS",
         "exploitScore": 0.5,
         "timesUsed": 1,
-        "explorationBonus": 1.4616336223198274,
-        "totalScore": 1.9616336223198274
+        "explorationBonus": 1.4640001404318044,
+        "totalScore": 1.9640001404318044
       },
       {
         "id": "CTET Paper I / CTET Paper II::Geography",
         "exploitScore": 0.5,
         "timesUsed": 1,
-        "explorationBonus": 1.4616336223198274,
-        "totalScore": 1.9616336223198274
+        "explorationBonus": 1.4640001404318044,
+        "totalScore": 1.9640001404318044
       },
       {
         "id": "CTET Paper I / CTET Paper II::Hindi",
         "exploitScore": 0.5,
         "timesUsed": 1,
-        "explorationBonus": 1.4616336223198274,
-        "totalScore": 1.9616336223198274
+        "explorationBonus": 1.4640001404318044,
+        "totalScore": 1.9640001404318044
       },
       {
         "id": "CTET Paper I::English",
         "exploitScore": 0.5,
         "timesUsed": 1,
-        "explorationBonus": 1.4616336223198274,
-        "totalScore": 1.9616336223198274
+        "explorationBonus": 1.4640001404318044,
+        "totalScore": 1.9640001404318044
+      },
+      {
+        "id": "DSSSB PRT - Special Educator::CTET ENGLISH",
+        "exploitScore": 0.5,
+        "timesUsed": 1,
+        "explorationBonus": 1.4640001404318044,
+        "totalScore": 1.9640001404318044
       },
       {
         "id": "BPSC TRE::Auto-detect",
         "exploitScore": 0.75,
         "timesUsed": 2,
-        "explorationBonus": 1.1934188551931462,
-        "totalScore": 1.9434188551931462
+        "explorationBonus": 1.195351109140279,
+        "totalScore": 1.945351109140279
       },
       {
         "id": "BPSC TRE::Hindi",
         "exploitScore": 0.86,
         "timesUsed": 5,
-        "explorationBonus": 0.8438745653029601,
-        "totalScore": 1.70387456530296
+        "explorationBonus": 0.8452408751719521,
+        "totalScore": 1.705240875171952
       },
       {
         "id": "CTET Paper I / CTET Paper II / UPTET::Maths",
         "exploitScore": 0.5,
         "timesUsed": 2,
-        "explorationBonus": 1.1934188551931462,
-        "totalScore": 1.6934188551931462
+        "explorationBonus": 1.195351109140279,
+        "totalScore": 1.695351109140279
       },
       {
         "id": "CTET Paper I::Auto-detect",
         "exploitScore": 0.5,
         "timesUsed": 2,
-        "explorationBonus": 1.1934188551931462,
-        "totalScore": 1.6934188551931462
+        "explorationBonus": 1.195351109140279,
+        "totalScore": 1.695351109140279
       },
       {
         "id": "CTET Paper I / CTET Paper II::CDP",
         "exploitScore": 0.5,
         "timesUsed": 3,
-        "explorationBonus": 1.033531045952607,
-        "totalScore": 1.533531045952607
+        "explorationBonus": 1.0352044269573868,
+        "totalScore": 1.5352044269573868
       },
       {
         "id": "CTET Paper I::CDP",
         "exploitScore": 0.5,
         "timesUsed": 3,
-        "explorationBonus": 1.033531045952607,
-        "totalScore": 1.533531045952607
+        "explorationBonus": 1.0352044269573868,
+        "totalScore": 1.5352044269573868
       },
       {
         "id": "DSSSB::History",
         "exploitScore": 0.5,
         "timesUsed": 5,
-        "explorationBonus": 0.8438745653029601,
-        "totalScore": 1.34387456530296
+        "explorationBonus": 0.8452408751719521,
+        "totalScore": 1.3452408751719522
       },
       {
         "id": "CTET Paper I / CTET Paper II::EVS",
         "exploitScore": 0.5,
         "timesUsed": 7,
-        "explorationBonus": 0.7308168111599137,
-        "totalScore": 1.2308168111599138
+        "explorationBonus": 0.7320000702159022,
+        "totalScore": 1.2320000702159022
       },
       {
         "id": "CTET Paper I / CTET Paper II::Maths",
         "exploitScore": 0.5,
         "timesUsed": 8,
-        "explorationBonus": 0.689020697301738,
-        "totalScore": 1.1890206973017379
+        "explorationBonus": 0.6901362846382578,
+        "totalScore": 1.1901362846382577
       },
       {
         "id": "CTET Paper I / CTET Paper II::Auto-detect",
         "exploitScore": 0.5,
         "timesUsed": 9,
-        "explorationBonus": 0.6536624275412776,
-        "totalScore": 1.1536624275412777
+        "explorationBonus": 0.6547207666149506,
+        "totalScore": 1.1547207666149506
       },
       {
         "id": "DSSSB::Auto-detect",
         "exploitScore": 0.5,
         "timesUsed": 19,
-        "explorationBonus": 0.46220913512129763,
-        "totalScore": 0.9622091351212976
+        "explorationBonus": 0.4629574938570865,
+        "totalScore": 0.9629574938570865
       }
     ]
   },
   "confidence": 0,
-  "generatedAt": "2026-10-26T19:26:37.876Z",
+  "generatedAt": "2026-11-12T12:14:44.559Z",
   "mode": "recommend-only",
   "humanActionNeeded": "Real backlog candidate found: \"Parts of Speech और Sentence Structure: BPSC TRE 4 English Grammar आसान उदाहरणों में\" (BPSC TRE/English, 8 more unpublished in this pair's syllabus). Re-run with --topic \"Parts of Speech और Sentence Structure: BPSC TRE 4 English Grammar आसान उदाहरणों में\" --subject \"English\" --exam \"BPSC TRE\" to get a full editorial brief for it, or pick a different one from Automation/input sylabuss/."
 }
