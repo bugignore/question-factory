@@ -1,0 +1,93 @@
+{
+  "id": "ctet-cdp-pyq-analysis-2026",
+  "type": "note",
+  "topic": "Day 1 | CTET December 2026 CDP Preparation: 2018–2026 के Previous Year Questions का विश्लेषण और परीक्षा पैटर्न",
+  "subject": "Auto-detect",
+  "exam": "BPSC TRE",
+  "flavour": "problem-first",
+  "concepts_taught": [
+    "CDP as application of child-development and pedagogy concepts rather than definition recall",
+    "CTET Paper I structure and CDP question count",
+    "official CTET archive session coverage from December 2018 to February 2026",
+    "scenario-question diagnosis using observable evidence",
+    "choosing between plausible distractors",
+    "Piaget's assimilation and accommodation",
+    "Vygotsky's Zone of Proximal Development and scaffolding",
+    "individual differences and inclusive classroom access",
+    "intrinsic motivation and supportive classroom climate",
+    "formative assessment and learner-error analysis",
+    "PYQ analysis sheet and error classification"
+  ],
+  "misconceptions_used": [
+    "Knowing theory definitions automatically enables correct scenario answers",
+    "A wrong learner response should be corrected before understanding the learner's reasoning",
+    "A child who does not answer publicly necessarily lacks understanding",
+    "All positive-sounding answer options are equally suitable",
+    "Absolute words automatically make an option false",
+    "Every calendar year from 2018 to 2026 had a CTET session",
+    "Practice questions can be represented as official previous-year questions"
+  ],
+  "examples_used": [
+    "A child adding unlike fractions by combining numerator and denominator",
+    "A learner completing a puzzle only after teacher prompts",
+    "A child who writes a correct answer but hesitates to speak publicly",
+    "A learner with hearing impairment needing accessible classroom communication",
+    "A child revising an animal category after comparing a cat and a dog"
+  ],
+  "pedagogical_strategy": "Teach a repeatable scenario-reading and distractor-analysis method, then connect it to five CDP conceptual lenses and practice questions.",
+  "article_shape": [
+    "problem-and-opening-fact",
+    "paper-pattern-and-archive",
+    "scenario-reading-method",
+    "option-discrimination",
+    "five-cdp-conceptual-lenses",
+    "pyq-analysis-method",
+    "preparation-error-diagnosis",
+    "practice-questions",
+    "rapid-revision",
+    "conclusion",
+    "references",
+    "further-reading"
+  ],
+  "question_types": [
+    "classroom-scenario",
+    "theory-application",
+    "inclusive-pedagogy",
+    "concept-distinction",
+    "assessment-scenario",
+    "assertion-reason",
+    "teacher-response",
+    "option-discrimination"
+  ],
+  "sources": [
+    "CTET Information Bulletin CTET February 2026",
+    "CTET Official Archive: Previous Year Question Papers",
+    "CTET Official Archive: Previous Year Final Answer Keys"
+  ],
+  "card_sentences_used": [
+    "एक ही theory के lecture दोबारा देखना exam में useful नहीं होता हैं, जब असली समस्या प्रश्न में theory पहचानने और विकल्पों के बीच निर्णय लेने की हो। ऐसी स्थिति में नया lecture नहीं, बल्कि गलत प्रश्न का विश्लेषण चाहिए।",
+    "प्रश्न का उत्तर भर नहीं। यह दर्ज करें कि प्रश्न किस concept पर था, किस परिस्थिति में concept लागू हुआ, गलत विकल्प क्यों आकर्षक लगा और अगली बार कौन-सा संकेत सही दिशा देगा। यही analysis प्रश्न-संग्रह को सीखने के साधन में बदलता है।",
+    "पहले देखें कि विकल्प प्रश्न की मूल समस्या का उत्तर देता है या केवल एक सामान्य अच्छी बात कहता है। फिर जाँचें कि वह बच्चे की सोच और गरिमा का सम्मान करता है या नहीं। अंत में देखें कि वह सीखने को आगे बढ़ाता है या केवल तत्काल अनुशासन/सही उत्तर पर रुक जाता है।",
+    "Development बताता है कि बच्चा किस तरह विकसित होता है। Learning बताता है कि अनुभव और सहायता से समझ कैसे आगे बढ़ती है। Individual differences बताते हैं कि एक ही तरीका सभी पर समान रूप से क्यों लागू नहीं होता। Motivation भागीदारी को प्रभावित करता है। Assessment शिक्षक को अगले शिक्षण निर्णय के लिए evidence देता है।",
+    "एक बच्चा गणित के प्रश्न का गलत उत्तर देता है। शिक्षक जानना चाहता है कि गलती किस सोच के कारण हुई। सबसे उपयुक्त पहला कदम क्या होगा?",
+    "उत्तर: B. बच्चे की reasoning जानने से misconception का पता चलता है। इसके बाद शिक्षक उपयुक्त उदाहरण या feedback चुन सकता है। केवल सही नियम लिखवाने से गलती का कारण स्पष्ट नहीं होता।",
+    "एक बच्चा किसी puzzle को अकेले पूरा नहीं कर पाता, लेकिन शिक्षक के संकेत मिलने पर उसे हल कर लेता है। यह स्थिति किस अवधारणा से सबसे अधिक संबंधित है?",
+    "उत्तर: B. ZPD स्वतंत्र प्रदर्शन और सहायता से संभव प्रदर्शन के बीच के अंतर को दर्शाता है। शिक्षक का संकेत सहायता का उदाहरण है।",
+    "एक hearing-impaired learner को कक्षा में निर्देश समझने में कठिनाई होती है। शिक्षक का सबसे उपयुक्त कदम क्या है?",
+    "उत्तर: C. Barrier कम करना और meaningful participation सुनिश्चित करना inclusive practice का उद्देश्य है। केवल अलग बैठाना या learning expectations घटाना inclusion नहीं है।",
+    "एक बच्चा नई जानकारी को अपनी पहले से बनी समझ में फिट करने की कोशिश करता है, बिना उस समझ में बदलाव किए। Piaget की शब्दावली में यह क्या है?",
+    "उत्तर: B. Assimilation में नई जानकारी मौजूदा schema के भीतर समझी जाती है। Accommodation में schema में संशोधन होता है।",
+    "शिक्षक पाता है कि अधिकांश बच्चे एक ही प्रकार की गलती कर रहे हैं। सीखने को बेहतर बनाने के लिए सबसे उचित प्रतिक्रिया क्या है?",
+    "उत्तर: C. एक समान error pattern यह संकेत दे सकता है कि teaching approach या concept explanation में बदलाव की जरूरत है। Assessment का उपयोग अगले शिक्षण निर्णय के लिए evidence जुटाने में होता है।",
+    "Assertion (A): बच्चों की गलतियाँ शिक्षक को उनकी सोच समझने का अवसर देती हैं। Reason (R): बच्चे की समाधान-प्रक्रिया से यह पता चल सकता है कि उसने concept को किस तरह समझा है।",
+    "विकल्प: (a) A और R दोनों सत्य हैं तथा R, A की सही व्याख्या है। (b) दोनों सत्य हैं, पर R सही व्याख्या नहीं है। (c) A सत्य है, R असत्य है। (d) A असत्य है, R सत्य है।",
+    "उत्तर: (a). Reason बताता है कि error analysis उपयोगी क्यों है: प्रक्रिया से learner की underlying understanding के संकेत मिलते हैं।",
+    "एक बच्चा पूरी कक्षा के सामने उत्तर देने में संकोच करता है, लेकिन जोड़ी में चर्चा करते समय सही विचार रखता है। शिक्षक को सबसे पहले क्या करना चाहिए?",
+    "उत्तर: C. अलग-अलग तरीकों से भागीदारी का अवसर देना बच्चे की समझ को बेहतर ढंग से सामने ला सकता है। एक परिस्थिति से स्थायी क्षमता-निर्णय नहीं करना चाहिए।",
+    "एक शिक्षक चाहता है कि बच्चे नया concept केवल याद न करें, बल्कि उसे अपने अनुभव से जोड़कर समझें। कौन-सी गतिविधि सबसे उपयुक्त होगी?",
+    "उत्तर: C. अनुभव से जुड़ी चर्चा, तुलना और व्याख्या conceptual understanding को विकसित करने में सहायक है।"
+  ],
+  "postId": "789",
+  "link": "https://examnotespdf.in/exam/bpsc-tre/notes/ctet-cdp-pyq-analysis-2026/",
+  "published": "2026-11-19T05:17:37Z"
+}
