@@ -308,7 +308,7 @@ EVS,"Water, Air &amp; Pollution"</pre>
   <button class="btn ghost" onclick="tryRun(copyWholePrompt,this)">🖥️ Copy whole prompt (PC only)</button>
   <div class="msg" id="pMsg"></div>
   <div id="filePickWrap" style="display:none">
-    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v16.md</code> in the folder above this one:</label>
+    <label>Couldn't auto-load the master prompt (this happens when the page is opened straight from the folder). Pick the file manually — it's <code>MASTER-PROMPT-ExamNotesPDF_v17.md</code> in the folder above this one:</label>
     <input type="file" id="masterPromptFile" accept=".md,.txt">
   </div>
   <textarea id="promptOut" style="display:none"></textarea>
@@ -413,6 +413,13 @@ EVS,"Water, Air &amp; Pollution"</pre>
     <button class="btn" onclick="tryRun(runValidationUI,this)">🔎 Run validation</button>
     <div class="msg" id="validateMsg"></div>
     <div id="validateResults"></div>
+    <details style="margin-top:12px"><summary>✍️ Humanize-fix: rewrite only the AI-sounding sentences (same chat)</summary>
+      <p class="hint" style="margin-top:8px">Finds sentences with AI tells ("not X but Y", "आइए समझते हैं", crucial/pivotal, मील का पत्थर…) and copies a short prompt listing only those. Paste it in the SAME chat that wrote the note, paste the JSON reply below, tap Apply. Nothing else in the note changes.</p>
+      <button class="btn ghost" onclick="tryRun(copyHumanizeFixPrompt,this)">📋 Copy humanize-fix prompt</button>
+      <textarea id="humanizeReply" style="min-height:90px;margin-top:8px" placeholder='Paste the AI reply here (the ```json block with "find"/"replace")'></textarea>
+      <button class="btn" onclick="tryRun(applyHumanizeFix,this)">✅ Apply fixes</button>
+      <div class="msg" id="humanizeMsg"></div>
+    </details>
   </fieldset>
 </section>
 
@@ -1400,9 +1407,14 @@ function updateLangMixLabel(){
   document.getElementById('langMixLabel').textContent = `Hindi ${hindi}% + English ${100-hindi}%`;
 }
 
+// v17 = v16 with code-enforced rules trimmed (emoji/paywall phrases/ad label),
+// no em-dashes or **bold** in the prompt text itself (models mirror their
+// prompt's style). v16 is kept untouched as the rollback: change this one
+// line back to 'MASTER-PROMPT-ExamNotesPDF_v16.md' to revert.
+const MASTER_PROMPT_FILE = 'MASTER-PROMPT-ExamNotesPDF_v17.md';
 async function loadMasterPrompt(){
   if(masterPromptText) return masterPromptText;
-  const candidates = ['../MASTER-PROMPT-ExamNotesPDF_v16.md'];
+  const candidates = ['../' + MASTER_PROMPT_FILE];
   let lastErr;
   for(const url of candidates){
     try{
@@ -1416,7 +1428,7 @@ async function loadMasterPrompt(){
   const hint = location.protocol === 'file:'
     ? 'This page was opened straight from the folder (file://), where browsers block reading other files automatically.'
     : 'Could not load the master prompt file from the repo root ('+(lastErr?lastErr.message:'')+').';
-  throw new Error(hint + ' Use the file picker that just appeared below the button to select MASTER-PROMPT-ExamNotesPDF_v16.md manually — then tap "Build & copy prompt" again.');
+  throw new Error(hint + ' Use the file picker that just appeared below the button to select ' + MASTER_PROMPT_FILE + ' manually — then tap "Build & copy prompt" again.');
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -1489,36 +1501,36 @@ in order: 1) can make a single file ("file"/"canvas")? → everything below (all
 blocks/markers/fences, unchanged) as ONE \`.txt\` file, one short chat confirmation only,
 no paste. 2) no single-file capability but can zip? → same content as ONE file inside a
 \`.zip\`. 3) no file capability? → output directly in chat, unchanged. Never split the
-difference — whole, one of the three.`;
+difference: whole, one of the three.`;
   }
   if(pref === 'chat'){
-    return `Output everything directly in the chat reply, unchanged — no file, no zip, no
+    return `Output everything directly in the chat reply, unchanged: no file, no zip, no
 canvas. The person will paste your reply directly into Step 2.`;
   }
   return `Reader is likely on MOBILE, where copying a long reply is unreliable. Deliver as a file,
 in order: 1) can zip? → everything below (all blocks/markers/fences, unchanged) as ONE
 file inside a \`.zip\`, one short chat confirmation only, no paste. 2) no zip but can make
 a single file ("file"/"canvas")? → same content as ONE \`.txt\` file. 3) no file capability?
-→ output directly in chat, unchanged. Never split the difference — whole, one of the three.`;
+→ output directly in chat, unchanged. Never split the difference: whole, one of the three.`;
 }
 function outputContract(deliveryPref){
   return `
 
-=== PIPELINE OUTPUT CONTRACT (read after finishing everything above — mandatory, additive only) ===
-Everything above still applies in full. This contract only wraps your answer in sentinel markers so a script can extract the pieces — it changes nothing about what you write, only how it's packaged at the end.
+=== PIPELINE OUTPUT CONTRACT (read after finishing everything above: mandatory, additive only) ===
+Everything above still applies in full. This contract only wraps your answer in sentinel markers so a script can extract the pieces: it changes nothing about what you write, only how it's packaged at the end.
 
-=== DELIVERY METHOD — CHECK FIRST ===
+=== DELIVERY METHOD: CHECK FIRST ===
 ${deliveryMethodBlock(deliveryPref)}
 
 If MULTI-PART DELIVERY above applies, this still governs delivery FORMAT (file vs. chat) for each reply; MULTI-PART DELIVERY governs how the blocks below split ACROSS replies.
 
 Output exactly four blocks below, in this order, nothing outside them.
 
-CRITICAL RENDERING RULE: every block's content (including the HTML body and the plain-text publisher notes) MUST sit inside a fenced code block (three backticks before and after, inside the sentinel markers) — chat interfaces render raw HTML visually, so without the fence the person copying your reply gets every tag destroyed. Never skip it.
+CRITICAL RENDERING RULE: every block's content (including the HTML body and the plain-text publisher notes) MUST sit inside a fenced code block (three backticks before and after, inside the sentinel markers): chat interfaces render raw HTML visually, so without the fence the person copying your reply gets every tag destroyed. Never skip it.
 
-ADDITIVE FIELDS — two extra SEO_JSON fields beyond what's specified above:
-- "imageAltText": ONE ALT text string for the featured/OG image, from whichever visual best represents the topic — contains the Focus Keyphrase or a close variant plus a concrete description of what the image shows.
-- "imagePrompt": a complete, ready-to-paste AI image-generation prompt for that image. Style: **clean, handwritten-notebook / teacher's-whiteboard study-notes graphic, never loud/clickbait/YouTube-thumbnail** — a neat notebook page or classroom whiteboard background, hand-drawn-style headings and underlines, small relevant doodles/icons/sketches tied to the topic, color-coded sections connected by arrows, a boxed summary corner. Warm highlighter-color accents, soft even lighting, thin clean linework. 16:9, WordPress featured-image format, NO actual readable words/sentences baked in — only decorative handwriting-style marks/icons, since AI-rendered text comes out garbled (the real title is overlaid separately).
+ADDITIVE FIELDS: two extra SEO_JSON fields beyond what's specified above:
+- "imageAltText": ONE ALT text string for the featured/OG image, from whichever visual best represents the topic: contains the Focus Keyphrase or a close variant plus a concrete description of what the image shows.
+- "imagePrompt": a complete, ready-to-paste AI image-generation prompt for that image. Style: clean, handwritten-notebook / teacher's-whiteboard study-notes graphic, never loud/clickbait/YouTube-thumbnail: a neat notebook page or classroom whiteboard background, hand-drawn-style headings and underlines, small relevant doodles/icons/sketches tied to the topic, color-coded sections connected by arrows, a boxed summary corner. Warm highlighter-color accents, soft even lighting, thin clean linework. 16:9, WordPress featured-image format, NO actual readable words/sentences baked in: only decorative handwriting-style marks/icons, since AI-rendered text comes out garbled (the real title is overlaid separately).
 
 <<<SEO_JSON>>>
 \`\`\`json
@@ -2457,15 +2469,48 @@ function aiTellNormalizeDashes(text){
   }
   return { text: parts.join(''), toColon, toComma };
 }
-function aiTellMechanicalClean(html, title){
+// The v16 ad template's label div ("— Advertisement — 📢 Sponsored") got mangled
+// by the emoji/dash passes below into ", Advertisement,  Sponsored". v17 drops the
+// label entirely (AdSense doesn't require one); this removes it from any reply that
+// still copies the old template. Runs FIRST, before emoji/dash passes touch it.
+function aiTellRemoveAdLabel(text){
+  let removed = 0;
+  const out = text.replace(/<div\b[^>]*>\s*(?:—\s*)?Advertisement(?:\s*—)?\s*(?:<span\b[^>]*>[^<]*Sponsored\s*<\/span>)?\s*<\/div>\s*/gi,
+    () => { removed++; return ''; });
+  return { text: out, removed };
+}
+// Port of website/tools/humanizer-toolkit/clean_notes.py --unbold: unwrap
+// decorative <strong>/<b>. Kept: bold inside headings/<th>, the FIRST bold span
+// containing the focus keyword (SEO section asks for it once), and the
+// VERIFIED PYQ / PRACTICE QUESTION markers. Everything else (label-prefix habit,
+// mid-sentence emphasis) is unwrapped to plain text, contents untouched.
+function aiTellUnbold(text, focusKeyword){
+  const held = [];
+  const hold = m => { held.push(m); return '\u0000' + (held.length-1) + '\u0000'; };
+  let t = text.replace(/<(h[1-6]|th)\b[\s\S]*?<\/\1>/gi, hold);
+  const kw = String(focusKeyword||'').trim().toLowerCase();
+  let kwKept = false, unwrapped = 0;
+  t = t.replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, tag, inner) => {
+    const plain = inner.replace(/<[^>]+>/g,'').trim();
+    if(/^(verified pyq|practice question)\b/i.test(plain)) return m;
+    if(!kwKept && kw && plain.toLowerCase().includes(kw)){ kwKept = true; return m; }
+    unwrapped++;
+    return inner;
+  });
+  t = t.replace(/\u0000(\d+)\u0000/g, (m, i) => held[+i]);
+  return { text: t, unwrapped };
+}
+function aiTellMechanicalClean(html, title, focusKeyword){
   let text = String(html||'');
   const report = {};
   let r;
+  r = aiTellRemoveAdLabel(text); text = r.text; report.adLabelsRemoved = r.removed;
   r = aiTellStripEmoji(text); text = r.text; report.emojiRemoved = r.removed;
   r = aiTellRemoveBannedPhrases(text); text = r.text; report.bannedPhrasesRemoved = r.removedSpans;
   r = aiTellRemoveStrayTokens(text); text = r.text; report.strayTokensRemoved = r.removed;
   r = aiTellFixDuplicateH1(text, title); text = r.text; report.duplicateH1 = r;
   r = aiTellNormalizeDashes(text); text = r.text; report.dashNormalize = { toColon:r.toColon, toComma:r.toComma };
+  r = aiTellUnbold(text, focusKeyword); text = r.text; report.boldUnwrapped = r.unwrapped;
   text = text.replace(/<(p|li|span|div|strong|b|em|i)(\s[^>]*)?>\s*<\/\1>/gi, ''); // tags left empty by the removals above
   const lowered = text.toLowerCase();
   report.stagedOpenerHints = AI_TELL_STAGED_OPENER_HINTS.filter(p => lowered.includes(p.toLowerCase()));
@@ -2479,7 +2524,7 @@ function parseResponse(raw){
   const pubResult = extractPublisherNotes(raw, bodyResult.endIdx);
   const cleanedBody = stripHtmlComments(bodyResult.bodyHtml);
   const blockResult = expandLongPostBlocks(cleanedBody);
-  const mechClean = aiTellMechanicalClean(blockResult.html, seoResult.seo.h1);
+  const mechClean = aiTellMechanicalClean(blockResult.html, seoResult.seo.h1, seoResult.seo.focusKeyword);
   const contentMemory = extractContentMemory(raw);
   const result = {
     seo: seoResult.seo,
@@ -2505,6 +2550,8 @@ function parseResponse(raw){
   if(!result.contentMemory) warnings.push('Content Memory block missing or unparseable — this note won\'t be recorded in Automation/content-memory/. Not fatal, but future runs lose this article\'s anti-repetition signal.');
   {
     const mc = mechClean, mcNotes = [];
+    if(mc.adLabelsRemoved) mcNotes.push(`${mc.adLabelsRemoved} old-style ad label(s) removed`);
+    if(mc.boldUnwrapped) mcNotes.push(`${mc.boldUnwrapped} decorative bold span(s) unwrapped`);
     if(mc.emojiRemoved) mcNotes.push(`${mc.emojiRemoved} emoji stripped`);
     if(mc.bannedPhrasesRemoved.length) mcNotes.push(`${mc.bannedPhrasesRemoved.length} sales/paywall-boilerplate sentence(s) removed`);
     if(mc.strayTokensRemoved.length) mcNotes.push(mc.strayTokensRemoved.join(', ') + ' removed');
@@ -3851,6 +3898,107 @@ function vCheckDuplicateHeadingText(bodyHtml){
     pass: !dup, detail: dup ? `"${heading}" appears again immediately before its own heading` : 'clean' };
 }
 
+/* ================= HUMANIZE SCAN (report-only, never auto-edits) =================
+   Sentence-level AI tells that a regex can FIND but not safely FIX (rewriting needs
+   the model). Patterns follow the humanizer catalogue's strongest tells (§1 not-X-
+   but-Y, §3 deep-sounding sayings, §4 staged run-ups, §12 stock words, §13 inflation)
+   plus their Hindi equivalents. Flagged sentences feed the soft validator check
+   below and the "humanize-fix" follow-up prompt, so the fix happens in the SAME
+   chat at zero cost to the master prompt. No \b around Devanagari: JS \b is ASCII-only. */
+const HUMANIZE_PATTERNS = [
+  { id:'not-x-but-y', label:'"Not X but Y" contrast',
+    re:/\bnot (?:just|only|merely|simply)\b.{0,100}?\bbut\b|\bit'?s not\b.{1,60}?,\s*it'?s\b|(?:सिर्फ|केवल|मात्र).{0,80}?नहीं.{0,12}?बल्कि|न केवल.{0,100}?बल्कि|नहीं,\s*बल्कि/i },
+  { id:'staged-runup', label:'Staged run-up before the point',
+    re:/\blet'?s (?:dive|explore|understand|break|look|discuss|learn)\b|here'?s what you need to know|without further ado|did you know|आइए\s*(?:समझ|जान|देख|चर्चा)|क्या आप जानते|अब (?:हम )?(?:विस्तार से )?(?:समझते|जानते|देखते) हैं/i },
+  { id:'deep-saying', label:'Saying that only sounds deep',
+    re:/\bthe real question\b|\bat its core\b|\bwhat really matters\b|\bthe heart of the matter\b|असली सवाल|सच तो यह है|असल में देखा जाए तो|पहला सवाल यह नहीं/i },
+  { id:'stock-words', label:'Stock AI word',
+    re:/\b(?:delve|delves|tapestry|pivotal|crucial|holistic|seamless(?:ly)?|game[- ]changer|testament|meticulous(?:ly)?|showcas(?:e|es|ing)|underscor(?:e|es|ing))\b|\bplays? an? (?:key|crucial|vital|pivotal) role\b|\bit is (?:important|worth) (?:to note|noting)\b|ध्यान देने योग्य बात|यह ध्यान रखना (?:महत्वपूर्ण|ज़रूरी|जरूरी) है|अत्यंत महत्वपूर्ण भूमिका/i },
+  { id:'inflation', label:'Inflated significance / urgency',
+    re:/\bmarking a (?:pivotal|significant|crucial)\b|\bstands as a\b|\bevolving landscape\b|\bsetting the stage\b|\blasting legacy\b|मील का पत्थर|क्रांतिकारी (?:बदलाव|कदम)|हाथ से निकल|\bmust[- ]know\b|\bdon'?t miss\b/i },
+];
+function humanizeSentences(bodyHtml){
+  const text = String(bodyHtml||'')
+    .replace(/<(script|style|svg)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<\/(?:p|li|td|th|div|h[1-6]|tr|summary)>|<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+  return text.split(/\n|(?<=[।?!]|\.(?=\s))\s+/).map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>s.length>=12);
+}
+function humanizeScan(bodyHtml){
+  const html = String(bodyHtml||'');
+  const hits = [], seen = new Set();
+  for(const s of humanizeSentences(html)){
+    if(/^\(?[a-dA-D][).]\s/.test(s)) continue; // MCQ option text, not the note's own prose
+    const own = s.replace(/"[^"]*"|“[^”]*”|'[^']{8,}'/g, ' '); // quoted policy/NCERT text is not ours to rewrite
+    for(const p of HUMANIZE_PATTERNS){
+      if(p.re.test(own) && !seen.has(s)){
+        seen.add(s);
+        // verbatim = the sentence exists as-is in the HTML (no inline tag splits it),
+        // so a find/replace from the fix prompt can be applied safely.
+        hits.push({ id:p.id, label:p.label, sentence:s, verbatim: html.includes(s) });
+        break;
+      }
+    }
+  }
+  return hits;
+}
+function vCheckHumanize(bodyHtml){
+  const hits = humanizeScan(bodyHtml);
+  const cap = 3; // a few are normal in a 4,000-word note; a pile-up is the tell
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const byType = {};
+  hits.forEach(h => byType[h.label] = (byType[h.label]||0)+1);
+  const summary = Object.entries(byType).map(([k,v])=>`${k} ×${v}`).join(', ');
+  const examples = hits.slice(0,5).map(h=>`<br>• ${esc(h.sentence.slice(0,140))}${h.sentence.length>140?'…':''}`).join('');
+  return { id:'humanize', label:`Reads like a teacher, not AI (≤${cap} flagged sentences)`, tier:'soft',
+    pass: hits.length<=cap,
+    detail: hits.length ? `${hits.length} flagged: ${summary}.${examples}<br>Use "Copy humanize-fix prompt" below to fix them in the same chat.` : 'clean' };
+}
+
+/* ---- humanize-fix: a short follow-up prompt for the SAME chat, listing only the
+   flagged sentences; the reply is a JSON list of {find, replace} applied here. ---- */
+function copyHumanizeFixPrompt(btn){
+  syncFormToState();
+  const hits = humanizeScan(state.bodyHtml).filter(h=>h.verbatim).slice(0, 30);
+  if(!hits.length){ show(msg('humanizeMsg'),'ok','Nothing flagged that can be auto-replaced. Nothing to fix.'); return; }
+  const list = hits.map((h,i)=>`${i+1}. [${h.label}] ${h.sentence}`).join('\n');
+  const t = `In the notes you wrote above, these sentences read as AI-written. Rewrite ONLY these. Keep every fact, number, term, name and citation; same Hindi/English mix.
+How: state the point directly, like one teacher explaining to one student. No "not X but Y" / "सिर्फ X नहीं, बल्कि Y" framing, no run-up ("आइए समझते हैं", "did you know"), no inflated or stock words (crucial, pivotal, delve, मील का पत्थर), no em-dashes, no HTML tags. If a sentence adds nothing, replace it with an empty string.
+
+Reply with ONLY a JSON array in a \`\`\`json code fence:
+[{"find": "<sentence copied EXACTLY from the list>", "replace": "<your rewrite>"}]
+
+${list}`;
+  doCopy(t, btn, msg('humanizeMsg'), `Humanize-fix prompt copied (${hits.length} sentence${hits.length>1?'s':''}). Paste it in the SAME chat, then paste the JSON reply below and tap Apply.`);
+}
+function applyHumanizeFix(btn){
+  syncFormToState();
+  const m = msg('humanizeMsg');
+  const raw = document.getElementById('humanizeReply').value;
+  let arr = null;
+  const tryParse = s => { try{ const v = JSON.parse(s); return Array.isArray(v) ? v : null; }catch(e){ return null; } };
+  arr = tryParse(stripFences(raw).trim());
+  if(!arr){ const mm = raw.match(/\[[\s\S]*\]/); if(mm) arr = tryParse(mm[0]); }
+  if(!arr){ show(m,'bad','Could not read a JSON array from that reply. Paste only the ```json block.'); return; }
+  let html = state.bodyHtml, applied = 0;
+  const missed = [];
+  for(const it of arr){
+    if(!it || typeof it.find !== 'string' || typeof it.replace !== 'string') continue;
+    const find = it.find.trim();
+    if(!find || !html.includes(find)){ missed.push(find.slice(0,60)); continue; }
+    let rep = it.replace.replace(/<[^>]+>/g,'').replace(/</g,'&lt;').replace(/>/g,'&gt;').trim();
+    rep = aiTellNormalizeDashes(rep).text;
+    html = html.replace(find, () => rep);
+    applied++;
+  }
+  html = html.replace(/<(p|li)(\s[^>]*)?>\s*<\/\1>/gi, ''); // sentences replaced with "" can leave empty tags
+  document.getElementById('fBodyHtml').value = html;
+  updatePreview();
+  document.getElementById('humanizeReply').value = '';
+  show(m, applied ? 'ok' : 'warn', `${applied} sentence(s) rewritten${missed.length ? `, ${missed.length} not found (AI changed the "find" text): ${missed.join(' | ')}` : ''}. Run validation again.`);
+}
+
 function vRunChecks(seo, bodyHtml){
   seo = seo || {};
   const doc = vParseBody(bodyHtml);
@@ -3863,7 +4011,8 @@ function vRunChecks(seo, bodyHtml){
     vCheckTitle(seo), vCheckMeta(seo), vCheckSlug(seo), vCheckH1(seo),
     vCheckFirst100Words(doc, seo),
     vCheckEmDashRemaining(bodyHtml), vCheckBoldDensity(bodyHtml), vCheckEmojiRemaining(bodyHtml),
-    vCheckBannedPhrasesRemaining(bodyHtml), vCheckDuplicateHeadingText(bodyHtml)
+    vCheckBannedPhrasesRemaining(bodyHtml), vCheckDuplicateHeadingText(bodyHtml),
+    vCheckHumanize(bodyHtml)
   ];
   const hardChecks = checks.filter(c=>c.tier==='hard');
   return { checks, hardFails: hardChecks.filter(c=>!c.pass), hardPass: hardChecks.every(c=>c.pass),
